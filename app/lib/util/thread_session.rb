@@ -54,9 +54,11 @@ module Util
               uri = URI.parse(Katello.config.pulp.url)
 
               ::Runcible::Base.config = {
-                :url      => "#{uri.scheme}://#{uri.host}",
+                :url      => "#{uri.scheme}://#{uri.host.downcase}",
                 :api_path => uri.path,
                 :user     => user_id,
+                :timeout      => Katello.config.rest_client_timeout,
+                :open_timeout => Katello.config.rest_client_timeout,
                 :oauth    => {:oauth_secret => Katello.config.pulp.oauth_secret,
                               :oauth_key    => Katello.config.pulp.oauth_key },
                 :logging  => {:logger     => ::Logging.logger['pulp_rest'],
@@ -82,6 +84,7 @@ module Util
             self.current = User.find_by_username(username)
             raise(ArgumentError, "Cannot find user '%s'" % username) if self.current.nil?
             do_block.call
+          ensure
             self.current = old_user
           end
         end
@@ -97,22 +100,10 @@ module Util
       end
 
       def thread_locals
-        # store request uuid (for Rails 3.2+ we can use Request.uuid) and process pid
-        uuid = request.respond_to?(:uuid) ? request.uuid : SecureRandom.hex(16)
-        ::Logging.mdc['uuid'] = Thread.current[:request_uuid] = uuid
-
-        # store user
-        u = current_user
-        User.current = u
-
+        User.current = current_user
         yield
-
-        # reset the current user (for security reasons)
+      ensure
         User.current = nil
-      rescue => exception
-        # reset the current user (for security reasons)
-        User.current = nil
-        raise
       end
     end
   end

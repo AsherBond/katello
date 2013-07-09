@@ -156,6 +156,8 @@ end
 
 class GluePulpRepoRequiresSyncTest < GluePulpRepoTestBase
 
+  i_suck_and_my_tests_are_order_dependent!
+
   @@fedora_17_x86_64 = nil
   @@fedora_17_x86_64_dev = nil
 
@@ -218,13 +220,13 @@ class GluePulpRepoRequiresSyncTest < GluePulpRepoTestBase
   end
 
   def test_packages
-    VCR.use_cassette('glue_pulp_repo_units_package', :match_requests_on => [:body_json, :path, :method]) do
+    VCR.use_cassette('glue_pulp_repo_units', :match_requests_on => [:body_json, :path, :method]) do
       refute_empty @@fedora_17_x86_64.packages.select { |package| package.name == 'elephant' }
     end
   end
 
   def test_has_package?
-    VCR.use_cassette('glue_pulp_repo_units_has_package', :match_requests_on => [:body_json, :path, :method]) do
+    VCR.use_cassette('glue_pulp_repo_units', :match_requests_on => [:body_json, :path, :method]) do
       pkg_id = @@fedora_17_x86_64.packages.sort_by(&:id).first.id
       assert @@fedora_17_x86_64.has_package?(pkg_id)
     end
@@ -301,7 +303,7 @@ class GluePulpRepoRequiresSyncTest < GluePulpRepoTestBase
     @@fedora_17_x86_64_dev.create_pulp_repo
 
     task_list = @@fedora_17_x86_64.clone_contents(@@fedora_17_x86_64_dev)
-    assert_equal 4, task_list.length
+    assert_equal 5, task_list.length
 
     self.class.wait_on_tasks(task_list)
   ensure
@@ -313,7 +315,7 @@ class GluePulpRepoRequiresSyncTest < GluePulpRepoTestBase
     staging = KTEnvironment.find(environments(:staging).id)
 
     task_list = @@fedora_17_x86_64.promote(library, staging)
-    assert_equal 4, task_list.length
+    assert_equal 5, task_list.length
     self.class.wait_on_tasks(task_list)
 
     clone_id = @@fedora_17_x86_64.clone_id(staging, staging.default_content_view)
@@ -362,7 +364,7 @@ class GluePulpRepoRequiresEmptyPromoteTest < GluePulpRepoTestBase
   def self.after_suite
     VCR.use_cassette('glue_pulp_repo_helper') do
       @@cloned_repo.destroy if @@cloned_repo
-      @@fedora_17_x86_64.destroy_repo
+      @@fedora_17_x86_64.destroy_repo if @@fedora_17_x86_64
     end
   end
 

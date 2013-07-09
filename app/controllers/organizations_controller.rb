@@ -19,6 +19,7 @@ class OrganizationsController < ApplicationController
   before_filter :authorize #call authorize after find_organization so we call auth based on the id instead of cp_id
   before_filter :setup_options, :only=>[:index, :items]
   before_filter :search_filter, :only => [:auto_complete_search]
+  skip_before_filter :require_org
 
   def rules
     index_test = lambda{Organization.any_readable?}
@@ -57,7 +58,7 @@ class OrganizationsController < ApplicationController
   def param_rules
     {
       :create => {:organization => [:name, :description, :label], :environment => [:name, :description, :label]},
-      :update => {:organization  => [:name, :description]}
+      :update => {:organization  => [:name, :description, :service_level]}
     }
   end
 
@@ -86,7 +87,8 @@ class OrganizationsController < ApplicationController
 
   def create
     org_label_assigned = ""
-    org_params = params[:organization]
+    org_params = params[:organization] or
+        return render_bad_parameters
     org_params[:label], org_label_assigned = generate_label(org_params[:name], 'organization') if org_params[:label].blank?
     @organization = Organization.new(:name => org_params[:name], :label => org_params[:label], :description => org_params[:description])
     @organization.save!
@@ -102,6 +104,8 @@ class OrganizationsController < ApplicationController
       @new_env.organization = @organization
       @new_env.prior = @organization.library
       @new_env.save!
+    elsif env_params[:label].present?
+      @new_env = @organization.library
     end
 
     notify.success _("Organization '%s' was created.") % @organization["name"]
@@ -142,12 +146,17 @@ class OrganizationsController < ApplicationController
   end
 
   def update
+    return render_bad_parameters unless params[:organization]
     result = params[:organization].values.first
 
     @organization.name = params[:organization][:name] unless params[:organization][:name].nil?
 
     unless params[:organization][:description].nil?
       result = @organization.description = params[:organization][:description].gsub("\n",'')
+    end
+
+    unless params[:organization][:service_level].nil?
+      result = @organization.service_level = params[:organization][:service_level]
     end
 
     @organization.save!
@@ -188,7 +197,7 @@ class OrganizationsController < ApplicationController
     end
 
     setup_environment_selector(@organization, accessible_envs)
-    @environment = first_env_in_path(accessible_envs, false, @organization)
+    @environment = first_env_in_path(accessible_envs, true, @organization)
     render :partial=>"environments", :locals=>{:accessible_envs => accessible_envs}
   end
 
@@ -215,8 +224,11 @@ class OrganizationsController < ApplicationController
 
   def default_info
     Organization.check_informable_type!(params[:informable_type])
+    task = TaskStatus.find_by_id(@organization.apply_info_task_id)
+    task_state = (task.blank? ? nil : task.state)
+    task_uuid = (task.blank? ? nil : task.uuid)
     render :partial => "default_info",
-      :locals => { :org => @organization, :informable_type => params[:informable_type] }
+      :locals => { :org => @organization, :informable_type => params[:informable_type], :task_state => task_state, :task_uuid => task_uuid }
   end
 
   protected

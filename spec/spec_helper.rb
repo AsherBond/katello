@@ -14,10 +14,12 @@ $:.unshift(__FILE__, ".") #add  current path to the classpath
 
 # This file is copied to spec/ when you run 'rails generate rspec:install'
 ENV["RAILS_ENV"] ||= 'test' # ok
+require 'simplecov'
+SimpleCov.start if ENV["COVERAGE"] # ok
+
 require File.expand_path("../../config/environment", __FILE__)
 require 'rspec/rails'
 require 'webrat'
-require 'simplecov'
 require 'helpers/login_helper_methods'
 require 'helpers/authorization_helper_methods'
 require 'helpers/locale_helper_methods'
@@ -29,6 +31,8 @@ require 'helpers/repository_helper_methods'
 require 'models/model_spec_helper'
 require "helpers/user_helper_methods"
 require "helpers/search_helper_methods"
+
+require './lib/monkeys/foreign_keys_postgresql'
 
 # Requires supporting ruby files with custom matchers and macros, etc,
 # in spec/support/ and its subdirectories.
@@ -51,6 +55,14 @@ RSpec.configure do |config|
   config.include Warden::Test::Helpers
   config.include CustomMatchers
 
+  config.before(:suite) do
+    DeferredGarbageCollection.start
+  end
+
+  config.after(:each) do
+    DeferredGarbageCollection.reconsider
+  end
+
   config.after :all do
     Warden.test_reset!
   end
@@ -66,7 +78,7 @@ RSpec.configure do |config|
   end
 
   # Remove this line if you're not using ActiveRecord or ActiveRecord fixtures
-  config.fixture_path = "#{::Rails.root}/spec/fixtures"
+  config.fixture_path = "#{::Rails.root}/test/fixtures/models"
 
   # If you're not using ActiveRecord, or you'd prefer not to run each of your
   # examples within a transaction, remove the following line or assign false

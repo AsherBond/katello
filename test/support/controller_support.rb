@@ -14,7 +14,7 @@
 module ControllerSupport
   def check_permission(params)
     permissions = params[:permission].is_a?(Array) ? params[:permission] : [params[:permission]]
-    permissions << nil if permissions.empty? || (params[:include_no_permissions] && !permissions.include?(nil))
+
     permissions.each do |permission|
       # TODO: allow user to be passed in via params and clear permissions between iterations
       user = no_permission_user
@@ -31,11 +31,11 @@ module ControllerSupport
       req.call
 
       if params[:authorized]
-        msg = "Expected response to be a <success>, but was <#{response.status}> instead. \n" +
+        msg = "Expected response for #{action} to be a <success>, but was <#{response.status}> instead. \n" +
                                                 "#{user.own_role.summary}"
         assert_response :success, msg
       else
-        msg = "Security Violation (403) expected, got #{response.status} instead. \n#{user.own_role.summary}"
+        msg = "Security Violation (403) expected for #{action}, got #{response.status} instead. \n#{user.own_role.summary}"
         assert_equal 403, response.status, msg
       end
     end
@@ -60,5 +60,37 @@ module ControllerSupport
       # fixtures not loaded
       FactoryGirl.create(:user)
     end
+  end
+end
+
+UserPermission = Struct.new(:verbs, :resource_type, :tags, :org, :options) do
+  def call(generator)
+    self.tags ||= []
+    self.options ||= {}
+    generator.can(verbs, resource_type, tags, org, options)
+  end
+
+  def +(permission)
+    UserPermissionSet.new([self, permission])
+  end
+end
+
+# create a constant for a lack of permissions
+NO_PERMISSION = lambda { |user| }
+
+class UserPermissionSet
+  attr_accessor :permissions
+
+  def initialize(permissions = [])
+    self.permissions = permissions
+  end
+
+  def +(user_permission)
+    self.permissions << user_permission
+  end
+  alias_method :<<, :+
+
+  def call(generator)
+    permissions.each { |p| p.call(generator) }
   end
 end

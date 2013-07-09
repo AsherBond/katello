@@ -20,6 +20,8 @@ class DeletionChangeset < Changeset
     self.state == Changeset::REVIEW or
         raise _("Cannot delete the changeset '%s' because it is not in the review phase.") % self.name
 
+    validate_content_view_tasks_complete!
+
     validate_content! self.errata
     validate_content! self.packages
     validate_content! self.distributions
@@ -72,6 +74,9 @@ class DeletionChangeset < Changeset
 
     self.promotion_date = Time.now
     self.state          = Changeset::DELETED
+
+    Glue::Event.trigger(Katello::Actions::ChangesetPromote, self)
+
     self.save!
 
     index_repo_content from_env
@@ -128,14 +133,13 @@ class DeletionChangeset < Changeset
         end
       end
     end
-    total_pkg_ids = []
 
-    pkgs_delete.each_pair do |repo, pkg_ids|
-      total_pkg_ids  += pkg_ids
-      repo.delete_packages(pkg_ids)
+    pkg_ids = []
+    pkgs_delete.each_pair do |repo, pkgs|
+      PulpTaskStatus::wait_for_tasks [repo.delete_packages(pkgs)]
+      pkg_ids.concat(pkgs)
     end
-
-    Package.index_packages(total_pkg_ids)
+    Package.index_packages(pkg_ids)
   end
 
 
@@ -146,7 +150,7 @@ class DeletionChangeset < Changeset
     not_included_errata.each do |errata|
        product = errata.product
        product.repos(from_env).each do |repo|
-         if repo.has_erratum? errata.errata_id
+         if repo.has_erratum? errata.display_name
            @affected_repos << repo
            errata_delete[repo] ||= []
            errata_delete[repo] << errata.errata_id
@@ -154,10 +158,12 @@ class DeletionChangeset < Changeset
        end
     end
 
+    errata_ids = []
     errata_delete.each_pair do |repo, errata|
-       repo.delete_errata(errata)
-       Errata.index_errata(errata)
+      PulpTaskStatus::wait_for_tasks [repo.delete_errata(errata)]
+      errata_ids.concat(errata)
     end
+    Errata.index_errata(errata_ids)
   end
 
 
@@ -168,7 +174,7 @@ class DeletionChangeset < Changeset
     not_included_distribution.each do |distro|
       product = distro.product
       product.repos(from_env).each do |repo|
-        if repo.has_distribution? distro.distribution_id
+        if repo.has_distribution? distro.display_name
           @affected_repos << repo
           distribution_delete[repo] = distro.distribution_id
         end
@@ -176,7 +182,7 @@ class DeletionChangeset < Changeset
     end
 
     distribution_delete.each_pair do |repo, distro|
-       repo.delete_distribution(distro)
+      PulpTaskStatus::wait_for_tasks [repo.delete_distribution(distro)]
     end
   end
 

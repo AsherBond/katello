@@ -73,7 +73,7 @@ module Glue::ElasticSearch::Errata
       end
 
       def self.filter(filter)
-        filter_for_repo = filter.slice(:repoid, :environment_id, :product_id)
+        filter_for_repo = filter.slice(:repository_id, :repoid, :environment_id, :product_id)
         filter_for_errata = filter.except(*filter_for_repo.keys)
 
         repos = repos_for_filter(filter_for_repo)
@@ -84,7 +84,8 @@ module Glue::ElasticSearch::Errata
       end
 
       def self.repos_for_filter(filter)
-        if repoid = filter[:repoid]
+        repoid = filter[:repoid] || filter[:repository_id]
+        if repoid
           return [Repository.find(repoid)]
         elsif environment_id = filter[:environment_id]
           env = KTEnvironment.find(environment_id)
@@ -101,7 +102,12 @@ module Glue::ElasticSearch::Errata
 
       def self.search query, start, page_size, filters={}, sort=[:errata_id_sort, "DESC"],
                                                         default_field = 'id_title'
-        return [] if !Tire.index(self.index).exists?
+
+        repoids = filters[:repoids]
+        if !Tire.index(self.index).exists? || (repoids && repoids.empty?)
+          return Util::Support.array_with_total
+        end
+
         all_rows = query.blank?
         search = Tire::Search::Search.new(self.index)
         search.instance_eval do
@@ -144,10 +150,15 @@ module Glue::ElasticSearch::Errata
           erratum.as_json.merge(erratum.index_options)
         }
 
-        Tire.index Errata.index do
-          create :settings => Errata.index_settings, :mappings => Errata.index_mapping
-          import errata
-        end if !errata.empty?
+        unless errata.empty?
+          Tire.index Errata.index do
+            create :settings => Errata.index_settings, :mappings => Errata.index_mapping
+          end unless Tire.index(::Errata.index).exists?
+
+          Tire.index Errata.index do
+            import errata
+          end
+        end
       end
     end
   end

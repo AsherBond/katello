@@ -77,11 +77,7 @@ module Glue::Pulp::Repo
 
     def initialize(attrs=nil, options={})
       if attrs.nil?
-        if Rails::VERSION::STRING.start_with?('3.2')
-          super
-        else
-          super(attrs)
-        end
+        super
       elsif
         type_key = attrs.has_key?('type') ? 'type' : :type
         #rename "type" to "cp_type" (activerecord and candlepin variable name conflict)
@@ -92,11 +88,7 @@ module Glue::Pulp::Repo
         attrs_used_by_model = attrs.reject do |k, v|
           !self.class.column_defaults.keys.member?(k.to_s) && (!respond_to?(:"#{k.to_s}=") rescue true)
         end
-        if Rails::VERSION::STRING.start_with?('3.2')
-          super(attrs_used_by_model, options)
-        else
-          super(attrs_used_by_model)
-        end
+        super(attrs_used_by_model, options)
       end
     end
 
@@ -112,10 +104,7 @@ module Glue::Pulp::Repo
     def create_pulp_repo
       #if we are in library, no need for an distributor, but need to sync
       if self.environment.library?
-        importer = Runcible::Extensions::YumImporter.new(:ssl_ca_cert=>self.feed_ca,
-              :ssl_client_cert=>self.feed_cert,
-              :ssl_client_key=>self.feed_key,
-              :feed_url=>self.feed)
+        importer = generate_importer
       else
         #if not in library, no need for sync info, but we need a distributor
         importer = Runcible::Extensions::YumImporter.new
@@ -132,10 +121,45 @@ module Glue::Pulp::Repo
       raise PulpErrors::ServiceUnavailable.new(message, e)
     end
 
+
+    def generate_importer
+      case self.content_type
+        when Repository::YUM_TYPE
+          Runcible::Extensions::YumImporter.new(:ssl_ca_cert=>self.feed_ca,
+                        :ssl_client_cert=>self.feed_cert,
+                        :ssl_client_key=>self.feed_key,
+                        :feed_url=>self.feed)
+        when Repository::FILE_TYPE
+          Runcible::Extensions::IsoImporter.new(:ssl_ca_cert=>self.feed_ca,
+                        :ssl_client_cert=>self.feed_cert,
+                        :ssl_client_key=>self.feed_key,
+                        :feed_url=>self.feed)
+        else
+          raise _("Unexpected repo type %s") % self.content_type
+      end
+    end
+
     def generate_distributor
-      Runcible::Extensions::YumDistributor.new(self.relative_path, (self.unprotected || false), true,
-        {:protected=>true, :id=>self.pulp_id,
-            :auto_publish=>!self.environment.library?})
+      case self.content_type
+        when Repository::YUM_TYPE
+          Runcible::Extensions::YumDistributor.new(self.relative_path, (self.unprotected || false), true,
+                  {:protected=>true, :id=>self.pulp_id,
+                      :auto_publish=>true})
+        when Repository::FILE_TYPE
+          dist = Runcible::Extensions::IsoDistributor.new(true, true)
+          dist.auto_publish = true
+          dist
+        else
+          raise _("Unexpected repo type %s") % self.content_type
+      end
+    end
+
+    def refresh_pulp_repo(feed_ca, feed_cert, feed_key)
+      self.feed_ca = feed_ca
+      self.feed_cert = feed_cert
+      self.feed_key = feed_key
+      Runcible::Extensions::Repository.update_importer(self.pulp_id, self.importers.first['id'], generate_importer.config)
+      Runcible::Extensions::Repository.update_distributor(self.pulp_id, self.distributors.first['id'], generate_distributor.config)
     end
 
     def promote from_env, to_env
@@ -212,9 +236,8 @@ module Glue::Pulp::Repo
         tmp_packages = []
         package_fields = ['name', 'version', 'release', 'arch', 'suffix', 'epoch',
                           'download_url', 'checksum', 'checksumtype', 'license', 'group',
-                          'children', 'vendor', 'filename', 'relativepath', 'requires',
-                          'provides', 'description', 'size', 'buildhost',
-                          '_id', '_content_type_id', '_href', '_storage_path', '_type']
+                          'children', 'vendor', 'filename', 'relativepath', 'description',
+                          'size', 'buildhost', '_id', '_content_type_id', '_href', '_storage_path', '_type']
 
         self.package_ids.each_slice(Katello.config.pulp.bulk_load_size) do |sub_list|
           tmp_packages.concat(Runcible::Extensions::Rpm.find_all_by_unit_ids(sub_list, package_fields))
@@ -400,31 +423,37 @@ module Glue::Pulp::Repo
       # are listed, pulp will retrieve every field it knows about for the rpm
       # (e.g. changelog, filelist...etc).
       events << Runcible::Extensions::Rpm.copy(self.pulp_id, to_repo.pulp_id,
-                                               { :fields => ['name', 'epoch', 'version', 'release', 'arch',
-                                                             'checksumtype', 'checksum'] })
-
+                                               { :fields => Package::PULP_SELECT_FIELDS })
       events << Runcible::Extensions::Distribution.copy(self.pulp_id, to_repo.pulp_id)
 
       # Since the rpms will be copied above, during the copy of errata and package groups,
       # include the copy_children flag to request that pulp skip copying them again.
       events << Runcible::Extensions::Errata.copy(self.pulp_id, to_repo.pulp_id, { :copy_children => false })
       events << Runcible::Extensions::PackageGroup.copy(self.pulp_id, to_repo.pulp_id, { :copy_children => false })
+      events << Runcible::Extensions::YumRepoMetadataFile.copy(self.pulp_id, to_repo.pulp_id)
+
       events
     end
 
     def unassociate_by_filter(content_type, filter_clauses)
-      content_unit = {
-        Runcible::Extensions::Rpm.content_type() => Runcible::Extensions::Rpm,
-        Runcible::Extensions::Errata.content_type() => Runcible::Extensions::Errata,
-        Runcible::Extensions::PackageGroup.content_type() => Runcible::Extensions::PackageGroup,
-        Runcible::Extensions::Distribution.content_type() => Runcible::Extensions::Distribution
-      }
-      content_unit[content_type].unassociate_from_repo(self.pulp_id, :unit => filter_clauses)
+
+      criteria = {:type_ids=>[content_type], :filters=>{:unit=>filter_clauses}}
+      if content_type == Runcible::Extensions::Rpm.content_type()
+        criteria[:fields] = { :unit => Package::PULP_SELECT_FIELDS}
+      end
+      Runcible::Extensions::Repository.unassociate_units(self.pulp_id, criteria)
     end
 
     def clear_contents
       self.clear_content_indices if Katello.config.use_elasticsearch
-      Runcible::Extensions::Repository.unassociate_units(self.pulp_id)
+      tasks = [Runcible::Extensions::Errata, Runcible::Extensions::PackageGroup,
+                                             Runcible::Extensions::Distribution].collect do |type|
+        type.unassociate_from_repo(self.pulp_id, {})
+      end.flatten(1)
+
+      tasks << Runcible::Extensions::Repository.unassociate_units(self.pulp_id,
+                 {:type_ids=>['rpm'], :filters=>{}, :fields => { :unit => Package::PULP_SELECT_FIELDS}})
+      tasks
     end
 
     def sync_start
@@ -455,15 +484,15 @@ module Glue::Pulp::Repo
     end
 
     def delete_packages package_id_list
-      Runcible::Extensions::Rpm.unassociate_unit_ids_from_repo(self.pulp_id,  package_id_list)
+      Runcible::Extensions::Rpm.unassociate_unit_ids_from_repo(self.pulp_id, package_id_list)
     end
 
     def delete_errata errata_id_list
-      Runcible::Extensions::Errata.unassociate_ids_from_repo(self.pulp_id,  errata_id_list)
+      Runcible::Extensions::Errata.unassociate_unit_ids_from_repo(self.pulp_id, errata_id_list)
     end
 
     def delete_distribution distribution_id
-      Runcible::Extensions::Distribution.unassociate_ids_from_repo(self.pulp_id, [distribution_id])
+      Runcible::Extensions::Distribution.unassociate_unit_ids_from_repo(self.pulp_id, [distribution_id])
     end
 
     def cancel_sync
@@ -543,10 +572,10 @@ module Glue::Pulp::Repo
         history = Runcible::Extensions::Repository.sync_status(pulp_id)
 
         if history.nil? or history.empty?
-          history = Runcible::Extensions::Repository.sync_history(pulp_id)
+          history = PulpSyncStatus.convert_history(Runcible::Extensions::Repository.sync_history(pulp_id))
         end
       rescue => e
-          history = Runcible::Extensions::Repository.sync_history(pulp_id)
+          history = PulpSyncStatus.convert_history(Runcible::Extensions::Repository.sync_history(pulp_id))
       end
 
       if history.nil? or history.empty?

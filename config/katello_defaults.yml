@@ -21,7 +21,7 @@ common:
   use_foreman: # set to true/false if you want to override default
   use_elasticsearch: # set to true/false if you want to override default
   app_name: # set a name if you want to override default
-
+  gravatar: true # set to true/false for enabling disabling gravatar
   warden: database
   ldap_roles: false
   validate_ldap: false
@@ -65,12 +65,18 @@ common:
 
   redhat_repository_url: https://cdn.redhat.com
 
-  # this enables gems used for profiling. will also enable newrelic in development mode
-  # for newrelic, go to /newrelic
-  profiling: false
+  # Add actions you want to profile with ruby-prof to profiling option, e.g.
+  #   profiling:
+  #     - "user_sessions#new"
+  #     - "user_sessions#create"
+  # Profiles will be stored in `tmp/profiles/`.
+  # When no action is present profiling is disabled, which is default.
+  profiling:
 
   # if paranoia is set to true even children of Exception will be rescued
   exception_paranoia: false
+  # set true to hide exceptions from user
+  hide_exceptions: false
 
   # run yard server inside katello server
   embed_yard_documentation: false
@@ -82,6 +88,24 @@ common:
   #
   notification:
     polling_seconds: 120
+
+  ldap_fluff_config:
+    host: ## ip address or hostname
+    port: 389 ## ip address or hostname
+    encryption: ## blank or :start_tls
+    base_dn: dc=redhat,dc=com ## baseDN for ldap auth, eg dc=redhat,dc=com
+    group_base: dc=redhat,dc=com ##baseDN for your ldap groups, eg ou=Groups,dc=redhat,dc=com
+    server_type: posix ## type of server. default == posix. :active_directory, :posix, :free_ipa
+    ad_domain: ## domain for your users if using active directory, eg redhat.com
+    service_user: ## service account for authenticating ldap calls in active directory or ipa
+    service_pass: ## service password for authenticating ldap calls in active directory or ipa
+    anon_queries: ## allow anonymous queries for AD or FreeIPA
+
+  # authentication
+  sso:
+    enable: true
+    provider_url: https://localhost/signo
+    logout_path: /logout
 
   # Setup your UI search configuration.
   search:
@@ -122,7 +146,7 @@ common:
     oauth_secret: katello
 
     sync_threads: 4
-    bulk_load_size: 200
+    bulk_load_size: 100
     # refers to the apache certificate
     # (typically /etc/pki/tls/certs/localhost.crt) location that is needed
     # to connect to pulp over https.
@@ -178,6 +202,8 @@ common:
     # adds an extra line after each log message with information from which file:line and method
     # was this message logged
     log_trace: false
+    #do not log certain paths (example  /notices/get_new)
+    ignored_paths: []
     # configuration of all loggers used in app
     loggers:
       # this logger is parent of all other loggers, by default this is the only one having appender
@@ -247,12 +273,11 @@ common:
 #
 production:
   exception_paranoia: true
+  hide_exceptions: true
   database:
     database: katello
   logging:
     loggers:
-      root:
-        path: /var/log/katello
       sql:
         level: fatal
 
@@ -268,7 +293,10 @@ development:
   database:
     database: katelloschema
     min_messages: WARNING
+  sso:
+    enable: false
   logging:
+    ignored_paths: ['/notices/get_new', '/assets/']
     colorize: true
     loggers:
       root:
@@ -304,6 +332,7 @@ development:
 # The following configuration values override ones from the common section
 #
 test:
+  rspec_gc_defer_time: <%= (ENV['DEFER_GC'] || 10).to_f %>
   database:
     database: katello-test<%= ENV['TEST_ENV_NUMBER'] %>
     min_messages: WARNING

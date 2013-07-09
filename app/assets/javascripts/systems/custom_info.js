@@ -50,6 +50,7 @@ KT.custom_info = (function() {
             type   : $button.data("method"),
             success: function() {
                 remove_custom_info_row($button.data("id"));
+                notices.displayNotice("success", window.JSON.stringify({ "notices": [i18n.custom_info_delete_success] }));
             },
             error  : function(data) {
                 notices.displayNotice("error", window.JSON.stringify({ "notices": [$.parseJSON(data.responseText)["displayMessage"]] }));
@@ -68,6 +69,7 @@ KT.custom_info = (function() {
             data    : { "keyname": keyname, "value": value },
             success : function(data) {
                 add_custom_info_row(data);
+                notices.displayNotice("success", window.JSON.stringify({ "notices": [i18n.custom_info_create_success] }));
             },
             error   : function(data) {
                 notices.displayNotice("error", window.JSON.stringify({ "notices": [$.parseJSON(data.responseText)["displayMessage"]] }));
@@ -82,25 +84,43 @@ KT.custom_info = (function() {
     }
 
     function add_custom_info_row(data) {
-        var esc_keyname = escape(data["keyname"]);
-        var _keyname = data["keyname"].replace(" ", "_");
+        var _keyname = escape(data["keyname"]);
         var value = data["value"];
         var informable_type = data["informable_type"];
         var informable_id = data["informable_id"];
-        var update_path = KT.routes.api_update_custom_info_path(informable_type, informable_id, esc_keyname);
-        var destroy_path = KT.routes.api_destroy_custom_info_path(informable_type, informable_id, esc_keyname);
+        var update_path = KT.routes.api_update_custom_info_path(informable_type, informable_id, _keyname);
+        var destroy_path = KT.routes.api_destroy_custom_info_path(informable_type, informable_id, _keyname);
 
-        var new_row = "<tr class=\"primary_color custom_info_row\" data-id=\"custom_info_" + _keyname + "\">"
-        + "<td class=\"ra\">"
-        + "<label for=\"custom_info_" + _keyname + "\">" + data["keyname"] + "</label>"
-        + "</td>"
-        + "<td>"
-        + "<div class=\"editable edit_textfield_custom_info\" data-method=\"put\" data-url=\"" + update_path + "\" name=\"value\" style title=\"Click to edit\">" + value + "</div>"
-        + "</td>"
-        + "<td>"
-        + "<input class=\"btn warning remove_custom_info_button\" data-id=\"custom_info_" + _keyname + "\" data-method=\"delete\" data-url=\"" + destroy_path + "\" type=\"submit\" value=\"" + i18n.remove + "\">"
-        + "</td>"
-        + "</tr>";
+        var new_row = $('<tr/>', {
+            'class': 'primary_color custom_info_row',
+            'data-id': 'custom_info_' + _keyname,
+            'html': $('<td/>', {
+                'class': 'ra',
+                'html': $('<label/>', {
+                    'for': 'custom_info_' + _keyname,
+                    'text': data["keyname"]
+                })
+            }).after($('<td/>', {
+                'html': $('<div/>', {
+                    'class': 'editable edit_textfield_custom_info',
+                    'data-method': 'put',
+                    'data-url': update_path,
+                    'name': 'custom_info[' + data["keyname"] + ']',
+                    'style': 'true',
+                    'title': i18n.clickToEdit,
+                    'text': value
+                })
+            })).after($('<td/>', {
+                'html': $('<input/>', {
+                    'class': 'btn warning remove_custom_info_button',
+                    'data-id': 'custom_info_' + _keyname,
+                    'data-method': 'delete',
+                    'data-url': destroy_path,
+                    'type': 'submit',
+                    'value': i18n.remove
+                })
+            }))
+        });
 
         $("#new_custom_info_row").after(new_row);
         setTimeout(function() { $("tr[data-id='custom_info_" + _keyname + "']").addClass("row_fade_in"); }, 1);

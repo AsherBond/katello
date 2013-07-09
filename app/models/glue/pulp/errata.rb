@@ -40,6 +40,17 @@ module Glue::Pulp::Errata
         ::Errata.new(erratum_attrs) if not erratum_attrs.nil?
       end
 
+      def self.list_by_filter_clauses(clauses)
+        errata = Runcible::Extensions::Errata.search(::Errata::CONTENT_TYPE,
+                                :filters => clauses)
+        if errata
+          errata.collect do |attrs|
+            ::Errata.new(attrs) if attrs
+          end.compact
+        else
+          []
+        end
+      end
     end
 
   end
@@ -73,19 +84,27 @@ module Glue::Pulp::Errata
       packages
     end
 
-    def product_ids
-      product_ids = []
+    def products
+      products = []
 
       self.repoids.each do |repoid|
         # there is a problem, that Pulp in versino <= 0.0.265-1 doesn't remove
         # repo frmo errata when deleting repository. Therefore there might be a
         # situation that repo is not in Pulp anymore, see BZ 790356
         if repo = Repository.where(:pulp_id => repoid)[0]
-          product_ids << repo.product.id
+          products << repo.product
         end
       end
 
-      product_ids.uniq
+      products.uniq
+    end
+
+    def product_ids
+      products.map(&:id)
+    end
+
+    def product_cp_ids
+      products.map(&:cp_id)
     end
   end
 

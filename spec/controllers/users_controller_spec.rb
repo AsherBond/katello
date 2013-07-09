@@ -50,10 +50,12 @@ describe UsersController do
       response.should_not be_success
     end
 
-    it "should error if no password", :katello => true do #TODO headpin
+    it 'should error if blank password', :katello => true do #TODO headpin
       post 'create', {:user => {:username=>"testuser", :password=>"", :email=> "user@somewhere.com", :env_id => @environment.id}}
       response.should_not be_success
+    end
 
+    it 'should error if no password', :katello => true do #TODO headpin
       post 'create', {:user => {:username=>"testuser", :email=> "user@somewhere.com", :env_id => @environment.id}}
       response.should_not be_success
     end
@@ -136,6 +138,45 @@ describe UsersController do
 
   end
 
+  describe "destroy a user" do
+    before(:each) do
+      User.any_instance.stub(:deletable?).and_return(true)
+
+      @to_delete = mock_model(User, :username=>"deleted", :password=>"deleted", :email=>"delete@test").as_null_object
+      User.stub(:find).and_return(@to_delete)
+      @to_delete.stub(:destroy)
+    end
+
+    describe "on success" do
+      before(:each) { @to_delete.stub(:destroyed?).and_return(true) }
+
+      it "destroys the requested user", :katello => true do
+        @to_delete.should_receive(:destroy)
+        @to_delete.should_receive(:destroyed?)
+        delete :destroy, :id => '123456', :format => :js
+      end
+
+      it "updates the user list", :katello => true do
+        delete :destroy, :id => "123456", :format => :js
+        response.should render_template(:partial => 'common/_list_remove')
+      end
+    end
+
+    describe "on failure" do
+      before(:each) { @to_delete.stub(:destroyed?).and_return(false) }
+
+      it "should produce an error notice on failure", :katello => true do
+        controller.should notify.error
+        delete :destroy, :id => "123456"
+      end
+
+      it "shouldn't render anything on failure", :katello => true do
+        delete :destroy, :id => "123456"
+        response.body.should be_blank
+      end
+    end
+  end
+
   describe "set helptips" do
 
     before(:each) do
@@ -205,6 +246,37 @@ describe UsersController do
          user_with_permissions { |u| u.can(:read, :users, nil, nil) }
       end
       it_should_behave_like "protected action"
+    end
+  end
+
+  describe "edit environment" do
+    before do
+      @organization = new_test_org
+      @testuser = create(:user)
+    end
+
+    describe "GET edit_environment" do
+      let(:action) {:items}
+      let(:req) { get :edit_environment }
+      let(:authorized_user) do
+        user_with_permissions { |u| u.can(:read, :users, nil, nil) }
+      end
+      let(:unauthorized_user) do
+        user_without_permissions
+      end
+      let(:on_success) do
+        assigns(:items).should include @testuser
+      end
+
+      it "should assign environment if user to default environment" do
+        env = create(:environment, :prior => @organization.library)
+        User.stub(:find).and_return(@testuser)
+        @testuser.stub(:has_default_environment?).and_return(true)
+        @testuser.should_receive(:default_environment).and_return(env)
+
+        get :edit_environment, :id => @testuser
+        response.should be_success
+      end
     end
   end
 end

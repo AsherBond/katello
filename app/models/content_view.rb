@@ -29,13 +29,13 @@ class ContentView < ActiveRecord::Base
   alias :versions :content_view_versions
 
   belongs_to :environment_default, :class_name => "KTEnvironment", :inverse_of => :default_content_view,
-             :foreign_key => :environment_default_id
+             :foreign_key => :environment_default_id # TODO this relation seems to be broken
 
-  has_many :component_content_views
+  has_many :component_content_views, :dependent => :destroy
   has_many :composite_content_view_definitions,
     :through => :component_content_views, :source => "content_view_definition"
 
-  has_many :changeset_content_views
+  has_many :changeset_content_views, :dependent => :destroy
   has_many :changesets, :through => :changeset_content_views
   has_many :activation_keys
 
@@ -69,9 +69,9 @@ class ContentView < ActiveRecord::Base
     # list of component content views, if any, that do not exist in the environment
     # provided.
     if composite
-      content_view_definition.component_content_views.group("content_views.id").
-          joins(:content_view_versions => :content_view_version_environments).
-          where(["content_view_version_environments.content_view_version_id "\
+      content_view_definition.component_content_views.select("distinct content_views.*").
+              joins(:content_view_versions => :content_view_version_environments).
+              where(["content_view_version_environments.content_view_version_id "\
                  "NOT IN (SELECT content_view_version_id FROM "\
                  "content_view_version_environments WHERE environment_id = ?)", env])
     end
@@ -99,6 +99,7 @@ class ContentView < ActiveRecord::Base
     self.environments.length > 1 ? true : false
   end
 
+  #NOTE: this function will most likely become obsolete once we drop api v1
   def as_json(options = {})
     result = self.attributes
     result['organization'] = self.organization.try(:name)
@@ -129,7 +130,7 @@ class ContentView < ActiveRecord::Base
   end
 
   def version(env)
-    self.versions.in_environment(env).order('content_view_versions.id ASC').last
+    self.versions.in_environment(env).order('content_view_versions.id ASC').scoped(:readonly=>false).last
   end
 
   def version_environment(env)
@@ -205,7 +206,7 @@ class ContentView < ActiveRecord::Base
 
     promote_version = self.version(from_env)
     promote_version = ContentViewVersion.find(promote_version.id)
-    promote_version.environments << to_env
+    promote_version.environments << to_env unless promote_version.environments.include?(to_env)
     promote_version.save!
 
     repos_to_promote = get_repos_to_promote(from_env, to_env)
@@ -224,6 +225,8 @@ class ContentView < ActiveRecord::Base
       end
     end
 
+    Glue::Event.trigger(Katello::Actions::ContentViewPromote, self, from_env, to_env)
+
     tasks
   end
 
@@ -236,6 +239,7 @@ class ContentView < ActiveRecord::Base
       raise Errors::ChangesetContentException.new(_("Cannot delete from %s, view does not exist there.") % from_env.name)
     end
     version = ContentViewVersion.find(version.id)
+    Glue::Event.trigger(Katello::Actions::ContentViewDemote, self, from_env)
     version.delete(from_env)
     self.destroy if self.versions.empty?
   end
@@ -255,26 +259,31 @@ class ContentView < ActiveRecord::Base
     # at this point, we don't want to delete the version as we need to reference the repos it
     # contains during the refresh
     library_version = self.version(self.organization.library)
-    library_version.environments.delete(self.organization.library)
 
     # create a new version
     version = ContentViewVersion.new(:version => next_version_id, :content_view => self)
     version.environments << organization.library
     version.save!
 
+    #move all the existing repos over to the new version
+    library_version.repos(organization.library).each do |repo|
+      repo.content_view_version = version
+    end
+    library_version.reload
+    library_version.delete(self.organization.library)
+
     if options[:async]
       task  = version.async(:organization => self.organization,
                             :task_type => TaskStatus::TYPES[:content_view_refresh][:type]).
-                      refresh_version(library_version, options[:notify])
+                      refresh_version(options[:notify])
 
       version.task_status = task
       version.save!
     else
       version.task_status = nil
       version.save!
-      version.refresh_version(library_version, options[:notify])
+      version.refresh_version(options[:notify])
     end
-
     version
   end
 
@@ -304,26 +313,24 @@ class ContentView < ActiveRecord::Base
   # a version of the view is promoted to an environment.  It is necessary for
   # candlepin to become aware that the view is available for consumers.
   def add_environment(env)
-    unless (env.library && self.content_view_environments.where(:environment_id=>env.id).blank?)
+    if self.content_view_environments.where(:environment_id => env.id ).empty?
       ContentViewEnvironment.create!(:name => env.name,
                                      :label => self.cp_environment_label(env),
                                      :cp_id => self.cp_environment_id(env),
                                      :environment_id => env.id,
                                      :content_view => self)
-    end
+      end
   end
 
   # Unassociate an environment from this content view. This can occur whenever
   # a view is deleted from an environment. It is necessary to make candlepin
   # aware that the view is no longer available for consumers.
   def remove_environment(env)
-    unless env.library
-      # Do not remove the content view environment, if there is still a view
-      # version in the environment.
-      if self.versions.in_environment(env).blank?
-        view_env = self.content_view_environments.where(:environment_id=>env.id)
-        view_env.first.destroy unless view_env.blank?
-      end
+    # Do not remove the content view environment, if there is still a view
+    # version in the environment.
+    if self.versions.in_environment(env).blank?
+      view_env = self.content_view_environments.where(:environment_id=>env.id)
+      view_env.first.destroy unless view_env.blank?
     end
   end
 
@@ -364,7 +371,7 @@ class ContentView < ActiveRecord::Base
         # a version of this repo is being promoted, so clear it and later
         # we'll regenerate the content... this is more efficient than
         # destroying the repo and recreating it...
-        result << repo.clear_contents
+        result += repo.clear_contents
       else
         # a version of this repo is not being promoted, so destroy it
         repo.destroy

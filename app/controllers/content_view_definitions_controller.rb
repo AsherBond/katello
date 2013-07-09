@@ -17,7 +17,7 @@ class ContentViewDefinitionsController < ApplicationController
   before_filter :require_user
   before_filter :find_content_view_definition, :only => [:clone, :show, :edit, :update, :destroy, :views, :content,
                                                          :update_content, :update_component_views,
-                                                         :publish_setup, :publish, :status]
+                                                         :publish_setup, :publish, :definition_status]
   before_filter :authorize #after find_content_view_definition, since the definition is required for authorization
   before_filter :panel_options, :only => [:index, :items]
 
@@ -56,7 +56,7 @@ class ContentViewDefinitionsController < ApplicationController
       :destroy => delete_rule,
 
       :views => show_rule,
-      :status => publish_rule,
+      :definition_status => publish_rule,
 
       :content => show_rule,
       :update_content => manage_rule,
@@ -159,14 +159,16 @@ class ContentViewDefinitionsController < ApplicationController
 
   def publish
     # perform the publish
-    @view_definition.publish(params[:content_view][:name], params[:content_view][:description],
-                             params[:content_view][:label], {:notify => true}) if params.has_key?(:content_view)
+    if params.has_key?(:content_view)
+      @view_definition.publish(params[:content_view][:name], params[:content_view][:description],
+                               params[:content_view][:label], {:notify => true})
+      notify.success(_("Started publish of content view '%{view_name}' from definition '%{definition_name}'.") %
+                         {:view_name => params[:content_view][:name], :definition_name => @view_definition.name})
 
-    notify.success(_("Started publish of content view '%{view_name}' from definition '%{definition_name}'.") %
-                       {:view_name => params[:content_view][:name], :definition_name => @view_definition.name})
-
-    render :nothing => true
-
+      render :nothing => true
+    else
+      render_bad_parameters
+    end
   rescue => e
     notify.exception(_("Failed to publish content view '%{view_name}' from definition '%{definition_name}'.") %
                          {:view_name => params[:content_view][:name], :definition_name => @view_definition.name}, e)
@@ -181,7 +183,7 @@ class ContentViewDefinitionsController < ApplicationController
                        :name => controller_display_name}
   end
 
-  def status
+  def definition_status
     # retrieve the status for publish & refresh tasks initiated by the client
     statuses = {:task_statuses => []}
 
@@ -191,7 +193,7 @@ class ContentViewDefinitionsController < ApplicationController
           :pending? => status.pending?,
           :status_html => render_to_string(:template => 'content_view_definitions/views/_version',
                                            :layout => false, :locals => {:version => status.task_owner,
-                                                                         :task => status})
+                                                                         :task => status, :view_definition => @view_definition})
       }
     end
 
@@ -220,8 +222,8 @@ class ContentViewDefinitionsController < ApplicationController
   end
 
   def update_content
-    if params[:products]
-      products_ids = params[:products].empty? ? [] : Product.readable(current_organization).
+    if params.has_key?(:products)
+      products_ids = params[:products].blank? ? [] : Product.readable(current_organization).
           where(:id => params[:products]).pluck("products.id")
 
       @view_definition.product_ids = products_ids

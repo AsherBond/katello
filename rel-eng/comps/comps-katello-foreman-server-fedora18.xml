@@ -24,25 +24,19 @@
        <packagereq type="default">foreman-proxy</packagereq>
 
        <packagereq type="default">foreman-installer</packagereq>
-       <packagereq type="default">foreman-proxy-installer</packagereq>
-       <packagereq type="default">foreman-installer-puppet-apache</packagereq>
-       <packagereq type="default">foreman-installer-puppet-concat</packagereq>
-       <packagereq type="default">foreman-installer-puppet-dhcp</packagereq>
-       <packagereq type="default">foreman-installer-puppet-dns</packagereq>
-       <packagereq type="default">foreman-installer-puppet-foreman</packagereq>
-       <packagereq type="default">foreman-installer-puppet-foreman_proxy</packagereq>
-       <packagereq type="default">foreman-installer-puppet-passenger</packagereq>
-       <packagereq type="default">foreman-installer-puppet-puppet</packagereq>
-       <packagereq type="default">foreman-installer-puppet-tftp</packagereq>
-       <packagereq type="default">foreman-installer-puppet-xinetd</packagereq>
 
        <packagereq type="default">rubygem-ancestry</packagereq>
        <packagereq type="default">rubygem-awesome_print</packagereq>
+       <packagereq type="default">rubygem-excon</packagereq>
        <packagereq type="default">rubygem-execjs</packagereq>
+       <packagereq type="default">rubygem-fog</packagereq>
        <packagereq type="default">rubygem-foremancli</packagereq>
+       <packagereq type="default">rubygem-gettext_i18n_rails_js</packagereq>
        <packagereq type="default">rubygem-hirb</packagereq>
        <packagereq type="default">rubygem-hirb-unicode</packagereq>
        <packagereq type="default">rubygem-jquery-ui-rails</packagereq>
+       <packagereq type="default">rubygem-net-scp</packagereq>
+       <packagereq type="default">rubygem-net-ssh</packagereq>
        <packagereq type="default">rubygem-quiet_assets</packagereq>
        <packagereq type="default">rubygem-rabl</packagereq>
        <packagereq type="default">rubygem-rbovirt</packagereq>
@@ -56,6 +50,9 @@
        <packagereq type="default">rubygem-unicode-display_width</packagereq>
        <packagereq type="default">rubygem-virt</packagereq>
        <packagereq type="default">rubygem-wirb</packagereq>
+
+       <!-- foreman-proxy deps -->
+       <packagereq type="default">rubygem-rkerberos</packagereq>
     </packagelist>
   </group>
   <group>

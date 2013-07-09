@@ -21,7 +21,7 @@ module Glue::Candlepin::Pool
       lazy_accessor :remote_data, :pool_derived, :product_name, :consumed, :quantity, :support_level, :support_type,
         :start_date, :end_date, :attrs, :owner, :product_id, :account_number, :contract_number,
         :source_pool_id, :host_id, :virt_only, :virt_limit, :multi_entitlement, :stacking_id,
-        :arch, :sockets, :ram, :description, :product_family, :variant, :provided_products,
+        :arch, :sockets, :cores, :ram, :description, :product_family, :variant, :provided_products, :instance_multiplier, :suggested_quantity,
         :initializer => lambda {|s|
           json = Resources::Candlepin::Pool.find(cp_id)
           # symbol "attributes" is reserved by Rails and cannot be used
@@ -53,7 +53,7 @@ module Glue::Candlepin::Pool
     end
 
     def organization
-      Organization.find_by_name(self.owner["key"])
+      Organization.find_by_label(self.owner["key"])
     end
 
     # if defined +load_remote_data+ will be used by +lazy_accessors+
@@ -94,6 +94,7 @@ module Glue::Candlepin::Pool
       @support_level = ""
       @sockets = 0
       @ram = 0
+      @cores = 0
       @description = ""
       @product_family = ""
       @variant = ""
@@ -111,6 +112,8 @@ module Glue::Candlepin::Pool
             @support_level = attr['value']
           when 'sockets'
             @sockets = attr['value'].to_i
+          when 'cores'
+            @cores = attr['value'].to_i
           when 'ram'
             @ram = attr['value'].to_i
           when 'description'
@@ -123,8 +126,18 @@ module Glue::Candlepin::Pool
             @multi_entitlement = (attr['value'] == 'true' || attr['value'] == 'yes') ? true : false
           when 'stacking_id'
             @stacking_id = attr['value']
+          when 'instance_multiplier'
+            @instance_multiplier = attr['value'].to_i
         end
       end if attrs['productAttributes']
+
+      @suggested_quantity = 1
+      attrs['calculatedAttributes'].each_key do |key|
+        case key
+          when 'suggested_quantity'
+            @suggested_quantity = attrs['calculatedAttributes']['suggested_quantity'].to_i
+        end
+      end if attrs['calculatedAttributes']
     end
 
   end

@@ -40,9 +40,17 @@ module Glue::Candlepin::Environment
       raise e
     end
 
+    def candlepin_info
+      Resources::Candlepin::Environment.find(self.cp_id)
+    end
+
     def del_environment
       Rails.logger.info _("Deleting environment in candlepin: %s") % self.label
       Resources::Candlepin::Environment.destroy(self.cp_id)
+      true
+    rescue RestClient::ResourceNotFound => e
+      Rails.logger.info _("Candlepin environment doesn't exist: %s") % self.label
+      true
     rescue => e
       Rails.logger.error _("Failed to delete candlepin environment %s") %
                            "#{self.label}: #{e}, #{e.backtrace.join("\n")}"

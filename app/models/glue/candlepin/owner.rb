@@ -35,6 +35,7 @@ module Glue::Candlepin::Owner
     def serializable_hash(options={})
       hash = super(options)
       hash = hash.merge(:service_levels => self.service_levels)
+      hash = hash.merge(:service_level => self.service_level)
       hash
     end
 
@@ -110,6 +111,14 @@ module Glue::Candlepin::Owner
 
     def owner_details
       Resources::Candlepin::Owner.find self.label
+    end
+
+    def service_level
+      self.owner_details['defaultServiceLevel']
+    end
+
+    def service_level=(level)
+      Resources::Candlepin::Owner.update(self.label, {:defaultServiceLevel=>level})
     end
 
     def pools consumer_uuid = nil

@@ -14,7 +14,7 @@
 require "minitest_helper"
 require './test/support/content_view_definition_support'
 
-describe Api::FiltersController do
+describe Api::V1::FiltersController do
   fixtures :all
   before :suite do
     models = ["User", "Role", "UserOwnRole", "Permission", "Organization", "KTEnvironment",
@@ -131,10 +131,9 @@ describe Api::FiltersController do
                         :action => action,
                         :request => @req)
 
-      refute_authorized(:permission => @read_only_permissions,
+      refute_authorized(:permission => [*@read_only_permissions, NO_PERMISSION],
                         :action => action,
-                        :request => @req,
-                        :include_no_permissions=> true
+                        :request => @req
       )
     end
 
@@ -164,10 +163,9 @@ describe Api::FiltersController do
           :request => @req
       )
 
-      refute_authorized(:permission => @read_only_permissions,
+      refute_authorized(:permission => [*@read_only_permissions, NO_PERMISSION],
                         :action => action,
-                        :request => @req,
-                        :include_no_permissions=> true
+                        :request => @req
       )
     end
 
@@ -247,10 +245,9 @@ describe Api::FiltersController do
           :request => @req
       )
 
-      refute_authorized(:permission => perms.read_only,
+      refute_authorized(:permission => [*perms.read_only, NO_PERMISSION],
                         :action => action,
                         :request => @req,
-                        :include_no_permissions=> true
       )
     end
 
@@ -328,10 +325,9 @@ describe Api::FiltersController do
           :request => @req
       )
 
-      refute_authorized(:permission => perms.read_only,
+      refute_authorized(:permission => [*perms.read_only, NO_PERMISSION],
                         :action => action,
-                        :request => @req,
-                        :include_no_permissions=> true
+                        :request => @req
       )
     end
 

@@ -28,7 +28,7 @@ class GlueCandlepinConsumerTestBase < MiniTest::Rails::ActiveSupport::TestCase
     @loaded_fixtures = load_fixtures
 
     services  = ['Pulp', 'ElasticSearch', 'Foreman']
-    models    = ['System', 'User', 'KTEnvironment', 'Organization', 'Product', 'ContentView', 'ContentViewDefinition', 'ContentViewEnvironment', 'ContentViewVersion']
+    models    = ['System', 'User', 'KTEnvironment', 'Organization', 'Product', 'ContentView', 'ContentViewDefinition', 'ContentViewEnvironment', 'ContentViewVersion', "Distributor"]
     disable_glue_layers(services, models)
 
     User.current = User.find(@loaded_fixtures['users']['admin']['id'])
@@ -99,13 +99,13 @@ class GlueCandlepinConsumerTestSystem < GlueCandlepinConsumerTestBase
 
   # Memory values
   def test_memory_candlepin_consumer
-    assert_equal 256, @@sys.memory
+    assert_equal (256.0 / 1024.0), @@sys.memory
 
     @@sys.facts['memory.memtotal'] = '2 GB'
     @@sys.facts['dmi.memory.size'] = '4 GB'
-    assert_equal 2048, @@sys.memory
+    assert_equal 2, @@sys.memory
     @@sys.facts['memory.memtotal'] = nil
-    assert_equal 4096, @@sys.memory
+    assert_equal 4, @@sys.memory
 
     @@sys.memory = 'abc'
     assert_equal 0, @@sys.memory
@@ -151,9 +151,7 @@ class GlueCandlepinConsumerTestSecondDelete < GlueCandlepinConsumerTestBase
     # First delete
     CandlepinConsumerSupport.destroy_system(@sys.id)
     # Second delete
-    assert_raises(RestClient::Gone) do
-      CandlepinConsumerSupport.destroy_system(@sys.id, 'support/candlepin/system_delete')
-    end
+    assert_equal true, CandlepinConsumerSupport.destroy_system(@sys.id, 'support/candlepin/system_delete')
   end
 
   def test_candlepin_distributor_second_delete
@@ -161,9 +159,7 @@ class GlueCandlepinConsumerTestSecondDelete < GlueCandlepinConsumerTestBase
     # First delete
     CandlepinConsumerSupport.destroy_distributor(@dist.id)
     # Second delete
-    assert_raises(RestClient::Gone) do
-      CandlepinConsumerSupport.destroy_distributor(@dist.id, 'support/candlepin/distributor_delete')
-    end
+    assert_equal true, CandlepinConsumerSupport.destroy_distributor(@dist.id, 'support/candlepin/distributor_delete')
   end
 
 end

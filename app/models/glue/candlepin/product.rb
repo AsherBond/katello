@@ -96,6 +96,10 @@ module Glue::Candlepin::Product
       super
     end
 
+    def orphaned?
+      self.provider.redhat_provider? && self.certificate.nil?
+    end
+
     def build_product_content(attrs)
       @productContent = attrs.collect { |pc| ::Candlepin::ProductContent.new pc }
     end
@@ -147,10 +151,11 @@ module Glue::Candlepin::Product
 
     def set_product
       Rails.logger.debug "Creating a product in candlepin: #{name}"
+      self.attrs ||=  [{:name=>"arch", :value=>"ALL"}]
       json = Resources::Candlepin::Product.create({
         :name => self.name,
         :multiplier => self.multiplier || 1,
-        :attributes => self.attrs || [] # name collision with ActiveRecord
+        :attributes => self.attrs # name collision with ActiveRecord
       })
       self.cp_id = json[:id]
     rescue => e

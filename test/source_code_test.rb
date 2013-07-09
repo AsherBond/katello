@@ -62,14 +62,15 @@ class SourceCodeTest < MiniTest::Rails::ActiveSupport::TestCase
   describe 'formatting' do
     it 'does not have trailing whitespaces' do
       SourceCode.
-          new('**/*.{rb,js,scss,haml}').
+          new('**/*.{rb,js,scss,haml}',
+              %r'coverage|(public|vendor)/assets/.*\.js').
           check_lines { |line| line !~ / +$/ }
     end
 
     it 'does use soft-tabs' do
       SourceCode.
           new('**/*.{rb,js,scss,haml}',
-              %r'(public|vendor)/assets/.*\.js').# tab is ok in minified files, its shorter than space
+              %r'(coverage|(public|vendor)/assets/.*\.js)').# tab is ok in minified files, its shorter than space
           check_lines { |line| line !~ /\t/ }
     end
   end
@@ -123,6 +124,27 @@ Multiple anonymous placeholders:
           gettext_str !~ /#\{.*?\}/ and gettext_str.scan(/%[a-z]/).size <= 1
         end
       end
+    end
+  end
+
+  describe 'DB schema/structure' do
+    it 'should be up to date' do
+      message = 'The schema is not up to date. Please run db:migrate and check in db/schema.rb or db/structure.rb'
+
+      schema_version = Dir.glob('db/migrate/*.rb').sort.last[/db\/migrate\/(\d+).*.rb/, 1]
+      actual_version = if File.exist? 'db/schema.rb'
+                         File.read('db/schema.rb')[/^ActiveRecord::Schema.define\(\:version \=\> (\d+)\) do/, 1]
+                       elsif File.exist? 'db/structure.sql'
+                         File.
+                             read('db/structure.sql').
+                             scan(/INSERT INTO schema_migrations \(version\) VALUES \('(\d+)'\);/).
+                             map(&:first).
+                             sort.last
+                       else
+                         raise 'no schema.rb or structure.sql'
+                       end
+
+      assert_equal schema_version, actual_version, message
     end
   end
 end

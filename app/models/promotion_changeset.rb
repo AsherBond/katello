@@ -29,6 +29,8 @@ class PromotionChangeset < Changeset
       end
     end
 
+    validate_content_view_tasks_complete!
+
     # if the user is attempting to promote a composite view and one or more of the
     # component views neither exists in the target environment nor is part
     # of the changeset, stop the promotion
@@ -98,6 +100,9 @@ class PromotionChangeset < Changeset
 
     self.promotion_date = Time.now
     self.state          = Changeset::PROMOTED
+
+    Glue::Event.trigger(Katello::Actions::ChangesetPromote, self)
+
     self.save!
 
     index_repo_content to_env
@@ -170,10 +175,10 @@ class PromotionChangeset < Changeset
         end
       end
     end
-    pkg_ids = []
 
+    pkg_ids = []
     pkgs_promote.each_pair do |repo, pkgs|
-      repo.add_packages(pkgs)
+      PulpTaskStatus::wait_for_tasks [repo.add_packages(pkgs)]
       pkg_ids.concat(pkgs)
     end
     Package.index_packages(pkg_ids)
@@ -191,8 +196,7 @@ class PromotionChangeset < Changeset
         if repo.is_cloned_in? to_env
           clone             = repo.get_clone to_env
 
-
-          if repo.has_erratum? err.errata_id and !clone.has_erratum? err.errata_id
+          if repo.has_erratum? err.display_name and !clone.has_erratum? err.display_name
             errata_promote[clone] ||= []
             errata_promote[clone] << err.errata_id
           end
@@ -202,7 +206,7 @@ class PromotionChangeset < Changeset
 
     errata_ids = []
     errata_promote.each_pair do |repo, errata|
-      repo.add_errata(errata)
+      PulpTaskStatus::wait_for_tasks [repo.add_errata(errata)]
       errata_ids.concat(errata)
     end
     Errata.index_errata(errata_ids)
@@ -223,15 +227,15 @@ class PromotionChangeset < Changeset
         clone = repo.get_clone to_env
         next if clone.nil?
 
-        if repo.has_distribution? distro.distribution_id and
-            !clone.has_distribution? distro.distribution_id
+        if repo.has_distribution? distro.display_name and
+            !clone.has_distribution? distro.display_name
           distribution_promote[clone] = distro.distribution_id
         end
       end
     end
 
     distribution_promote.each_pair do |repo, distro|
-      repo.add_distribution(distro)
+      PulpTaskStatus::wait_for_tasks [repo.add_distribution(distro)]
     end
   end
 

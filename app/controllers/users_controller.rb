@@ -99,7 +99,7 @@ class UsersController < ApplicationController
       @organization   = current_organization
       accessible_envs = current_organization.environments
       setup_environment_selector(current_organization, accessible_envs)
-      @environment = first_env_in_path(accessible_envs)
+      @environment = first_env_in_path(accessible_envs, true)
     end
     render :partial => "edit",
            :locals  => { :user            => @user,
@@ -203,7 +203,6 @@ class UsersController < ApplicationController
 
   def edit_environment
     if @user.has_default_environment?
-      @old_perm     = @user.default_systems_reg_permission
       @environment  = @user.default_environment
       @old_env      = @environment
       @organization = Organization.find(@environment.attributes['organization_id'])
@@ -239,7 +238,7 @@ class UsersController < ApplicationController
 
     @environment              = default_environment_id.nil? ? nil : KTEnvironment.find(default_environment_id)
     @user.default_environment = @environment
-    #@user.save!
+    @user.save!
 
     @organization             = @environment.try :organization
 
@@ -272,10 +271,15 @@ class UsersController < ApplicationController
   end
 
   def destroy
-    if @user.destroy
+    @user.destroy
+    if @user.destroyed?
       notify.success _("User '%s' was deleted.") % @user[:username]
       #render and do the removal in one swoop!
       render :partial => "common/list_remove", :locals => { :id => params[:id], :name => controller_display_name }
+    else
+      err_msg = N_("Removal of the user failed. If you continue having trouble with this, please contact an Administrator.")
+      notify.error err_msg
+      render :nothing => true
     end
   end
 

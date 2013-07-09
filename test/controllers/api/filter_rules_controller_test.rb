@@ -14,7 +14,7 @@
 require "minitest_helper"
 require './test/support/content_view_definition_support'
 
-describe Api::FilterRulesController do
+describe Api::V1::FilterRulesController do
   fixtures :all
 
   before do
@@ -48,10 +48,9 @@ describe Api::FilterRulesController do
       )
 
       refute_authorized(
-          :permission => perms.read_only,
+          :permission => [*perms.read_only, NO_PERMISSION],
           :action => action,
           :request => @req,
-          :include_no_permissions => true
       )
 
     end
@@ -84,10 +83,9 @@ describe Api::FilterRulesController do
     )
 
     refute_authorized(
-        :permission => perms.read_only,
+        :permission => [*perms.read_only, NO_PERMISSION],
         :action => action,
-        :request => @req,
-        :include_no_permissions => true
+        :request => @req
     )
   end
 

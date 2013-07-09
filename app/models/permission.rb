@@ -13,7 +13,7 @@
 class Permission < ActiveRecord::Base
   include Glue::ElasticSearch::Permission if Katello.config.use_elasticsearch
   before_destroy :check_locked # RAILS3458: must be before dependent associations http://tinyurl.com/rails3458
-  belongs_to :resource_type
+  belongs_to :resource_type # TODO belongs_to permission on the other side
   belongs_to :organization
   belongs_to :role, :inverse_of => :permissions
   has_and_belongs_to_many :verbs
@@ -24,7 +24,7 @@ class Permission < ActiveRecord::Base
 
 
   validates :name, :presence => true
-  validates_with Validators::NonHtmlNameValidator, :attributes => :name
+  validates_with Validators::KatelloNameFormatValidator, :attributes => :name
   validates_with Validators::KatelloDescriptionFormatValidator, :attributes => :description
   validates_uniqueness_of :name, :scope => [:organization_id, :role_id], :message => N_("Label has already been taken")
   validates_with Validators::PermissionValidator
@@ -77,9 +77,9 @@ class Permission < ActiveRecord::Base
     return {all_verbs => true}.with_indifferent_access if all_verbs
     return {} if resource_type.nil? || verbs.nil?
     display_verbs = {}
-    verbs.each { |verb|
+    verbs.each do |verb|
       display_verbs[verb.verb] = {:id => verb.id, :display_name => verb.display_name(resource_type.name, global)}
-    }
+    end
     display_verbs.with_indifferent_access
   end
 

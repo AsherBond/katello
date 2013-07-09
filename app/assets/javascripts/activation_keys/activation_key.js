@@ -69,7 +69,7 @@ $(document).ready(function() {
 
      $('input[id^=filter]').live('change, keyup', function(){
          // if the user has cleared the filter box, locate all parents and if a parent is collapsed, hide the children
-         if ($.trim($(this).val()).length == 0) {
+         if ($.trim($(this).val()).length === 0) {
              var parents = $('tr[data-family_begin]');
              parents.each(function(){
                  // if the parent is collapsed, hide the children
@@ -91,25 +91,20 @@ KT.activation_key = (function($) {
         var fakesubbutton = $('#fake_subscription_submit_button');
         var subcheckboxes = $('#subscription_form input[type="checkbox"]');
         var checked = 0;
-        subbutton.hide();
 
         subcheckboxes.each(function(){
             $(this).change(function(){
                 if($(this).is(":checked")){
-                    checked++;
-                    if(!(subbutton.is(":visible"))){
-                        fakesubbutton.fadeOut("fast", function(){subbutton.fadeIn()});
-                    }
-                }else{
-                    checked--;
-                    if((subbutton.is(":visible")) && checked == 0){
-                        subbutton.fadeOut("fast", function(){fakesubbutton.fadeIn()});
+                    checked += 1;
+                    subbutton.removeAttr('disabled');
+                } else {
+                    checked -= 1;
+                    if (checked === 0) {
+                        subbutton.attr('disabled', 'disabled');
                     }
                 }
             });
         });
-
-        //subbutton.unbind('click').click(disable_submit);
     },
     initialize_new = function() {
         $('#usage_limit_checkbox').live('click', function() {
@@ -172,9 +167,9 @@ KT.activation_key = (function($) {
         // toggle the expand/collapse arrow
         var arrow = data.find('img');
         if(arrow.attr("src").indexOf("collapsed") === -1){
-            arrow.attr("src", "icons/expander-collapsed.png");
+            arrow.attr("src", "assets/icons/expander-collapsed.png");
         } else {
-            arrow.attr("src", "icons/expander-expanded.png");
+            arrow.attr("src", "assets/icons/expander-expanded.png");
         }
     },
     toggle_usage_limit = function(checkbox) {
@@ -209,8 +204,12 @@ KT.activation_key = (function($) {
                     total = sibling_cbxs.length,
                     num_checked = 0;
 
-                sibling_cbxs.each( function() { if (this.checked) num_checked++; });
-                if (total == num_checked) {
+                sibling_cbxs.each( function() {
+                    if (this.checked) {
+                        num_checked += 1;
+                    }
+                });
+                if (total === num_checked) {
                     family_cbx.attr('checked', true);
                 }
                 else if (num_checked > 0) {
@@ -327,6 +326,6 @@ KT.activation_key = (function($) {
         highlight_content_views: highlight_content_views,
         highlight_input: highlight_input,
         refresh_list_item: refresh_list_item
-    }
+    };
 }(jQuery));
 

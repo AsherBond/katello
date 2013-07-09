@@ -40,7 +40,7 @@ class Product < ActiveRecord::Base
   belongs_to :provider, :inverse_of => :products
   belongs_to :sync_plan, :inverse_of => :products
   belongs_to :gpg_key, :inverse_of => :products
-  has_many :content_view_definition_products
+  has_many :content_view_definition_products, :dependent => :destroy
   has_many :content_view_definitions, :through => :content_view_definition_products
 
   validates_with Validators::KatelloDescriptionFormatValidator, :attributes => :description
@@ -57,6 +57,14 @@ class Product < ActiveRecord::Base
   scope :with_enabled_repos_only, lambda { |env|
         with_repos(env, true)
   }
+
+  def self.find_by_cp_id(cp_id, organization)
+    self.where(:cp_id=>cp_id).in_org(organization).scoped(:readonly=>false).first
+  end
+
+  def self.in_org(organization)
+    self.joins(:provider).where('providers.organization_id' => organization.id)
+  end
 
   scope :engineering, where(:type => "Product")
 

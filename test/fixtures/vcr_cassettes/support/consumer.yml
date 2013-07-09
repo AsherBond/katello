@@ -2,7 +2,7 @@
 http_interactions: 
 - request: 
     method: post
-    uri: https://localhost/pulp/api/v2/consumers/
+    uri: https://abed.usersys.redhat.com/pulp/api/v2/consumers/
     body: 
       encoding: US-ASCII
       string: "{\"id\":\"010E99C0-3276-11E2-81C1-0800200C9A66\",\"display_name\":\"Simple Server\"}"
@@ -14,7 +14,7 @@ http_interactions:
       Content-Type: 
       - application/json
       Authorization: 
-      - OAuth oauth_body_hash="2jmj7l5rSw0yVb%2FvlWAYkK%2FYBwk%3D", oauth_consumer_key="katello", oauth_nonce="rWcsOKbSK7HzSseGDGQDtjXK6SSKg8dYzG6m2oSMSYg", oauth_signature="U9TLfW%2B0rlYxiFnoKUUqS2tHv7g%3D", oauth_signature_method="HMAC-SHA1", oauth_timestamp="1367009959", oauth_version="1.0"
+      - OAuth oauth_body_hash="2jmj7l5rSw0yVb%2FvlWAYkK%2FYBwk%3D", oauth_consumer_key="katello", oauth_nonce="aF7qPioS6YOYVi7K7eufOnh1djvQdLjw4dPnFyc80CQ", oauth_signature="rxbdwwptQXEIyK9pfo5gTOlGfzU%3D", oauth_signature_method="HMAC-SHA1", oauth_timestamp="1373071755", oauth_version="1.0"
       Pulp-User: 
       - admin
       Content-Length: 
@@ -27,23 +27,23 @@ http_interactions:
       message: Created
     headers: 
       Date: 
-      - Fri, 26 Apr 2013 20:59:19 GMT
+      - Sat, 06 Jul 2013 00:49:15 GMT
       Server: 
       - Apache/2.2.15 (Red Hat)
       Location: 
       - "{'_href': u'/pulp/api/v2/consumers/010E99C0-3276-11E2-81C1-0800200C9A66/'}"
       Content-Length: 
-      - "2203"
+      - "2195"
       Content-Type: 
       - application/json
     body: 
       encoding: US-ASCII
-      string: "{\"display_name\": \"Simple Server\", \"description\": null, \"certificate\": \"-----BEGIN RSA PRIVATE KEY-----\\nMIICXwIBAAKBgQDf1c5NPOJvI2BekcSPo4oqN/lzx6NjFLYsJp1lRqYTueX7OIsE\\ncqKXm17kLmEYBwfnnok0cWKD6sBy7FZ/PCemA/NouJJldJ+70nBSuns5Q9/cnArY\\nJnBKCuWD2SD3enLlorKdq7HulAnnprvoWM8M3rb+S4vIq4TF2YzjGY1uowIDAQAB\\nAoGBAJ3zu5QnncY9mZjClomiJzKpsz9vpq2ZhQBc837vPuz2pwMDoJ4v4urHOkwd\\nKmkRNRPOfRXj2VgrxUiT3GoG4hZjv4eFuRaoT2i+2+WbQDcqPQLHTSl5JZhvUrFt\\ndaDLCw9WDasUJpVxz/fZeJVwWfsU6YM4zz8LA6i8wFWDwCjxAkEA+0FRhK8vOMZN\\nMSSwzwTTIdfHD69F+d9Xp+tH++RdbT2J2RL+bq+LjlfsHWoGakVEV6vU6uNab4ws\\ngWyMIGncqQJBAOQP7UUZfDpX4+R55q+4CVsEvZqpaCWbkl5Pctjw3R2tZjArJLd5\\nEe47yPect6bsVyOYXDr5qMVKr6wSWwkpFGsCQQCc1yNZ3jluCWt6N9se/3YEdDvQ\\nsKrP1flT2u0ucllXrch09wRYd8B39K5xlhO3FtIYoCzjC1USuL+3ctjuCucxAkEA\\njkTNPATo9TBsztOor8d7tpbffMLfYE6LYV/ogiLHnULVc4kGb5oMMHSFKspN2sim\\nl2LtbjDeMq0jp5EPz0gcHwJBAMNTW/OumBc6NU6fs1BI22xUSp6pyY5nrcqhQhnB\\nunM9B44NG7WAVPI2vAGSDSC5E1cY89jy6oHX1xJp11syPrA=\\n-----END RSA PRIVATE KEY-----\\n-----BEGIN CERTIFICATE-----\\nMIICpjCCAY4CAgG0MA0GCSqGSIb3DQEBBQUAMIGFMQswCQYDVQQGEwJVUzEXMBUG\\nA1UECBMOTm9ydGggQ2Fyb2xpbmExEDAOBgNVBAcTB1JhbGVpZ2gxEDAOBgNVBAoT\\nB1NvbWVPcmcxFDASBgNVBAsTC1NvbWVPcmdVbml0MSMwIQYDVQQDExpkaGNwMTI5\\nLTE4MS5yZHUucmVkaGF0LmNvbTAeFw0xMzA0MjYyMDU5MTlaFw0yMzA0MjQyMDU5\\nMTlaMC8xLTArBgNVBAMTJDAxMEU5OUMwLTMyNzYtMTFFMi04MUMxLTA4MDAyMDBD\\nOUE2NjCBnzANBgkqhkiG9w0BAQEFAAOBjQAwgYkCgYEA39XOTTzibyNgXpHEj6OK\\nKjf5c8ejYxS2LCadZUamE7nl+ziLBHKil5te5C5hGAcH556JNHFig+rAcuxWfzwn\\npgPzaLiSZXSfu9JwUrp7OUPf3JwK2CZwSgrlg9kg93py5aKynaux7pQJ56a76FjP\\nDN62/kuLyKuExdmM4xmNbqMCAwEAATANBgkqhkiG9w0BAQUFAAOCAQEAl7usohno\\nNqgRXEY3vO2friqwyJfuQs35SUv5di6c7Df/PFBTIu1s7xDX4oKIbupgxE/piqo/\\nG96k64RJmmKQKjrHOygzQjBTMohYo/YsZWTU623FAvynTlZeUseynRINq2sEc1X6\\nmidDLYLWC40I+RCXOmRv2PLfl849uq/rNYE7QJ3eS3zDp5qtuaT5YNJvIl9A5hvE\\nxzCQdeuOWc5/M1g68B3I5CrzsEWqs1XFS6wFPdhlHi4FPZkZCuPLQdOGxF9RD+LA\\nA8U7GTtAT7IyX7bsxvZpKeJeNU7pJPwQQu0BZXTsM01z8YSuSDwIT0bRElc1fw3C\\nOpUxsGzaGMoqAQ==\\n-----END CERTIFICATE-----\", \"_ns\": \"consumers\", \"notes\": {}, \"capabilities\": {}, \"_id\": {\"$oid\": \"517aeaa73cbbb519a4005061\"}, \"id\": \"010E99C0-3276-11E2-81C1-0800200C9A66\", \"_href\": {\"_href\": \"/pulp/api/v2/consumers/010E99C0-3276-11E2-81C1-0800200C9A66/\"}}"
+      string: "{\"display_name\": \"Simple Server\", \"description\": null, \"certificate\": \"-----BEGIN RSA PRIVATE KEY-----\\nMIICXQIBAAKBgQDPsdwufP1gxWCmq95SLUJfU+ohb3Rmudf7q6ZZHEWHrRqRPzPP\\nSW/6Lc2igvqXk6dQpCvQhY6dGeHa928PKyWWc7ZFGV4Xf0ebsXhGWqldhAuDikq1\\n8R1Mul2r2hmVP5QJm5qR1szNIGD8GK6CuB4qU8tn4weU5VAKbhaJXgwsxwIDAQAB\\nAoGBALFLGrF0cLaSxpaAUB/GEspdT5eLFMo8CmsDc9TNlWzkD7G9SfTAs53US51W\\nQaPynvjvq5cs6zigR3Qrk9pW8pWY+n5vgh78t08AZACatnMXqio8O4KnqBYzUy/m\\nkEdN1mVsOd9R3A0AA+Qf06c9Vv0HJGiVFHXKyiZVsZUOr/NBAkEA+YZy2CH7GwNQ\\nOp/iQMyEBAR92jqZRZy9a9pkj8DhhqHiUoQhA9IPPq256pEuXuhghRNO5kZR37Up\\neFnQa9HjxQJBANUVihdaSGZcecZYHKXkjB6Ngu5hUE8zZl0A1EvreTHfboyh+W2i\\nC7EUp0+mBzX29UUQ+7GvdQgq9nx0hNCr+xsCQQCv8YibM+K+mmiA3eoIbO0NdClV\\nrooS1sGOAjF0V7nuV8mhC3/IFN8hABie+H3s+AfO7d1ta9ohVrmGHjZjQF1NAkBX\\nZlNSysxBeBLWwRNXFAxJB+A5aJ7pLXsCELIDRd1bEHsmodVOG5ZSFtedessgXmAx\\n6Qpj0kTdicm6OIy1jqUbAkAKQXL7dL2uze3ad4bSr+9gRYUNZcUmRpaQQf6gFxLp\\nRB61Rq8tK6Lh6PqKHclOYLjy8DdvqPVNtYBKms4+vs7Z\\n-----END RSA PRIVATE KEY-----\\n-----BEGIN CERTIFICATE-----\\nMIICozCCAYsCAgQSMA0GCSqGSIb3DQEBBQUAMIGCMQswCQYDVQQGEwJVUzEXMBUG\\nA1UECBMOTm9ydGggQ2Fyb2xpbmExEDAOBgNVBAcTB1JhbGVpZ2gxEDAOBgNVBAoT\\nB1NvbWVPcmcxFDASBgNVBAsTC1NvbWVPcmdVbml0MSAwHgYDVQQDExdhYmVkLnVz\\nZXJzeXMucmVkaGF0LmNvbTAeFw0xMzA3MDYwMDQ5MTZaFw0yMzA3MDQwMDQ5MTZa\\nMC8xLTArBgNVBAMTJDAxMEU5OUMwLTMyNzYtMTFFMi04MUMxLTA4MDAyMDBDOUE2\\nNjCBnzANBgkqhkiG9w0BAQEFAAOBjQAwgYkCgYEAz7HcLnz9YMVgpqveUi1CX1Pq\\nIW90ZrnX+6umWRxFh60akT8zz0lv+i3NooL6l5OnUKQr0IWOnRnh2vdvDysllnO2\\nRRleF39Hm7F4RlqpXYQLg4pKtfEdTLpdq9oZlT+UCZuakdbMzSBg/BiugrgeKlPL\\nZ+MHlOVQCm4WiV4MLMcCAwEAATANBgkqhkiG9w0BAQUFAAOCAQEAZ3I86gPoKD6W\\nZHiblfDvlI2w/F2WZb6hZL6uQC/D3Y2La31EkRrsiuKNp37qXTcXujeEI9ZRjxuu\\nAZnWLDAlXSZ9stwjrp3ObaSzKAvEeLUmowC+8x3j+VYJ2dgncIqr0bUbqMLKxf56\\n3S4nUrOQ5feIHd8y29ErwN6WkEr9BXUj6ztgzM7dr9l8JoriGOHoCNrTR55iIG+k\\nqnamvfGjHgCn1Ij+d52rSCTh/oBwcylt1+K8xi8ZV+1f5uncnFTMHho/GWB6ex9v\\nlYm2i4d6SVxBrp61+VXGDuN9fFWjk6swIoD+A2HaSrhwoRFHECTVAXxYWzbNkf8Y\\nxnwaLV3fcw==\\n-----END CERTIFICATE-----\", \"_ns\": \"consumers\", \"notes\": {}, \"capabilities\": {}, \"_id\": {\"$oid\": \"51d7698c5ca0130acd0c1db0\"}, \"id\": \"010E99C0-3276-11E2-81C1-0800200C9A66\", \"_href\": {\"_href\": \"/pulp/api/v2/consumers/010E99C0-3276-11E2-81C1-0800200C9A66/\"}}"
     http_version: 
-  recorded_at: Fri, 26 Apr 2013 20:59:19 GMT
+  recorded_at: Sat, 06 Jul 2013 00:49:16 GMT
 - request: 
     method: delete
-    uri: https://localhost/pulp/api/v2/consumers/010E99C0-3276-11E2-81C1-0800200C9A66/
+    uri: https://abed.usersys.redhat.com/pulp/api/v2/consumers/010E99C0-3276-11E2-81C1-0800200C9A66/
     body: 
       encoding: US-ASCII
       string: ""
@@ -55,7 +55,7 @@ http_interactions:
       Content-Type: 
       - application/json
       Authorization: 
-      - OAuth oauth_consumer_key="katello", oauth_nonce="Sx9a4AZlrS7SPEQwDFM4VKXsD5CBk03SUxdOQvt0I", oauth_signature="qso0tBi4RZEsSThoynq7KkqxGIU%3D", oauth_signature_method="HMAC-SHA1", oauth_timestamp="1367009979", oauth_version="1.0"
+      - OAuth oauth_consumer_key="katello", oauth_nonce="uD1j0NJweCjh781hoYFuYVQjQnDLdj2aF6yjnRG7OWA", oauth_signature="ufrFshH%2FKDjmGfkTgntikuU8T8w%3D", oauth_signature_method="HMAC-SHA1", oauth_timestamp="1373071776", oauth_version="1.0"
       Pulp-User: 
       - admin
       User-Agent: 
@@ -66,7 +66,7 @@ http_interactions:
       message: Not Found
     headers: 
       Date: 
-      - Fri, 26 Apr 2013 20:59:39 GMT
+      - Sat, 06 Jul 2013 00:49:36 GMT
       Server: 
       - Apache/2.2.15 (Red Hat)
       Content-Encoding: 
@@ -79,5 +79,5 @@ http_interactions:
       encoding: US-ASCII
       string: "{\"http_request_method\": \"DELETE\", \"exception\": null, \"error_message\": \"Missing resource(s): consumer=010E99C0-3276-11E2-81C1-0800200C9A66\", \"_href\": \"/pulp/api/v2/consumers/010E99C0-3276-11E2-81C1-0800200C9A66/\", \"http_status\": 404, \"traceback\": null, \"resources\": {\"consumer\": \"010E99C0-3276-11E2-81C1-0800200C9A66\"}}"
     http_version: 
-  recorded_at: Fri, 26 Apr 2013 20:59:40 GMT
+  recorded_at: Sat, 06 Jul 2013 00:49:36 GMT
 recorded_with: VCR 2.4.0

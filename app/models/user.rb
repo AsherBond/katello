@@ -16,6 +16,15 @@ class User < ActiveRecord::Base
   include Glue::Pulp::User if Katello.config.use_pulp
   include Glue::ElasticSearch::User if Katello.config.use_elasticsearch
   include Glue if Katello.config.use_cp || Katello.config.use_pulp
+
+  include Glue::Event
+  def create_event
+    Headpin::Actions::UserCreate
+  end
+  def destroy_event
+    Headpin::Actions::UserDestroy
+  end
+
   include AsyncOrchestration
   include Ext::IndexedModel
 
@@ -33,7 +42,7 @@ class User < ActiveRecord::Base
   # PROCEED DEPENDENT ASSOCIATIONS tinyurl.com/rails3458
   before_destroy :not_last_super_user?, :destroy_own_role
 
-  has_many :roles_users
+  has_many :roles_users, :dependent => :destroy
   has_many :roles, :through => :roles_users, :before_remove => :super_admin_check, :uniq => true, :extend => RolesPermissions::UserOwnRole
   validates_with Validators::OwnRolePresenceValidator, :attributes => :roles
   has_many :help_tips
@@ -55,8 +64,8 @@ class User < ActiveRecord::Base
   # validate the password length before hashing
   validates_each :password do |model, attr, value|
     if Katello.config.warden != 'ldap'
-      if model.password_changed?
-        model.errors.add(attr, _("must be at least 5 characters.")) if value.length < 5
+      if model.password_changed? || model.new_record?
+        model.errors.add(attr, _('must be at least 5 characters.')) if value.nil? || value.length < 5
       end
     end
   end
@@ -69,7 +78,7 @@ class User < ActiveRecord::Base
   # hash the password before creating or updateing the record
   def hash_password
     if Katello.config.warden != 'ldap'
-      self.password = Password::update(self.password) if self.password.length != 192
+      self.password = Password::update(self.password) if self.password && self.password.length != 192
     end
   end
 
@@ -111,6 +120,8 @@ class User < ActiveRecord::Base
     return nil unless u
     # check if not disabled
     return nil if u.disabled
+    # check if we have password (can be set to nil for users from LDAP when you switch to DB)
+    return nil if u.password.nil?
     # check if hash is valid
     return nil unless Password.check(password, u.password)
     u

@@ -18,12 +18,12 @@ class ApplicationController < ActionController::Base
   layout :set_layout
   include Notifications::ControllerHelper
   include Profiling
+  include Locale
   clear_helpers
 
   helper UIAlchemy::TranslationHelper
   helper_method :current_organization
   helper_method :render_correct_nav
-  before_filter :set_locale
   before_filter :require_user,:require_org
   before_filter :check_deleted_org
 
@@ -44,23 +44,24 @@ class ApplicationController < ActionController::Base
   # order of these are important.
   rescue_from Exception do |exception|
     paranoia = Katello.config.exception_paranoia
+    hide     = Katello.config.hide_exceptions
 
     to_do = case exception
               when StandardError
-                :handle
+              hide ? :handle : :raise
               when ScriptError
                 paranoia ? :handle : :raise
               when SignalException, SystemExit, NoMemoryError
                 :raise
               else
-                Rails.logger.error "Uknown child of Exception instead of StandardError detected: " +
+              Rails.logger.error 'Unknown child of Exception instead of StandardError detected: ' +
                                        "#{exception.message} (#{exception.class})"
                 paranoia ? :handle : :raise
             end
 
     case to_do
       when :handle
-        execute_rescue exception, lambda { |exception| render_error(exception) }
+      execute_rescue(exception) { |exception| render_error(exception) }
       when :raise
         raise exception
     end
@@ -85,24 +86,20 @@ class ApplicationController < ActionController::Base
     render :nothing => true, :status => :not_found
   end
 
-  rescue_from ActionController::RoutingError do |exception|
-    execute_rescue(exception, lambda{|exception| render_404})
+  if Katello.config.hide_exceptions
+    rescue_from ActionController::RoutingError,
+                ActionController::UnknownController,
+                AbstractController::ActionNotFound do |exception|
+      execute_rescue(exception) { |exception| render_404 }
   end
-
-  rescue_from ActionController::UnknownController do |exception|
-    execute_rescue(exception, lambda{|exception| render_404})
-  end
-
-  rescue_from AbstractController::ActionNotFound do |exception|
-    execute_rescue(exception, lambda{|exception| render_404})
   end
 
   rescue_from Errors::SecurityViolation do |exception|
-    execute_rescue(exception, lambda{|exception| render_403})
+    execute_rescue(exception) { |exception| render_403 }
   end
 
   rescue_from HttpErrors::UnprocessableEntity do |exception|
-    execute_rescue(exception, lambda{|exception| render_bad_parameters(exception)})
+    execute_rescue(exception) { |exception| render_bad_parameters(exception) }
   end
   # support for session (thread-local) variables must be the last filter (except authorize)in this class
   include Util::ThreadSession::Controller
@@ -195,16 +192,6 @@ class ApplicationController < ActionController::Base
     end
   end
 
-  def set_locale
-    if current_user && current_user.default_locale
-      I18n.locale = current_user.default_locale
-    else
-      I18n.locale = ApplicationController.extract_locale_from_accept_language_header parse_locale
-    end
-
-    logger.debug "Setting locale: #{I18n.locale}"
-  end
-
   def current_organization
     unless session[:current_organization_id]
       return nil unless session[:current_organization_id]
@@ -247,16 +234,11 @@ class ApplicationController < ActionController::Base
   def parse_calendar_date(date_str, time_str = "")
     return nil if date_str.blank?
 
-    event = date_str
-    unless time_str.blank?
-      event = event + ' ' + time_str
-    else
-      event = event + ' ' + "12:00 am"
-    end
-    event = event + ' '  + DateTime.now.zone
-    DateTime.strptime(event, "%m/%d/%Y %I:%M %P %:z")
-  rescue ArgumentError
-    raise _("Invalid date or time format")
+    datetime_str = [date_str,
+                    time_str.blank? ? '12:00 am' : time_str,
+                    DateTime.now.zone].join ' '
+
+    DateTime.strptime(datetime_str, '%m/%d/%Y %I:%M %P %:z') rescue false
   end
 
 
@@ -265,29 +247,6 @@ class ApplicationController < ActionController::Base
     _("No environments are currently available in this organization.  Please either add some to the organization or select an organization that has an environment to set user default.")
   end
 
-  # Look for match to list of locales specified in request. If not found, try matching just
-  # first two letters. Finally, default to english if no matches at all.
-  # eg. [en_US, en] would match en
-  #
-  # The method accept parameter = list of locales returned by parse_locale. Since the method is used
-  # outside of the request context, we need to pass this data in as a parameter.
-  #
-  def self.extract_locale_from_accept_language_header locales
-
-    # Look for full match
-    locales.each {|locale|
-      return locale if Katello.config.available_locales.include? locale
-    }
-
-    # Look for match to first two letters
-    #
-    locales.each {|locale|
-      return locale[0..1] if Katello.config.available_locales.include? locale[0..1]
-    }
-
-    # Default to 'en'
-    return 'en'
-  end
 
   def retain_search_history
     current_user.create_or_update_search_history(URI(@_request.env['HTTP_REFERER']).path, params[:search])
@@ -357,7 +316,6 @@ class ApplicationController < ActionController::Base
       #save original uri and redirect to login page
       session[:original_uri] = request.fullpath
       execute_after_filters
-      redirect_to new_user_session_url and return false
     end
   end
 
@@ -372,21 +330,6 @@ class ApplicationController < ActionController::Base
 
   def current_user
     user
-  end
-
-  # adapted from http_accept_lang gem, return list of browser locales
-  def parse_locale
-    locale_lang = (request.env['HTTP_ACCEPT_LANGUAGE'] || '').split(/\s*,\s*/).collect do |l|
-      l += ';q=1.0' unless l =~ /;q=\d+\.\d+$/
-      l.split(';q=')
-    end.sort do |x,y|
-      raise "incorrect locale format" unless x.first =~ /^[a-z\-]+$/i
-      y.last.to_f <=> x.last.to_f
-    end.collect do |l|
-      l.first.downcase.gsub(/-[a-z]+$/i) { |x| x.upcase }
-    end
-  rescue
-    []
   end
 
   # render 403 page
@@ -414,16 +357,46 @@ class ApplicationController < ActionController::Base
     User.current = nil
   end
 
-  # render bad params
-  def render_bad_parameters(exception)
+  # render bad params to user
+  # @overload render_bad_parameters()
+  #   render bad_parameters with `default_message` and status `400`
+  # @overload render_bad_parameters(message)
+  #   render bad_parameters with `message` and status `400`
+  #   @param [String] message
+  # @overload render_bad_parameters(error)
+  #   render bad_parameters with `error.message` and `error.status_code` if present
+  #   @param [Exception] error
+  # @overload render_bad_parameters(error, message)
+  #   add `message` to overload `exception.message`
+  #   @param [String] message
+  #   @param [Exception] error
+  def render_bad_parameters(*args)
+    default_message = if request.xhr?
+                        _('Invalid parameters sent in the request for this operation. Please contact a system administrator.')
+                      else
+                        _('Invalid parameters sent. You may have mistyped the address. If you continue having trouble with this, please contact an Administrator.')
+                      end
+
+    exception = args.find { |o| o.kind_of? Exception }
+    message   = args.find { |o| o.kind_of? String } || exception.try(:message) || default_message
+
+    status = if exception && exception.respond_to?(:status_code)
+               exception.status_code
+             else
+               400
+             end
+
     if exception
-        logger.error _("Rendering 422:") + " #{exception.message}"
-        notify.exception(
-            _("Invalid parameters sent in the request for this operation. Please contact a system administrator."),
-            exception)
+      log_exception exception
+      notify.exception(message, exception)
+    else
+      notify.error message
+      log.warn message
     end
+
     respond_to do |format|
-      format.html { render :template => "common/400", :layout => !request.xhr?, :status => exception.status_code }
+      format.html { render :template => 'common/400', :layout => !request.xhr?, :status => status,
+                           :locals   => { :message => message } }
       format.atom { head exception.status_code }
       format.xml  { head exception.status_code }
       format.json { head exception.status_code }
@@ -484,7 +457,11 @@ class ApplicationController < ActionController::Base
   end
 
   def environment_path_element(perms_method=nil)
-    Proc.new { |a_path| {:id=>a_path.id, :name=>a_path.name, :select=>(perms_method.nil? ? false : a_path.instance_eval(perms_method))} }
+    lambda do |a_path|
+      { :id     => a_path.id,
+        :name   => a_path.name,
+        :select => perms_method.nil? ? false : a_path.send(perms_method) }
+    end
   end
 
   def library_path_element(perms=nil)
@@ -680,8 +657,8 @@ class ApplicationController < ActionController::Base
     flash_to_headers
   end
 
-  def first_env_in_path accessible_envs, include_library=false, organization = current_organization
-    return current_organization.library if include_library && accessible_envs.member?(current_organization.library)
+  def first_env_in_path(accessible_envs, include_library=false, organization=current_organization)
+    return organization.library if include_library && accessible_envs.member?(organization.library)
     organization.promotion_paths.each{|path|
       path.each{|env|
         if accessible_envs.member?(env)
@@ -692,7 +669,7 @@ class ApplicationController < ActionController::Base
     nil
   end
 
-  def execute_rescue exception, renderer
+  def execute_rescue(exception, &renderer)
     log_exception exception
     if current_user
       User.current = current_user
@@ -707,8 +684,7 @@ class ApplicationController < ActionController::Base
     end
   end
 
-  def org_not_found_error exception
-    logger.error exception.message
+  def org_not_found_error
     execute_after_filters
     logout
     message = _("Your current organization is no longer valid. It is possible that either the organization has been deleted or your permissions revoked, please log back in to continue.")

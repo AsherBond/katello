@@ -1,22 +1,29 @@
 .idea*
 .project
+<<<<<<< HEAD
 .pydevproject
 *.py?
+=======
+>>>>>>> 42fd1e0a69d2ad9e0cb432e1ce553334428259cf
 reports
 project.vim
 katello.vim
 tags
 .settings
+<<<<<<< HEAD
 cli/po/build
 cli/po/POTFILES.in
 cli/po/*.mo
 cli/cover
 cli/doc/build
+=======
+>>>>>>> 42fd1e0a69d2ad9e0cb432e1ce553334428259cf
 *.swp
 .rbenv*
 .ropeproject
 .rvmrc*
 .DS_Store
+<<<<<<< HEAD
 src/Gemfile*.lock
 src/.bundle
 src/.bin
@@ -59,3 +66,39 @@ katello-utils/.rvmrc*
 src/doc/graphs/*.svg
 .ruby-version
 .ruby-gemset
+=======
+Gemfile*.lock
+.bundle
+.bin
+db/*.sqlite3
+db/*.sqlite3-journal
+log/*.log
+log/*.age
+hudson
+yard
+tmp
+*~
+config/katello.yml
+*.iml
+locale/*/LC_MESSAGES
+locale/.cache/*
+.yardoc
+yardoc
+apidoc
+project.vim
+routes.html
+routes.txt
+perm_coverage.log
+vendor/ruby
+coverage
+public/assets
+bundler.d/local*.rb
+config/initializers/_local*.rb
+config/initializers/local*.rb
+lib/tasks/local*.rb
+doc/graphs/*.svg
+.ruby-version
+.ruby-gemset
+*.swo
+*.swn
+>>>>>>> 42fd1e0a69d2ad9e0cb432e1ce553334428259cf

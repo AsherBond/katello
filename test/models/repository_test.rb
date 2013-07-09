@@ -31,6 +31,13 @@ class RepositoryCreateTest < RepositoryTestBase
     refute_empty  Repository.where(:id=>@repo.id)
   end
 
+  def test_create_with_no_type
+    @repo.content_type = ''
+    assert_raises ActiveRecord::RecordInvalid do
+      @repo.save!
+    end
+  end
+
 end
 
 
@@ -122,6 +129,14 @@ class RepositoryInstanceTest < RepositoryTestBase
     assert Repository.in_environment(@staging).where(:library_instance_id=>@fedora_17_x86_64.id).count > 0
   end
 
+  def test_create_clone_preserve_type
+    @fedora_17_x86_64.content_type = 'file'
+    @fedora_17_x86_64.save!
+    clone = @fedora_17_x86_64.create_clone(@staging)
+    assert clone.id
+    assert_equal @fedora_17_x86_64.content_type, clone.content_type
+  end
+
   def test_repo_id
     @fedora             = Product.find(products(:fedora).id)
     @library            = KTEnvironment.find(environments(:library).id)
@@ -132,4 +147,14 @@ class RepositoryInstanceTest < RepositoryTestBase
     assert_equal "acme_corporation_label-library_label-org_default_label-fedora_label-fedora_17_x86_64_label", repo_id
   end
 
+  def test_clone_repo_path_for_component
+    # validate that clone repo path for a component view does not include the component view label
+    @content_view_definition = content_view_definition_bases(:composite_def)
+    dev = KTEnvironment.find(environments(:dev).id)
+
+    relative_path = Repository.clone_repo_path(@fedora_17_x86_64, dev,
+                                               @content_view_definition.component_content_views.first)
+
+    assert_equal "/dev_label/library/fedora_17_label", relative_path
+  end
 end

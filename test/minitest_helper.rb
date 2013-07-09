@@ -1,14 +1,17 @@
 ENV["RAILS_ENV"] = "test"
+require 'simplecov'
+SimpleCov.start if ENV["COVERAGE"] # ok
 
 require File.expand_path('../../config/environment', __FILE__)
 require 'minitest/autorun'
 require 'minitest/rails'
-require 'simplecov'
 require 'json'
 require 'support/auth_support'
 require 'support/warden_support'
 require 'support/controller_support'
 require 'mocha/setup'
+
+require './lib/monkeys/foreign_keys_postgresql'
 
 class MiniTest::Rails::ActiveSupport::TestCase
   include FactoryGirl::Syntax::Methods

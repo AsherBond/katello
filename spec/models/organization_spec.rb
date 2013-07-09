@@ -40,7 +40,7 @@ describe Organization do
     specify {@organization.label.should == 'test_org_label'}
     specify {@organization.library.should_not be_nil}
     specify {@organization.redhat_provider.should_not be_nil}
-    specify {@organization.environments.should be_empty}
+    specify {@organization.environments.size.should == 1}
     specify {Organization.where(:name => @organization.name).size.should == 1}
     specify {Organization.where(:name => @organization.name).first.should == @organization}
 
@@ -112,8 +112,10 @@ describe Organization do
 
     it "can delete the org" do
       id = @organization.id
+      Organization.any_instance.stub(:being_deleted?).and_return(true)
       @organization.destroy
 
+      @organization.should be_destroyed
       lambda{Organization.find(id)}.should raise_error(ActiveRecord::RecordNotFound)
     end
 
@@ -125,6 +127,7 @@ describe Organization do
       @organization.environments << @env
       @env.save!
 
+      Organization.any_instance.stub(:being_deleted?).and_return(true)
       @organization.reload.destroy
 
       lambda{Organization.find(org_id)}.should raise_error(ActiveRecord::RecordNotFound)
@@ -147,6 +150,7 @@ describe Organization do
       @env2.save!
 
       id1 = @organization.id
+      Organization.any_instance.stub(:being_deleted?).and_return(true)
       @organization.reload.destroy
       lambda{Organization.find(id1)}.should raise_error(ActiveRecord::RecordNotFound)
 
@@ -158,6 +162,7 @@ describe Organization do
        dev = KTEnvironment.create!(:name=>"Dev-34343", :label=> "Dev", :organization => @organization, :prior => @organization.library)
        qa = KTEnvironment.create!(:name=>"QA", :label=> "QA", :organization => @organization, :prior => dev)
        prod =  KTEnvironment.create!(:name=>"prod", :label=> "prod", :organization => @organization, :prior => qa)
+       Organization.any_instance.stub(:being_deleted?).and_return(true)
        @organization = @organization.reload
        @organization.destroy
        lambda{Organization.find(@organization.id)}.should raise_error(ActiveRecord::RecordNotFound)

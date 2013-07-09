@@ -14,6 +14,8 @@ class SystemGroupEventsController < ApplicationController
   before_filter :find_group
   before_filter :authorize
 
+  helper SystemGroupEventsHelper
+
   def section_id
     'systems'
   end
@@ -25,7 +27,7 @@ class SystemGroupEventsController < ApplicationController
       :index => read_group,
       :items => read_group,
       :show => read_group,
-      :status => read_group,
+      :event_status => read_group,
       :more_items => read_group
     }
   end
@@ -44,7 +46,7 @@ class SystemGroupEventsController < ApplicationController
     end
   end
 
-  def status
+  def event_status
     # retrieve the status for the actions initiated by the client
     statuses = {:jobs => [], :tasks => []}
 

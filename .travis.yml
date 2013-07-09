@@ -15,10 +15,10 @@ env:
   - JOB=cli
 =======
 before_install:
-  - touch config/katello.yml
+  - cp script/ci/katello.yml config/katello.yml
 
 install:
-  - bundle install --without checking:devboost:optional:debugging --quiet
+  - travis_retry bundle install --without devboost:optional:debugging
 
 script:
   - "./script/ci/katello_pr_$JOB.sh"
@@ -27,4 +27,8 @@ env:
   - JOB=minitest
   - JOB=rspec
   - JOB=headpin_rspec
+<<<<<<< HEAD
 >>>>>>> cf40be3dbfef9dce1fdd5ed8ca5273c35c9332f8
+=======
+  - JOB=other
+>>>>>>> 42fd1e0a69d2ad9e0cb432e1ce553334428259cf

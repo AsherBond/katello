@@ -49,7 +49,7 @@ class Changeset < ActiveRecord::Base
   has_many :dependencies, :class_name => "ChangesetDependency", :inverse_of => :changeset
   belongs_to :environment, :class_name => "KTEnvironment"
   belongs_to :task_status
-  has_many :changeset_content_views
+  has_many :changeset_content_views, :dependent => :destroy
   has_many :content_views, :through => :changeset_content_views
 
   # find changesets in given state/states
@@ -69,6 +69,26 @@ class Changeset < ActiveRecord::Base
   }
 
   before_save :uniquify_artifacts
+
+
+  def self.new_changeset(args)
+    return self.changeset_class(args).new(args)
+  end
+
+  def self.changeset_class(args)
+    raise "Must provide a changeset type." unless type = args.try(:[], :type)
+    type.downcase!
+
+    if type == PROMOTION
+      return PromotionChangeset
+    elsif type == DELETION
+      return DeletionChangeset
+    else
+      raise _("Unknown changeset type. Choose one of: %s") % TYPES.join(", ")
+    end
+  end
+
+
   def key_for item
     "changeset_#{id}_#{item}"
   end
@@ -171,15 +191,15 @@ class Changeset < ActiveRecord::Base
      return repository
    end
 
-   def add_distribution! distribution_id, product
-     env_to_verify_on_add_content.repositories.any? { |repo| repo.has_distribution? distribution_id } or
+   def add_distribution! distribution, product
+     env_to_verify_on_add_content.repositories.any? { |repo| repo.has_distribution? distribution.id } or
          raise Errors::ChangesetContentException.new(
                    "Distribution not found within this environment you want to promote from.")
 
-     distro = ChangesetDistribution.create!(:distribution_id => distribution_id,
-                                       :display_name    => distribution_id,
-                                       :product_id      => product.id,
-                                       :changeset       => self)
+     distro = ChangesetDistribution.create!(:distribution_id => distribution._id,
+                                            :display_name    => distribution.id,
+                                            :product_id      => product.id,
+                                            :changeset       => self)
      self.distributions << distro
      save!
      distro
@@ -237,8 +257,8 @@ class Changeset < ActiveRecord::Base
     return deleted
   end
 
-  def remove_distribution! distribution_id, product
-    deleted = ChangesetDistribution.destroy_all(:distribution_id => distribution_id,
+  def remove_distribution! distribution, product
+    deleted = ChangesetDistribution.destroy_all(:distribution_id => distribution._id,
                                                 :changeset_id    => self.id, :product_id => product.id)
     save!
     return deleted
@@ -256,6 +276,34 @@ class Changeset < ActiveRecord::Base
 
   def validate_content! elements
     elements.each { |e| raise ActiveRecord::RecordInvalid.new(e) if not e.valid? }
+  end
+
+  def validate_content_view_tasks_complete!
+    # if the user is attempting to apply a view that is currently being
+    # published/refreshed or a view that has a component view that is
+    # currently being published/refreshed, stop the 'apply'
+    from_env = self.environment.prior
+    self.content_views.each do |view|
+      version = view.version(from_env)
+      if version.try(:task_status).try(:pending?)
+        raise Errors::ContentViewTaskInProgress.new(_("A '%{type_of_action}' action is currently in progress for  "\
+                                                      "content view '%{content_view}'.  Please retry the changeset "\
+                                                      "after the action completes.") %
+                                                      { :type_of_action => _(TaskStatus::TYPES[version.task_status.task_type][:english_name]),
+                                                        :content_view => view.name })
+      elsif view.composite
+        view.content_view_definition.component_content_views.each do |component_view|
+          version = component_view.version(from_env)
+          if version.task_status.pending?
+            raise Errors::ContentViewTaskInProgress.new(_("A '%{type_of_action}' action is currently in progress for "\
+                                                          "component content view '%{content_view}'.  Please retry "\
+                                                          "the changeset after the action completes.") %
+                                                          { :type_of_action => _(TaskStatus::TYPES[version.task_status.task_type][:english_name]),
+                                                            :content_view => view.name })
+          end
+        end
+      end
+    end
   end
 
   def find_package_data(product, name_or_nvre)
@@ -333,7 +381,7 @@ class Changeset < ActiveRecord::Base
     products_ids += self.errata.map { |e| e.product.cp_id }
     products_ids -= self.products.collect { |p| p.cp_id }
     products_ids.uniq.collect do |product_cp_id|
-      Product.find_by_cp_id(product_cp_id)
+      Product.find_by_cp_id(product_cp_id, self.environment.organization)
     end
   end
 

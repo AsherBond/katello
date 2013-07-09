@@ -11,7 +11,7 @@
  http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 */
 
-
+/*jshint multistr: true */
 
 $(document).ready(function() {
 
@@ -32,6 +32,151 @@ $(document).ready(function() {
     Spinner({lines: 13, width: 4}).spin($('.large_spinner').get(0));
 });
 
+KT.content_search_templates = (function(i18n) {
+    var auto_collapse_rows = [2, 3],
+        package_header = function(display) {
+            display["url"] = KT.routes.details_package_path(KT.utils.escape(display["id"]));
+
+            return KT.utils.template("<span data-url='<%= url %>' class='tipsify-package'><%- name %></span> \
+                       <span class='one-line-ellipsis'><%- vel_rel_arch %></span>", display);
+        },
+        errata_header = function(display) {
+            if(display["errata_type"] === "bugfix") {
+                display["icon_class"] = "bug_icon-black";
+            }
+            else if(display["errata_type"] === "enhancement") {
+                display["icon_class"] = "plus_icon-black";
+            }
+            else if(display["errata_type"] === "security") {
+                display["icon_class"] = "shield_icon-black";
+            }
+            else {
+                display["icon_class"] = "enhancement_icon";
+            }
+            display["url"] = KT.routes.short_details_erratum_path(KT.utils.escape(display["id"]));
+
+            return KT.utils.template("<i class=\"errata-icon <%= icon_class %>\"  /><span class=\"tipsify-errata\" data-url=\"<%= url %>\"><%- errata_id %></span>",
+                    display);
+        },
+        row_header_content = function(name, type) {
+            if(type === "package") {
+                html = package_header(name);
+            }
+            else if(type === "errata") {
+                html = errata_header(name);
+            }
+            else {
+                html = KT.utils.escape(name);
+            }
+
+            return html;
+        },
+        row_header = function(id, name, type, row_level, has_children, parent_id) {
+            var title = (type === "package" || type === "errata") ? "" : name,
+                html = $('<li/>', {
+                            'data-id'   : id,
+                            'id'        : 'row_header_' + id,
+                            'class'     : 'row_header grid_row_level_' + row_level
+                        });
+
+
+            name = row_header_content(name, type);
+            if( parent_id !== undefined ){
+                html.attr('data-parent_id', parent_id);
+            }
+
+            if( row_level === 2 ){
+                if( name.length > 30 && name.length < 60 ){
+                    html.addClass('row_height_2');
+                    html.append($('<span/>', { 'class': 'one-line-ellipsis', 'title': title }).html(name));
+                } else if( name.length >= 60 && name.length <= 94 ){
+                    html.addClass('row_height_3');
+                    html.append($('<span/>', { 'class': 'one-line-ellipsis', 'title': title }).html(name));
+                } else if( name.length > 94 ) {
+                    html.addClass('row_height_3');
+                    html.append($('<span/>', { 'class' : 'three-line-ellipsis tipsify', 'title' : name }).html(name));
+                } else {
+                    html.append($('<span/>', { 'class': 'one-line-ellipsis', 'title' : title }).html(name));
+                }
+            } else if( row_level >= 3 ){
+                if( name.length > 30 ){
+                    html.addClass('row_height_2');
+                }
+                html.append($('<span/>', { 'class': 'one-line-ellipsis', 'title': title }).html(name));
+            } else {
+                if( (has_children && name.length > 26) || (parent_id && name.length > 28) || name.length > 28 ){
+                    html.append($('<span/>', { 'class' : 'one-line-ellipsis tipsify', 'title' : name }).html(name));
+                } else {
+                    html.append($('<span/>').html(name));
+                }
+            }
+
+            var temp_html = $('<div/>');
+
+            if( has_children ){
+                if (KT.utils.contains(auto_collapse_rows, row_level)) {
+                    html.prepend(this.collapse_arrow({ open : false }));
+                    html.attr('data-collapsed', "true");
+                    temp_html.append(html);
+                    temp_html.append($('<ul/>', { 'id' : 'child_header_list_' + id, 'class' : 'hidden' }));
+                } else {
+                    html.prepend(this.collapse_arrow({ open : true }));
+                    html.attr('data-collapsed', "false");
+                    temp_html.append(html);
+                    temp_html.append($('<ul/>', { 'id' : 'child_header_list_' + id }));
+                }
+            } else {
+                temp_html.append(html);
+            }
+
+            return temp_html.html();
+        },
+        repo_comparison_header = function(display) {
+            return KT.utils.template(" \
+                <span title=\"<%- environment_name %>\" class=\"one-line-ellipsis\"><%- environment_name %></span> \
+                <span class=\"one-line-ellipsis tipsify\" title=\"<%- content_view_name %>\"><%- content_view_name %></span> \
+                <span class=\"one-line-ellipsis tipsify\" title=\"<%- repo_name %>\"><%- repo_name %></span> \
+            ", display);
+        },
+        content_view_comparison_header = function(display) {
+            return KT.utils.template(" \
+                <span title=\"<%- view_name %> <%- view_version %>\" class=\"one-line-ellipsis tipsify\"><%- view_name %></span> \
+                <span class=\"one-line-ellipsis\"><%- environment_name %></span> \
+            ", display);
+        },
+        column_header = function(id, to_display, span) {
+            var content = "";
+
+            if ( to_display["custom"] && to_display["content"]["type"] === "content-view-comparison") {
+                content = content_view_comparison_header(to_display["content"]);
+            } else if ( to_display["custom"] && to_display["content"]["type"] === "repo-comparison" ) {
+                content = repo_comparison_header(to_display["content"]);
+            } else {
+                content = KT.utils.escape(to_display["content"]);
+            }
+
+            var html = $('<li/>', {
+                    'id'        : 'column_' + id,
+                    'data-id'   : id,
+                    'data-span' : span,
+                    'class'     : 'column_header hidden'
+                }).html(content);
+
+            if( !to_display['custom'] ){
+                if( content > span * 12 ){
+                    html.addClass('tipsify one-line-ellipsis').attr('title', content);
+                }
+            }
+
+            return html;
+        };
+
+    return {
+        row_header              : row_header,
+        row_header_content      : row_header_content,
+        column_header           : column_header
+    };
+}(i18n));
 
 
 KT.content_search = function(paths_in){
@@ -127,6 +272,7 @@ KT.content_search = function(paths_in){
         comparison_grid.init();
         comparison_grid.controls = comparison_grid.controls();
         comparison_grid.set_columns(env_select.get_paths(), true);
+        comparison_grid.set_templates(templates());
 
         browse_box = KT.widget.browse_box("content_selector", KT.widgets, KT.mapping, initial_search);
         $(document).bind(browse_box.get_event(), search_initiated);
@@ -140,6 +286,7 @@ KT.content_search = function(paths_in){
         bind_selectors();
         bind_repo_comparison();
         bind_view_comparison();
+        bind_package_modals();
 
         $(document).bind('return_to_results.comparison_grid', remove_subgrid);
 
@@ -192,7 +339,7 @@ KT.content_search = function(paths_in){
 
         utils.each(environment_list, function(env){
             env_obj[env.id] = env;
-            env_select.select(env.id)
+            env_select.select(env.id);
         });
         comparison_grid.show_columns(env_obj);
     },
@@ -200,8 +347,8 @@ KT.content_search = function(paths_in){
       $(document).bind('load_more.comparison_grid', function(event){
         var search = $.bbq.getState('search'),
             data_out = event.cell_data,
-            type = search.content_type;
-            ajax_type = undefined;
+            type = search.content_type,
+            ajax_type;
         if (search.subgrid && search.subgrid.type){
             type = search.subgrid.type;
         }
@@ -222,7 +369,7 @@ KT.content_search = function(paths_in){
             $(document).trigger('show_more.comparison_grid', [data.rows]);
             close_tipsy();
           }
-        })
+        });
       });
     },
     bind_search_event = function(){
@@ -231,6 +378,30 @@ KT.content_search = function(paths_in){
             if (!utils.isEqual(old_search_params, search_params)) {
                 do_search(search_params);
             }
+        });
+    },
+    bind_package_modals = function(){
+        $(".package-filelist-link, .package-changelog-link").live("click", function(e) {
+            var link = $(e.target),
+                link_class = link.attr("class"),
+                package_id = link.data("id"),
+                div = link_class.substring(0, link_class.indexOf("-link")) + "-" + package_id;
+
+            e.preventDefault();
+            width = (div.indexOf("changelog") === -1) ? "600px" : "960px";
+            $("#"+div).dialog({ modal: true,
+                                autoOpen: true,
+                                width: width
+            });
+
+            // hide the tipsy
+            close_tipsy();
+        });
+        $("a.show-more-changelog").live("click", function(e) {
+            var link = $(e.target);
+            e.preventDefault();
+            link.parent("p").next("div.more-changelog").show();
+            link.hide();
         });
     },
     do_search = function(search_params){
@@ -305,9 +476,9 @@ KT.content_search = function(paths_in){
                     comparison_grid.set_right_select(search_modes, search_params.subgrid.mode);
                 }
                 if(subgrid.url.indexOf('view') === -1) {
-                    comparison_grid.set_default_row_level(3)
+                    comparison_grid.set_default_row_level(3);
                 } else {
-                    comparison_grid.set_default_row_level(1)
+                    comparison_grid.set_default_row_level(1);
                 }
 
                 var cols = data.cols ? data.cols : subgrid.cols;
@@ -349,7 +520,7 @@ KT.content_search = function(paths_in){
             var search = $.bbq.getState('search');
             search.subgrid = $(this).data();
             $.bbq.pushState({search:search});
-        }, 'json');
+        });
     },
     bind_repo_comparison = function(){
         $(document).bind('compare_repos.comparison_grid', function(event){
@@ -359,8 +530,8 @@ KT.content_search = function(paths_in){
                 return;
             }
             utils.each(event.selected, function(item){
-                var split_ids = item.row_id.split('_')
-                formatted.push({env_id:item.col_id, view_id:split_ids[1], repo_id:split_ids[5]})
+                var split_ids = item.row_id.split('_');
+                formatted.push({env_id:item.col_id, view_id:split_ids[1], repo_id:split_ids[5]});
             });
             search.subgrid = {
                 type: 'repo_compare_packages',
@@ -377,7 +548,7 @@ KT.content_search = function(paths_in){
                 return;
             }
             utils.each(event.selected, function(item){
-                formatted.push({env_id:item.col_id, view_id:item.row_id.split('_')[1]})
+                formatted.push({env_id:item.col_id, view_id:item.row_id.split('_')[1]});
             });
             search.subgrid = {
                 type: 'view_compare_packages',
@@ -447,6 +618,7 @@ KT.content_search = function(paths_in){
         $('.view_tipsy').tipsy({html:true, gravity:'s', className:'content-tipsy',
                     title:find_text});
         KT.tipsy.custom.url_tooltip($('.tipsify-errata'), 'w');
+        KT.tipsy.custom.url_tooltip($('.tipsify-package'), 'w');
 
     },
     subgrid_selector_items = function(type) {
@@ -456,6 +628,10 @@ KT.content_search = function(paths_in){
             to_ret.push(subgrids[item]);
         });
         return to_ret;
+    },
+    templates = function() {
+      extended_templates = $.extend({}, KT.comparison_grid.templates, KT.content_search_templates);
+      return extended_templates;
     };
 
     init();
@@ -465,7 +641,8 @@ KT.content_search = function(paths_in){
         remove_subgrid: remove_subgrid,
         get_initial_environments: get_initial_environments,
         get_initial_environment_ids:get_initial_environment_ids,
-    }
+        templates: templates
+    };
 };
 
 /**
@@ -473,8 +650,8 @@ KT.content_search = function(paths_in){
  */
 KT.content_search_cache = (function(){
     var utils = KT.utils,
-        saved_search = undefined,
-        saved_data = undefined;
+        saved_search,
+        saved_data;
 
     var save_state = function(grid, search){
         saved_search = $.extend(true, {}, search);
@@ -516,7 +693,7 @@ KT.widget.finder_box = function(container_id, search_id, autocomplete_id){
     init = function(){
         container = $('#' + container_id);
         setup_search(search_id);
-        setup_autocomplete(autocomplete_id)
+        setup_autocomplete(autocomplete_id);
         if(search_id && autocomplete_id){
             //if we have both, select one
             search_container.find('input:radio').click();
@@ -595,7 +772,7 @@ KT.widget.finder_box = function(container_id, search_id, autocomplete_id){
            return {autocomplete: ids};
         }
         else {
-            return {}
+            return {};
         }
     },
     set_results = function(results){
@@ -653,7 +830,7 @@ KT.widget.browse_box = function(selector_id, widgets, mapping, initial_values){
             if (initial_values && initial_values.content_type){
                 selector.val(initial_values.content_type);
                 utils.each(widgets, function(widget, key){
-                    widget.finder.set_results(initial_values[key])
+                    widget.finder.set_results(initial_values[key]);
                 });
             }
             selector.change();
@@ -698,7 +875,7 @@ KT.widget.browse_box = function(selector_id, widgets, mapping, initial_values){
         change_selection: change_selection,
         trigger_search : trigger_search,
         get_event: function(){return event_name;}
-    }
+    };
 };
 
 

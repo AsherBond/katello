@@ -31,7 +31,7 @@ class SystemGroupPackagesController < ApplicationController
       :add => edit_group,
       :remove => edit_group,
       :update => edit_group,
-      :status => edit_group
+      :package_status => edit_group
     }
   end
 
@@ -122,26 +122,35 @@ class SystemGroupPackagesController < ApplicationController
   end
 
   def update
-    if !params[:packages].blank?
-      # user entered one or more package names (as comma-separated list) in the content box
-      packages = Util::Package.validate_package_list_format(params[:packages])
-
-      if packages
-        job = @group.update_packages packages
-        notify.success _("Update of Packages '%{packages}' scheduled for System Group '%{name}'.") % {:packages => params[:packages], :name => @group.name}
-      else
-        notify.error _("One or more errors found in Package names '%s'.") % params[:packages]
-        render :text => '' and return
-      end
-
-    elsif !params[:groups].blank?
+    if !params[:groups].blank?
       # user entered one or more package group names (as comma-separated list) in the content box
       groups = params[:groups].split(/ *, */ )
       job = @group.update_package_groups groups
       notify.success _("Update of Package Groups '%{groups}' scheduled for System Group '%{name}'.") %
         {:groups => groups.join(','), :name => @group.name}
+
+    elsif params.has_key?(:packages)
+      if !params[:packages].empty?
+        # user entered one or more package names (as comma-separated list) in the content box
+        packages = Util::Package.validate_package_list_format(params[:packages])
+
+        if packages
+          job = @group.update_packages packages
+          notify.success _("Update of Packages '%{packages}' scheduled for System Group '%{name}'.") %
+                             {:packages => params[:packages], :name => @group.name}
+        else
+          notify.error _("One or more errors found in Package names '%s'.") % params[:packages]
+          render :text => '' and return
+        end
+
+      else
+        # user didn't enter any packages... instead, they requested 'Update All'
+        job = @group.update_packages([])
+        notify.success _("Update of All Packages scheduled for System Group '%{name}'.") % {:name => @group.name}
+      end
+
     else
-      notify.error _("Empty request received to update Packages or Package Groups for System Group '%s'.") %
+      notify.error _("Invalid request received to update Packages or Package Groups for System Group '%s'.") %
                        @group['name']
       render :text => '' and return
     end
@@ -161,7 +170,7 @@ class SystemGroupPackagesController < ApplicationController
     render :text => '' and return
   end
 
-  def status
+  def package_status
     # retrieve the status for the actions initiated by the client
     response = []
     jobs = @group.refreshed_jobs.where('jobs.id' => params[:id])

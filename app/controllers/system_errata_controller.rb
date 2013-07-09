@@ -12,7 +12,7 @@
 
 class SystemErrataController < ApplicationController
 
-  before_filter :find_system, :only =>[:install, :index, :items, :status]
+  before_filter :find_system, :only =>[:install, :index, :items, :errata_status]
   before_filter :authorize
 
   def section_id
@@ -27,7 +27,7 @@ class SystemErrataController < ApplicationController
       :index => read_system,
       :items => read_system,
       :install => edit_system,
-      :status => edit_system
+      :errata_status => edit_system
     }
   end
 
@@ -51,6 +51,9 @@ class SystemErrataController < ApplicationController
     errata_state = params[:errata_state] if params[:errata_state]
     chunk_size = current_user.page_size
     errata, total_count, results_count = get_errata(offset.to_i, offset.to_i+chunk_size, filter_type, errata_state)
+
+    return render_bad_parameters unless errata
+
     rendered_html = render_to_string(:partial=>"systems/errata/items", :locals => { :errata => errata, :editable => @system.editable? })
     render :json => {:html => rendered_html,
                       :results_count => results_count,
@@ -65,7 +68,7 @@ class SystemErrataController < ApplicationController
     render :text => task.id
   end
 
-  def status
+  def errata_status
     if params[:id]
       statuses = @system.tasks.where('task_statuses.id' => params[:id], :task_type => [:errata_install])
     else

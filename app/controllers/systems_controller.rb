@@ -23,6 +23,7 @@ class SystemsController < ApplicationController
                                        :bulk_errata_install, :bulk_add_system_group, :bulk_remove_system_group]
 
   before_filter :find_environment, :only => [:environments, :new]
+  before_filter :find_environment_in_system, :only => [:create, :update]
   before_filter :authorize
 
   before_filter :setup_options, :only => [:index, :items, :create, :environments]
@@ -31,14 +32,24 @@ class SystemsController < ApplicationController
   COLUMNS = {'name' => 'name_sort', 'lastCheckin' => 'lastCheckin'}
 
   def rules
-    edit_system = lambda{System.find(params[:id]).editable?}
     read_system = lambda{System.find(params[:id]).readable?}
     env_system = lambda{@environment && @environment.systems_readable?}
     any_readable = lambda{current_organization && System.any_readable?(current_organization)}
     delete_systems = lambda{@system.deletable?}
     bulk_delete_systems = lambda{@systems.collect{|s| false unless s.deletable?}.compact.empty?}
     bulk_edit_systems = lambda{@systems.collect{|s| false unless s.editable?}.compact.empty?}
-    register_system = lambda { current_organization && System.registerable?(@environment, current_organization) }
+    register_system = lambda do
+      if current_organization
+        if params.has_key?(:system) && !params[:system][:content_view_id].blank?
+            content_view = ContentView.readable(current_organization).
+                              find_by_id(params[:system][:content_view_id])
+            System.registerable?(@environment, current_organization, content_view) if content_view
+        else
+            System.registerable?(@environment, current_organization)
+        end
+      end
+    end
+
     items_test = lambda do
       if params[:env_id]
         @environment = KTEnvironment.find(params[:env_id])
@@ -47,6 +58,17 @@ class SystemsController < ApplicationController
         current_organization && System.any_readable?(current_organization)
       end
     end
+
+    edit_system = lambda do
+      subscribable = true
+      if params.has_key?(:system) && !params[:system][:content_view_id].blank?
+          content_view = ContentView.readable(current_organization).
+                          find_by_id(params[:system][:content_view_id])
+          subscribable = content_view ? content_view.subscribable? : false
+      end
+      subscribable && System.find(params[:id]).editable?
+    end
+
     {
       :index => any_readable,
       :create => register_system,
@@ -95,58 +117,24 @@ class SystemsController < ApplicationController
   end
 
   def new
-    @system = System.new
-    @system.facts = {} #this is nil to begin with
-    @organization = current_organization
-    accessible_envs = current_organization.environments
-    setup_environment_selector(current_organization, accessible_envs)
+    install_cert_command = "rpm -Uvh http://#{request.host}/pub/candlepin-cert-consumer-latest.noarch.rpm"
+    register_command = "subscription-manager register --org=\"#{@environment.organization.name}\""
 
-    # This controls whether the New System page will display an environment selector or not.
-    # Since only one selector may exist at a time, it is left off of the New page when the
-    # Environments page is displayed.
-    envsys = !params[:env_id].nil?
-
-    render :partial=>"new", :locals=>{:system=>@system, :accessible_envs => accessible_envs, :envsys => envsys}
-  end
-
-  def create
-    @system = System.new
-    @system.facts = {}
-    @system.arch = params["arch"]["arch_id"]
-    @system.sockets = params["system"]["sockets"]
-    @system.memory = params["system"]["memory"]
-    @system.guest = (params["system_type"]["virtualized"] == 'virtual')
-    @system.name= params["system"]["name"]
-    @system.cp_type = "system"
-    @system.environment = KTEnvironment.find(params["system"]["environment_id"])
-    @system.content_view = ContentView.find_by_id(params["system"].try(:[], "content_view_id"))
-    #create it in candlepin, parse the JSON and create a new ruby object to pass to the view
-    #find the newly created system
-    if @system.save!
-      notify.success _("System '%s' was created.") % @system['name']
-
-      if search_validate(System, @system.id, params[:search])
-        render :partial=>"systems/list_systems",
-          :locals=>{:accessor=>"id", :columns=>['name', 'lastCheckin','created' ], :collection=>[@system], :name=> controller_display_name}
-      else
-        notify.message _("'%s' did not meet the current search criteria and is not being shown.") % @system["name"]
-        render :json => { :no_match => true }
-      end
-    end
-
-  rescue ActiveRecord::RecordInvalid => error
-    raise error # handle error by ApplicationController's rescue_from
-  rescue => error
-    display_message = if error.respond_to?('response') && error.response.include?('displayMessage')
-                         JSON.parse(error.response)['displayMessage']
-                      end
-    notify.exception *[display_message, error].compact
-    Rails.logger.error error.backtrace.join("\n")
-    render :text => error, :status => :bad_request
+    render :partial=>"new",
+      :locals => {
+        :install_cert_command => install_cert_command,
+        :register_command => register_command
+      }
   end
 
   def index
     @system_groups = SystemGroup.where(:organization_id => current_organization).order(:name)
+
+    if current_user.experimental_ui
+      render :index_nutupane, :locals => { :experimental_ui => true }
+    else
+      render :index
+    end
   end
 
   def environments
@@ -239,10 +227,15 @@ class SystemsController < ApplicationController
     end
     consumed_entitlements = @system.consumed_entitlements
     avail_pools = @system.available_pools_full
-    render :partial=>"subs_update", :locals=>{:system=>@system, :avail_subs => avail_pools,
-                                              :consumed_subs => consumed_entitlements,
-                                              :editable=>@system.editable?}
+    render :partial => "subs_update",
+           :locals => { :system => @system,
+                        :avail_subs => avail_pools,
+                        :consumed_subs => consumed_entitlements,
+                        :editable => @system.editable? }
     notify.success _("System subscriptions updated.")
+  rescue RestClient::Exception => e
+    notify.error(JSON.parse(e.response)["displayMessage"])
+    render :text => "", :status => 500
   end
 
   def products
@@ -278,7 +271,8 @@ class SystemsController < ApplicationController
     # Stuff into var for use in spec tests
     @locals_hash = { :system => @system, :editable => @system.editable?,
                     :releases => releases, :releases_error => releases_error, :name => controller_display_name,
-                    :environments => environment_paths(library_path_element, environment_path_element("systems_readable?")) }
+                    :environments => environment_paths(library_path_element("systems_readable?"),
+                                                       environment_path_element("systems_readable?")) }
     render :partial => "edit", :locals => @locals_hash
   end
 
@@ -331,7 +325,31 @@ class SystemsController < ApplicationController
 
   def show
     system = System.find(params[:id])
-    render :partial=>"systems/list_system_show", :locals=>{:item=>system, :accessor=>"id", :columns=> COLUMNS.keys, :noblock => 1}
+
+    if current_user.experimental_ui
+      begin
+        releases = @system.available_releases
+      rescue => e
+        releases_error = e.to_s
+        Rails.logger.error e.to_s
+      end
+      releases ||= []
+      releases_error ||= nil
+
+      # Stuff into var for use in spec tests
+      @locals_hash = { :system => @system, :editable => @system.editable?,
+                      :releases => releases, :releases_error => releases_error, :name => controller_display_name,
+                      :environments => environment_paths(library_path_element("systems_readable?"),
+                                                         environment_path_element("systems_readable?"))}
+
+      if request.xhr?
+        render :show_nutupane, :layout => false, :locals => @locals_hash
+      else
+        render :show_nutupane, :locals => @locals_hash
+      end
+    else
+      render :partial=>"systems/list_system_show", :locals=>{:item=>system, :accessor=>"id", :columns=> COLUMNS.keys, :noblock => 1}
+    end
   end
 
   def section_id
@@ -382,9 +400,9 @@ class SystemsController < ApplicationController
         end
       end
       if !invalid_perms.empty?
-        raise _("System Group membership modification not allowed for group(s): %s") % invalid_perms.join(', ')
+        return render_bad_parameters _("System Group membership modification not allowed for group(s): %s") % invalid_perms.join(', ')
       elsif !max_systems_exceeded.empty?
-        raise _("System Group maximum number of systems exceeded for group(s): %s") % max_systems_exceeded.join(', ')
+        return render_bad_parameters _("System Group maximum number of systems exceeded for group(s): %s") % max_systems_exceeded.join(', ')
       end
 
       @systems.each do |system|
@@ -578,6 +596,7 @@ class SystemsController < ApplicationController
 
   def system_groups
     # retrieve the available groups that aren't currently assigned to the system and that haven't reached their max
+    # TODO move the sql to the model
     @system_groups = SystemGroup.where(:organization_id=>current_organization).
         select("system_groups.id, system_groups.name").
         joins("LEFT OUTER JOIN system_system_groups ON system_system_groups.system_group_id = system_groups.id").
@@ -638,8 +657,15 @@ class SystemsController < ApplicationController
     if current_organization
       readable = KTEnvironment.systems_readable(current_organization)
       @environment = KTEnvironment.find(params[:env_id]) if params[:env_id]
-      @environment ||= first_env_in_path(readable, false)
+      @environment ||= first_env_in_path(readable, true)
       @environment ||=  current_organization.library
+    end
+  end
+
+  def find_environment_in_system
+    if params.has_key?(:system) && params[:system].has_key?(:environment_id)
+      @environment = KTEnvironment.systems_readable(current_organization).
+                      where(:id => params[:system][:environment_id]).first
     end
   end
 
@@ -658,9 +684,9 @@ class SystemsController < ApplicationController
       :col => ["name_sort", "lastCheckin"],
       :titles => [_("Name"), _("Registered / Last Checked In")],
       :custom_rows => true,
-      :enable_create => Katello.config.katello? && System.registerable?(@environment, current_organization),
+      :enable_create => System.registerable?(@environment, current_organization),
       :create => _("System"),
-      :create_label => _('+ New System'),
+      :create_label => _('+ Register System'),
       :enable_sort => true,
       :name => controller_display_name,
       :list_partial => 'systems/list_systems',

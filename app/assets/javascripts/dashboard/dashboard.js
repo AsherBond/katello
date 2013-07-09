@@ -18,7 +18,7 @@ KT.dashboard = (function(){
                 series: {
                     pie:{
                         show: true,
-                        radius: .8,
+                        radius: 0.8,
                         stroke: {
                             width: 0
                         },
@@ -86,8 +86,12 @@ KT.dashboard = (function(){
       $('.dropbutton.active').tipsy('hide').removeClass('active').removeClass('showing');
     },
     widgetReload = function(theWidget, quantity, type) {
-        if(quantity == undefined){quantity=-1}
-        if(!typeof(type) != "string"){type="quantity"}
+        if(quantity === undefined) {
+            quantity =- 1;
+        }
+        if(typeof(type) === "string") {
+            type = "quantity";
+        }
         var div = theWidget;
         var url = div.attr("data-url");
         var id = div.attr("data-id");
@@ -138,7 +142,39 @@ KT.dashboard = (function(){
     register_sync_progress = function() {
         $(".progressbar").each(function(){
             var bar = $(this);
-            bar.progressbar({value: parseInt(bar.attr("percentage"))});
+            bar.progressbar({value: parseInt(bar.attr("percentage"), 10)});
+        });
+    },
+    saveLayout = function() {
+        var columns = [];
+        $(".column").each(function(index, col) {
+            var column = [];
+            $(col).children().each(function(widget_index, widget) {
+                var id = $(widget).find("div.widget").last().attr("id");
+                column.push(id.match(/dashboard_(\w+)/)[1]);
+            });
+            columns.push(column);
+        });
+        $.ajax({
+              type: "PUT",
+              url: KT.routes.dashboard_index_path(),
+              data: {columns: columns}
+        });
+    },
+    setupLayout = function() {
+        $("#dashboard .column").sortable({
+            cursor: "move",
+            handle: "h2",
+            opacity: 0.7,
+            forcePlaceholderSize: true,
+            connectWith: ".column",
+            start: function(e, ui) {
+                $(".column").addClass("highlight");
+            },
+            stop: function(e, ui) {
+                $(".column").removeClass("highlight");
+            },
+            update: KT.dashboard.saveLayout
         });
     },
     widget_map = function() {
@@ -146,14 +182,16 @@ KT.dashboard = (function(){
             subscriptions: plot,
             errata: register_errata,
             sync: register_sync_progress
-        }
+        };
     };
     return {
         widget_map: widget_map(),
         widgetReload: widgetReload,
         popoutClose : popoutClose,
-        popoutSetup : popoutSetup
-    }
+        popoutSetup : popoutSetup,
+        saveLayout  : saveLayout,
+        setupLayout : setupLayout
+    };
 })();
 
 
@@ -164,13 +202,14 @@ $(document).ready(function() {
         proc();
     }
     KT.dashboard.popoutSetup();
+    KT.dashboard.setupLayout();
 });
 
 
 //wait until the entire page is loaded, to ensure images and things are downloaded
 $(window).load(function() {
     $(".loading").each(function(){
-       KT.dashboard.widgetReload($(this))
+       KT.dashboard.widgetReload($(this));
     });
     KT.tipsy.custom.tooltip($('.tipsy-icon.errata-info'));
 });

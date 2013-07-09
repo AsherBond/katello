@@ -40,7 +40,6 @@ class System < ActiveRecord::Base
   belongs_to :content_view
 
   validates :environment, :presence => true
-  validates_with Validators::NonLibraryEnvironmentValidator, :attributes => :environment
   # multiple systems with a single name are supported
   validates :name, :presence => true
   validates_length_of :name, :maximum => 250
@@ -180,6 +179,26 @@ class System < ActiveRecord::Base
         json['guests'] = self.guests.map(&:attributes)
       end
     end
+
+    if options[:expanded]
+      json['editable'] = editable?
+      json['type'] = if guest == 'true'
+                        _("Guest")
+                      else
+                        case self
+                          when Hypervisor
+                            _("Hypervisor")
+                          else
+                            _("Host")
+                        end
+                      end
+      keys = []
+      ContentView.readable(organization).in_environment(environment).non_default.each do |view|
+        keys << { :value => view.id, :name => view.name }
+      end
+      json['available_content_views'] = keys
+    end
+
     json
   end
 

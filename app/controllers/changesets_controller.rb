@@ -42,7 +42,7 @@ class ChangesetsController < ApplicationController
       :object => read_perm,
       :auto_complete_search => read_perm,
       :apply => apply_perm,
-      :status => read_perm
+      :changeset_status => read_perm
     }
   end
 
@@ -212,8 +212,8 @@ class ChangesetsController < ApplicationController
 
           when "distribution"
             product = Product.find pid
-            @changeset.add_distribution! id, product if adding
-            @changeset.remove_distribution! id, product if !adding
+            @changeset.add_distribution! Distribution.find(id), product if adding
+            @changeset.remove_distribution! Distribution.find(id), product if !adding
         end
       end
       @changeset.updated_at = Time.now
@@ -271,7 +271,7 @@ class ChangesetsController < ApplicationController
     render :text=>e.to_s, :status=>500
   end
 
-  def status
+  def changeset_status
     progress = @changeset.task_status.progress
     state = @changeset.state
     to_ret = {'id' => 'changeset_' + @changeset.id.to_s, 'state' => state, 'progress' => progress.to_i,
@@ -377,8 +377,14 @@ class ChangesetsController < ApplicationController
             return false
           end
         else
-          if type == "errata"
-            return false if not update_errata_valid?(id)
+          case type
+            when "content_view"
+              return false if not update_content_view_valid?(id)
+            when "errata"
+              return false if not update_errata_valid?(id)
+            else
+              Rails.logger.debug('Unexpected type without a product id: ' + type)
+              return false
           end
         end
       end
@@ -388,8 +394,6 @@ class ChangesetsController < ApplicationController
 
   def update_item_valid? type, id, product_id
     case type
-      when "content_view"
-        item = ContentView.find(id)
       when "product"
         item = Product.find(id)
       when "package"
@@ -407,6 +411,11 @@ class ChangesetsController < ApplicationController
     else
       return false
     end
+  end
+
+  def update_content_view_valid? id
+    content_view = ContentView.find(id)
+    content_view.promotable?
   end
 
   def update_errata_valid? id

@@ -120,7 +120,7 @@ describe Product, :katello => true do
 
       it "should have the value of 'arch' attribute" do
         Resources::Candlepin::Product.stub!(:get).and_return([ProductTestData::SIMPLE_PRODUCT.merge(:attributes => [{:name => 'arch', :value => 'i386'}])])
-        @p.arch.should == 'i386'
+        Product.find(@p.id).arch.should == 'i386'
       end
     end
 
@@ -160,6 +160,7 @@ describe Product, :katello => true do
   context "product repos" do
     before(:each) do
       disable_product_orchestration
+      Runcible::Extensions::Repository.stub(:publish_all).and_return([])
     end
 
     context "repo id" do
@@ -180,9 +181,9 @@ describe Product, :katello => true do
     describe "add repo" do
       before(:each) do
         Resources::Candlepin::Product.stub!(:create).and_return({:id => ProductTestData::PRODUCT_ID})
-        Resources::Candlepin::Content.stub!(:create).and_return({:id => "123"})
-        Resources::Candlepin::Content.stub!(:update).and_return({:id => "123"})
-        Resources::Candlepin::Content.stub!(:get).and_return({:id => "123"})
+        Resources::Candlepin::Content.stub!(:create).and_return({:id => "123", :type=>'yum'})
+        Resources::Candlepin::Content.stub!(:update).and_return({:id => "123", :type=>'yum'})
+        Resources::Candlepin::Content.stub!(:get).and_return({:id => "123", :type=>'yum'})
 
         @p = Product.create!(ProductTestData::SIMPLE_PRODUCT)
       end

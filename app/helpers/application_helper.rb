@@ -150,6 +150,15 @@ module ApplicationHelper
     render :partial=>"/common/env_select", :locals => options
   end
 
+  def gravatar_image_tag(email)
+    image_url = gravatar_url(email)
+    return "<img src=\"#{image_url}\" class=\"gravatar\"><span class=\"gravatar-span\">"
+  end
+
+  def gravatar_url(email)
+    "https:///secure.gravatar.com/avatar/#{Digest::MD5.hexdigest(email)}?d=mm&s=25"
+  end
+
   def env_select_class curr_env, selected_env, curr_path, selected_path, accessible_envs, library_clickable
     classes = []
     if (library_clickable or !curr_env.library?) and accessible_envs.member?(curr_env)
@@ -276,7 +285,12 @@ module ApplicationHelper
   end
 
   def kt_form_for(object, options = {}, &block)
-    options[:builder] = KatelloFormBuilder
+    if current_user.experimental_ui
+      options[:builder] = Experimental::KatelloFormBuilder
+      options[:html] = { :class => "form" }
+    else
+      options[:builder] = KatelloFormBuilder
+    end
     form_for(object, options, &block)
   end
 
@@ -302,4 +316,18 @@ module ApplicationHelper
   def to_calendar_date(date)
     date.strftime('%m/%d/%Y')
   end
+
+  def subscription_limits_helper(sub)
+    lim = []
+    lim << _("Sockets: %s") % sub.sockets if sub.sockets > 0
+    lim << _("Cores: %s") % sub.cores if sub.cores > 0
+    lim << _("RAM: %s GB") % sub.ram if sub.ram > 0
+    lim.join(", ")
+  end
+
+  def default_description_limit
+    return Validators::KatelloDescriptionFormatValidator::MAX_LENGTH
+  end
 end
+
+

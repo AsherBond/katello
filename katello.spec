@@ -14,12 +14,10 @@
 %if "%{?scl}" == "ruby193"
     %global scl_prefix %{scl}-
     %global scl_ruby /usr/bin/ruby193-ruby
-    %global scl_rake scl enable ruby193 rake
     ### TODO temp disabled for SCL
     %global nodoc 1
 %else
     %global scl_ruby /usr/bin/ruby
-    %global scl_rake /usr/bin/rake
 %endif
 
 %global homedir %{_datarootdir}/%{name}
@@ -50,6 +48,8 @@ Provides:        %{name}-glue-foreman = 1.3.15
 Requires:        %{name}-glue-candlepin
 Requires:        %{name}-selinux
 Conflicts:       %{name}-headpin
+BuildRequires:   %{scl_ruby}
+Requires:        %{scl_ruby}
 
 %description
 Provides a package for managing application life-cycle for Linux systems.
@@ -70,6 +70,7 @@ Requires:       elasticsearch
 Requires:       wget
 Requires:       curl
 
+Requires:       %{scl_ruby}
 Requires:       %{?scl_prefix}rubygems
 Requires:       %{?scl_prefix}rubygem(rails) >= 3.2.8
 Requires:       %{?scl_prefix}rubygem(haml) >= 3.1.2
@@ -105,11 +106,20 @@ Requires:       %{?scl_prefix}rubygem(ui_alchemy-rails) >= 1.0.0
 Requires:       %{?scl_prefix}rubygem(chunky_png)
 Requires:       %{?scl_prefix}rubygem(tire) >= 0.3.0
 Requires:       %{?scl_prefix}rubygem(tire) < 0.4
-Requires:       %{?scl_prefix}rubygem(ldap_fluff)
+Requires:       %{?scl_prefix}rubygem(ldap_fluff) >= 0.2.1
 Requires:       %{?scl_prefix}rubygem(anemone)
 Requires:       %{?scl_prefix}rubygem(apipie-rails) >= 0.0.18
 Requires:       %{?scl_prefix}rubygem(logging) >= 1.8.0
 Requires:       %{?scl_prefix}rubygem(bundler_ext) >= 0.3
+Requires:       %{?scl_prefix}rubygem(rack-openid) >= 1.3.1
+Requires:       %{?scl_prefix}rubygem(ruby-openid) >= 2.2.3
+Requires:       %{?scl_prefix}rubygem(rabl)
+Requires:       %{?scl_prefix}rubygem(dynflow)
+Requires:       %{?scl_prefix}rubygem(minitest)
+Requires:       %{?scl_prefix}rubygem(foreigner)
+Requires:       %{?scl_prefix}rubygem(justified)
+Requires:       signo >= 0.0.5
+Requires:       signo-katello >= 0.0.5
 Requires:       lsof
 
 %if 0%{?rhel} == 6
@@ -148,6 +158,8 @@ BuildRequires:  %{?scl_prefix}rubygem(logging) >= 1.8.0
 BuildRequires:  %{?scl_prefix}rubygem(ui_alchemy-rails) >= 1.0.0
 BuildRequires:  %{?scl_prefix}rubygem(minitest)
 BuildRequires:  %{?scl_prefix}rubygem(minitest-rails)
+BuildRequires:  %{?scl_prefix}rubygem(rabl)
+BuildRequires:  %{?scl_prefix}rubygem(hooks)
 BuildRequires:  asciidoc
 BuildRequires:  /usr/bin/getopt
 BuildRequires:  java >= 0:1.6.0
@@ -213,6 +225,21 @@ This is the Katello meta-package.  If you want to install Katello and all
 of its dependencies on a single machine, you should install this package
 and then run katello-configure to configure everything.
 
+%package foreman-all
+BuildArch:      noarch
+Summary:        A meta-package to pull in all components for Katello and Foreman
+Requires:       %{name}-all
+Requires:       %{name}-configure-foreman
+Requires:       %{name}-configure-foreman-proxy
+
+%description foreman-all
+
+This is a meta-package for Katello-Foreman integration. If you want to
+install Katello and all of its dependencies, including Foreman, on a
+single machine, you should install this package and then run
+katello-configure to configure everything.
+
+
 %package glue-elasticsearch
 BuildArch:      noarch
 Summary:         Katello connection classes for the Elastic Search backend
@@ -228,7 +255,8 @@ Requires:        %{name}-common
 Requires:        pulp-server
 Requires:        pulp-rpm-plugins
 Requires:        pulp-selinux
-Requires:        %{?scl_prefix}rubygem(runcible) >= 0.4.3
+Requires:        createrepo >= 0.9.9-18%{?dist}
+Requires:        %{?scl_prefix}rubygem(runcible) >= 0.4.11
 
 %description glue-pulp
 Katello connection classes for the Pulp backend
@@ -249,6 +277,7 @@ Requires:       %{name}-glue-candlepin
 Requires:       %{name}-glue-elasticsearch
 Requires:       katello-selinux
 Requires:       %{?scl_prefix}rubygem(bundler_ext)
+Requires:       %{scl_ruby}
 
 %description headpin
 A subscription management only version of Katello.
@@ -408,6 +437,9 @@ testing.
 %build
 export RAILS_ENV=build
 
+#don't distribute quiet_paths
+rm -f config/initializers/quiet_paths.rb
+
 # when running in SCL we do not distribute any devel packages yet
 %if %{?scl:1}%{!?scl:0}
     rm -f bundler.d/checking.rb
@@ -450,10 +482,10 @@ fi
     mv lib/tasks lib/tasks_disabled
     export BUNDLER_EXT_NOSTRICT=1
     export BUNDLER_EXT_GROUPS="default assets"
-%{?scl:scl enable %{scl} "}
+%{?scl:scl enable %{scl} - << \EOF}
     rake  assets:precompile:primary --trace RAILS_ENV=production
     rake  assets:precompile:nondigest --trace
-%{?scl:"}
+%{?scl:EOF}
     rm config/katello.yml
     mv lib/tasks_disabled lib/tasks
 %endif
@@ -493,6 +525,10 @@ install -d -m0755 %{buildroot}%{datadir}/tmp
 install -d -m0755 %{buildroot}%{datadir}/tmp/pids
 install -d -m0755 %{buildroot}%{datadir}/config
 install -d -m0755 %{buildroot}%{_sysconfdir}/%{name}
+install -d -m0755 %{buildroot}%{datadir}/openid-store
+install -d -m0755 %{buildroot}%{datadir}/openid-store/associations
+install -d -m0755 %{buildroot}%{datadir}/openid-store/nonces
+install -d -m0755 %{buildroot}%{datadir}/openid-store/temp
 
 install -d -m0755 %{buildroot}%{_localstatedir}/log/%{name}
 mkdir -p %{buildroot}/%{_mandir}/man8
@@ -527,6 +563,10 @@ install -m 644 config/environments/production.rb %{buildroot}%{_sysconfdir}/%{na
 install -d -m0755 %{buildroot}%{_sysconfdir}/cron.daily
 install -m 755 script/katello-refresh-cdn %{buildroot}%{_sysconfdir}/cron.daily/katello-refresh-cdn
 
+#create apache config templates
+mkdir -p %{buildroot}%{_sysconfdir}/httpd/conf.d/%{name}.d
+echo "# this file will be overwritten by running katello-configure" > %{buildroot}%{_sysconfdir}/httpd/conf.d/%{name}.d/%{name}.conf
+
 #copy init scripts and sysconfigs
 install -Dp -m0644 %{confdir}/%{name}.sysconfig %{buildroot}%{_sysconfdir}/sysconfig/%{name}
 install -Dp -m0644 %{confdir}/service-wait.sysconfig %{buildroot}%{_sysconfdir}/sysconfig/service-wait
@@ -545,6 +585,7 @@ install -p -m0644 etc/service-list %{buildroot}%{_sysconfdir}/%{name}/
 
 #create symlinks for some db/ files
 ln -svf %{datadir}/schema.rb %{buildroot}%{homedir}/db/schema.rb
+ln -svf %{datadir}/openid-store %{buildroot}%{homedir}/db/openid-store
 
 #create symlinks for data
 ln -sv %{_localstatedir}/log/%{name} %{buildroot}%{homedir}/log
@@ -605,6 +646,8 @@ usermod -a -G katello-shared tomcat
 usermod -a -G katello-shared tomcat
 
 %files
+### if you put something here and it should go to headpin as well
+### then add it to "files headpin" section few pages below too
 %attr(600, katello, katello)
 %{_bindir}/katello-*
 %ghost %attr(600, katello, katello) %{_sysconfdir}/%{name}/secret_token
@@ -619,13 +662,7 @@ usermod -a -G katello-shared tomcat
 %{homedir}/app/models/ext
 %{homedir}/app/models/roles_permissions
 %{homedir}/app/assets/
-%{homedir}/app/assets/stylesheets
-%{homedir}/app/assets/javascripts
-%{homedir}/app/assets/images
 %{homedir}/vendor
-%{homedir}/vendor/assets
-%{homedir}/vendor/assets/stylesheets
-%{homedir}/vendor/assets/images
 %{homedir}/app/views
 %{homedir}/autotest
 %{homedir}/ca
@@ -645,9 +682,10 @@ usermod -a -G katello-shared tomcat
 %{homedir}/app/lib/navigation
 %{homedir}/app/lib/notifications
 %{homedir}/app/lib/validators
-%{homedir}/app/lib/resources/cdn.rb
+%{homedir}/app/lib/api
+%{homedir}/app/lib/dashboard
+%dir %{homedir}/app/lib/resources
 %{homedir}/app/lib/content_search
-%{homedir}/app/lib/experimental
 %{homedir}/lib/tasks
 %exclude %{homedir}/lib/tasks/yard.rake
 %exclude %{homedir}/lib/tasks/hudson.rake
@@ -671,6 +709,8 @@ usermod -a -G katello-shared tomcat
 %config(noreplace) %{_sysconfdir}/%{name}/service-list
 %{homedir}/Rakefile
 %{_mandir}/man8/katello-service.8*
+### if you put something here and it should go to headpin as well
+### then add it to "files headpin" section few pages below too
 
 %files common
 %doc LICENSE.txt
@@ -679,6 +719,8 @@ usermod -a -G katello-shared tomcat
 %config(noreplace) %attr(600, katello, katello) %{_sysconfdir}/%{name}/%{name}.yml
 %config(noreplace) %{_sysconfdir}/%{name}/thin.yml
 %config(noreplace) %{_sysconfdir}/httpd/conf.d/%{name}.conf
+%dir %{_sysconfdir}/httpd/conf.d/katello.d
+%config(noreplace) %{_sysconfdir}/httpd/conf.d/%{name}.d/%{name}.conf
 %config %{_sysconfdir}/%{name}/environment.rb
 %config %{_sysconfdir}/logrotate.d/%{name}
 %config %{_sysconfdir}/%{name}/mapping.yml
@@ -692,9 +734,16 @@ usermod -a -G katello-shared tomcat
 %dir %{homedir}/lib
 %dir %{homedir}/app/lib
 %dir %{homedir}/app/lib/resources
+%{homedir}/app/lib/resources/cdn.rb
+%{homedir}/lib/headpin
 %{homedir}/lib/util
 %{homedir}/app/lib/util
 %{homedir}/script/service-wait
+%dir %{homedir}/db/openid-store/
+%attr(755, katello, katello) %{datadir}/openid-store/associations
+%attr(755, katello, katello) %{datadir}/openid-store/nonces
+%attr(755, katello, katello) %{datadir}/openid-store/temp
+
 
 %defattr(-, katello, katello)
 %dir %{homedir}
@@ -718,6 +767,8 @@ usermod -a -G katello-shared tomcat
 
 %files all
 
+%files foreman-all
+
 %files headpin
 %attr(600, katello, katello)
 %{_bindir}/katello-*
@@ -730,13 +781,7 @@ usermod -a -G katello-shared tomcat
 %exclude %{homedir}/lib/tasks/test.rake
 %exclude %{homedir}/lib/tasks/simplecov.rake
 %{homedir}/app/assets/
-%{homedir}/app/assets/stylesheets
-%{homedir}/app/assets/javascripts
-%{homedir}/app/assets/images
 %{homedir}/vendor
-%{homedir}/vendor/assets
-%{homedir}/vendor/assets/stylesheets
-%{homedir}/vendor/assets/images
 %{homedir}/app/views
 %{homedir}/autotest
 %{homedir}/ca
@@ -754,10 +799,13 @@ usermod -a -G katello-shared tomcat
 %{homedir}/app/lib/navigation
 %{homedir}/app/lib/notifications
 %{homedir}/app/lib/validators
+%{homedir}/app/lib/api
+%{homedir}/app/lib/dashboard
 %exclude %{homedir}/app/lib/resources/candlepin.rb
 %{homedir}/lib/tasks
 %{homedir}/lib/util
 %{homedir}/app/lib/util
+%{homedir}/app/lib/glue/event.rb
 %{homedir}/app/lib/glue/queue.rb
 %{homedir}/app/lib/glue/task.rb
 %{homedir}/locale
@@ -768,7 +816,6 @@ usermod -a -G katello-shared tomcat
 %{homedir}/script
 %{homedir}/spec
 %{homedir}/tmp
-%{homedir}/vendor
 %{homedir}/.bundle
 %{homedir}/config.ru
 %{homedir}/Gemfile.in

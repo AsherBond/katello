@@ -2,7 +2,7 @@
 http_interactions: 
 - request: 
     method: delete
-    uri: https://localhost:8443/candlepin/consumers/a46bebbc-907f-4499-993a-af73f81d317f
+    uri: https://localhost:8443/candlepin/consumers/b4ec43d5-8139-4aa7-af0e-6505ca371c93
     body: 
       encoding: US-ASCII
       string: ""
@@ -12,7 +12,7 @@ http_interactions:
       Accept-Encoding: 
       - gzip, deflate
       Authorization: 
-      - OAuth oauth_consumer_key="katello", oauth_nonce="LdH8wz3mbYIYrBnJbqntQK1KGTBk4dM3blpnxZL0", oauth_signature="bANdFo57QCzbgPlQKXD8h21c2Ac%3D", oauth_signature_method="HMAC-SHA1", oauth_timestamp="1367009785", oauth_version="1.0"
+      - OAuth oauth_consumer_key="katello", oauth_nonce="0rWD1RuCjDCKeERWyXu4ZPyUfYvzP6s2CughaRgz0", oauth_signature="5yFMYApr4QA1r2bv4E1F8BKrdOw%3D", oauth_signature_method="HMAC-SHA1", oauth_timestamp="1373071449", oauth_version="1.0"
       Cp-User: 
       - admin
       User-Agent: 
@@ -25,21 +25,21 @@ http_interactions:
       Server: 
       - Apache-Coyote/1.1
       X-Candlepin-Version: 
-      - 0.8.3-1
+      - 0.8.13-1
       Content-Type: 
       - application/json
       Transfer-Encoding: 
       - chunked
       Date: 
-      - Fri, 26 Apr 2013 20:56:25 GMT
+      - Sat, 06 Jul 2013 00:44:08 GMT
     body: 
       encoding: US-ASCII
-      string: "{\"displayMessage\":\"Consumer a46bebbc-907f-4499-993a-af73f81d317f has been deleted\",\"deletedId\":\"a46bebbc-907f-4499-993a-af73f81d317f\"}"
+      string: "{\"displayMessage\":\"Consumer b4ec43d5-8139-4aa7-af0e-6505ca371c93 has been deleted\",\"deletedId\":\"b4ec43d5-8139-4aa7-af0e-6505ca371c93\"}"
     http_version: 
-  recorded_at: Fri, 26 Apr 2013 20:56:25 GMT
+  recorded_at: Sat, 06 Jul 2013 00:44:09 GMT
 - request: 
     method: delete
-    uri: https://localhost:8443/candlepin/consumers/8ed055d4-68a9-404a-8ae3-309f527f782a
+    uri: https://localhost:8443/candlepin/consumers/65eb858e-7651-4b5b-a87e-300c3eb3ab20
     body: 
       encoding: US-ASCII
       string: ""
@@ -49,7 +49,7 @@ http_interactions:
       Accept-Encoding: 
       - gzip, deflate
       Authorization: 
-      - OAuth oauth_consumer_key="katello", oauth_nonce="xYpbC5YlTjnUrrvJGnyRHNo6TE82AM5iX72YjOBc", oauth_signature="8ZW31K3FvibLVvJIMZi0uW%2B6NjQ%3D", oauth_signature_method="HMAC-SHA1", oauth_timestamp="1367009933", oauth_version="1.0"
+      - OAuth oauth_consumer_key="katello", oauth_nonce="fYjXTHvxTeacqDSHYvXOMmWzH0j432XD3xFrFaV7lg", oauth_signature="7OxsbvtL27fVdFVVLBcMBU2Aqgg%3D", oauth_signature_method="HMAC-SHA1", oauth_timestamp="1373071650", oauth_version="1.0"
       Cp-User: 
       - admin
       User-Agent: 
@@ -62,16 +62,16 @@ http_interactions:
       Server: 
       - Apache-Coyote/1.1
       X-Candlepin-Version: 
-      - 0.8.3-1
+      - 0.8.13-1
       Content-Type: 
       - application/json
       Transfer-Encoding: 
       - chunked
       Date: 
-      - Fri, 26 Apr 2013 20:58:52 GMT
+      - Sat, 06 Jul 2013 00:47:29 GMT
     body: 
       encoding: US-ASCII
-      string: "{\"displayMessage\":\"Consumer 8ed055d4-68a9-404a-8ae3-309f527f782a has been deleted\",\"deletedId\":\"8ed055d4-68a9-404a-8ae3-309f527f782a\"}"
+      string: "{\"displayMessage\":\"Consumer 65eb858e-7651-4b5b-a87e-300c3eb3ab20 has been deleted\",\"deletedId\":\"65eb858e-7651-4b5b-a87e-300c3eb3ab20\"}"
     http_version: 
-  recorded_at: Fri, 26 Apr 2013 20:58:53 GMT
+  recorded_at: Sat, 06 Jul 2013 00:47:30 GMT
 recorded_with: VCR 2.4.0

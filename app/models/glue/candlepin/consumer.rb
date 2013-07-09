@@ -137,6 +137,9 @@ module Glue::Candlepin::Consumer
     def del_candlepin_consumer
       Rails.logger.debug "Deleting consumer in candlepin: #{name}"
       Resources::Candlepin::Consumer.destroy(self.uuid)
+    rescue RestClient::Gone => e
+      #ignore already deleted system
+      true
     rescue => e
       Rails.logger.error "Failed to delete candlepin consumer #{name}: #{e}, #{e.backtrace.join("\n")}"
       raise e
@@ -202,8 +205,8 @@ module Glue::Candlepin::Consumer
       raise e
     end
 
-    def to_json
-      super(:methods => [:href, :facts, :idCert, :owner, :autoheal, :release, :releaseVer, :checkin_time, :installedProducts])
+    def to_json(options={})
+      super(options.merge(:methods => [:href, :facts, :idCert, :owner, :autoheal, :release, :releaseVer, :checkin_time, :installedProducts]))
     end
 
     def convert_from_cp_fields(cp_json)
@@ -335,7 +338,7 @@ module Glue::Candlepin::Consumer
       else
         mem = '0'
       end
-      memory_in_megabytes(mem)
+      memory_in_gigabytes(mem)
     end
 
     def memory=(mem)
@@ -371,21 +374,21 @@ module Glue::Candlepin::Consumer
       end
     end
 
-    def memory_in_megabytes(mem_str)
-      # convert total memory into megabytes
+    def memory_in_gigabytes(mem_str)
+      # convert total memory into gigabytes
       return 0 if mem_str.nil?
       mem,unit = mem_str.split
       total_mem = mem.to_f
       case unit
         when 'B'  then total_mem = 0
-        when 'kB' then total_mem = (total_mem / 1024)
-        when 'MB' then total_mem *= 1
-        when 'GB' then total_mem *= (1024)
-        when 'TB' then total_mem *= (1024*1024)
+        when 'kB' then total_mem = 0
+        when 'MB' then total_mem /= 1024
+        when 'GB' then total_mem *= 1
+        when 'TB' then total_mem *= 1024
         # default memtotal is in kB
-        else total_mem = (total_mem / 1024)
+        else total_mem = (total_mem / (1024*1024))
       end
-      total_mem.to_i
+      total_mem.round(2)
     end
 
     def available_pools_full listall=false
@@ -477,7 +480,9 @@ module Glue::Candlepin::Consumer
                        :endDate => Date.parse(pool["endDate"]),
                        :startDate => Date.parse(pool["startDate"]),
                        :contractNumber => pool["contractNumber"],
-                       :providedProducts => provided_products)
+                       :providedProducts => provided_products,
+                       :accountNumber => pool["accountNumber"],
+                       :productId => pool["productId"])
       }
       consumed_entitlements.sort! {|a,b| a.poolName <=> b.poolName}
       consumed_entitlements
@@ -489,8 +494,9 @@ module Glue::Candlepin::Consumer
 
     # As a convenience and common terminology
     def compliance_color
-      return 'green' if self.compliant?
-      return 'yellow' if self.compliance['partiallyCompliantProducts'].length > 0 && self.compliance['nonCompliantProducts'].length == 0
+      return 'green' if self.compliance['status'] == 'valid'
+      return 'red' if self.compliance['status'] == 'invalid'
+      return 'yellow' if self.compliance['status'] == 'partial'
       return 'red'
     end
 

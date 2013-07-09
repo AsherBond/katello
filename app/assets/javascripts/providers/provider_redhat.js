@@ -91,7 +91,7 @@ KT.redhat_provider_page = (function($) {
             success: function(data, textStatus, jqXHR){
               KT.redhat_provider_page.checkboxHighlightRow(data['id']);
               if(data['can_disable_repo_set']){
-                set_checkbox.removeAttr('disabled')
+                set_checkbox.removeAttr('disabled');
               }
               else {
                 set_checkbox.attr('disabled','disabled');
@@ -108,11 +108,11 @@ KT.redhat_provider_page = (function($) {
             refresh_repo_set(url, content_id, is_refresh);
         }
         else {
-            disable_repo_set(disable_url, content_id)
+            disable_repo_set(disable_url, content_id);
         }
     },
     disable_repo_set = function(url, content_id){
-        var row = $('#rpms_repo_set_' + content_id);
+        var row = $('#repo_set_' + content_id);
         hide_repos(content_id);
         row.find('.repo_set_enable').hide();
         row.find('.repo_set_spinner').show();
@@ -124,8 +124,12 @@ KT.redhat_provider_page = (function($) {
             data: {content_id:content_id},
             cache: false,
             success: function(data){
+                var checkbox = row.find('.repo_set_enable');
                 row.find('table').replaceWith('<table style="display: none;"> </table>');
-                row.find('.repo_set_enable').show();
+                checkbox.show();
+                if (checkbox.data('orphaned')) {
+                    checkbox.attr("disabled", "disabled");
+                }
                 row.find('.repo_set_spinner').hide();
                 row.find('.expander').removeClass('disabled').hide();
                 row.find('.repo_set_refresh').removeClass('disabled').hide();
@@ -139,7 +143,7 @@ KT.redhat_provider_page = (function($) {
         });
     },
     refresh_repo_set = function(url, content_id, is_refresh){
-        var row = $('#rpms_repo_set_' + content_id);
+        var row = $('#repo_set_' + content_id);
         hide_repos(content_id);
         row.addClass("disable");
         row.find('.repo_set_enable').hide();
@@ -179,13 +183,13 @@ KT.redhat_provider_page = (function($) {
         $.sparkline_display_visible();
     },
     hide_repos = function(content_id){
-        var row = $('#rpms_repo_set_' + content_id);
+        var row = $('#repo_set_' + content_id);
         if(row.hasClass('expanded')){
             row.find('.expander_area').click();
         }
     },
     show_repos = function(content_id){
-        var row = $('#rpms_repo_set_' + content_id);
+        var row = $('#repo_set_' + content_id);
         if(row.hasClass('collapsed')){
             row.find('.expander_area').click();
         }
@@ -197,5 +201,5 @@ KT.redhat_provider_page = (function($) {
         on_node_show: on_node_show,
         repoSetChange: repoSetChange,
         hide_repos: hide_repos
-    }
+    };
 }(jQuery));

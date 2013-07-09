@@ -14,7 +14,7 @@ class SystemGroupErrataController < ApplicationController
 
   helper SystemErrataHelper
 
-  before_filter :find_group, :only =>[:install, :index, :items, :status]
+  before_filter :find_group, :only =>[:install, :index, :items, :errata_status]
   before_filter :authorize
 
   def section_id
@@ -28,7 +28,7 @@ class SystemGroupErrataController < ApplicationController
       :index => read_group,
       :items => read_group,
       :install => edit_group,
-      :status => edit_group
+      :errata_status => edit_group
     }
   end
 
@@ -44,6 +44,8 @@ class SystemGroupErrataController < ApplicationController
     errata_state = params[:errata_state] if params[:errata_state]
     chunk_size = current_user.page_size
     errata, errata_systems, total_count, results_count = get_errata(offset.to_i, offset.to_i+chunk_size, filter_type, errata_state)
+
+    return render_bad_parameters unless errata
 
     rendered_html = render_to_string(:partial=>"systems/errata/items", :locals => { :errata => errata,
                                                                                     :errata_systems => errata_systems,
@@ -68,7 +70,7 @@ class SystemGroupErrataController < ApplicationController
     render :text => '' and return
   end
 
-  def status
+  def errata_status
     if params[:id]
       jobs = @group.refreshed_jobs.joins(:task_statuses).where(
           'jobs.id' => params[:id], 'task_statuses.task_type' => [:errata_install])

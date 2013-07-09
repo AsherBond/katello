@@ -16,7 +16,7 @@ class Role < ActiveRecord::Base
 
   acts_as_reportable
 
-  has_many :roles_users
+  has_many :roles_users, :dependent => :destroy
   has_many :users, :through => :roles_users, :before_remove =>:super_admin_check
   has_many :permissions, :dependent => :destroy, :inverse_of =>:role, :class_name=>"Permission", :extend => RolesPermissions::DefaultSystemRegistrationPermission
   has_many :ldap_group_roles, :dependent => :destroy, :inverse_of => :role
@@ -24,11 +24,11 @@ class Role < ActiveRecord::Base
 
   # scope to facilitate retrieving roles that are 'non-self' roles... group() so that unique roles are returned
   scope :non_self, where("type <> 'UserOwnRole' or type is NULL").order('roles.name')
-  validates :name, :uniqueness => true, :length => {:maximum => 128, :minimum => 1}, :presence => true
+  validates :name, :uniqueness => true, :presence => true
   validates_with Validators::NoTrailingSpaceValidator, :attributes => :name
   validates_with Validators::RolenameValidator, :attributes => :name
 
-  validates :description, :length => { :maximum => 250 }
+  validates_with Validators::KatelloDescriptionFormatValidator, :attributes => :description
   validates_with Validators::LockValidator, :on => :update
 
   #validates_associated :permissions

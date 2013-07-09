@@ -37,13 +37,8 @@ else
     ENV['BUNDLE_GEMFILE'] = File.expand_path('../../Gemfile', __FILE__)
   end
   if defined?(Bundler)
-    basic_groups = [:default]
-    if Katello.early_config.katello?
-      basic_groups = basic_groups + [:pulp]
-    end
-    if Katello.early_config.profiling
-      basic_groups += [:optional]
-    end
+    basic_groups = [:default, :optional]
+    basic_groups.push :pulp if Katello.early_config.katello?
     groups = case Rails.env.to_sym
              when :build
                basic_groups + [:development, :build, :assets]
@@ -61,20 +56,11 @@ else
   end
 end
 
-# TODO to be removed after config path is made configurable in LdapFluff
-candidates       = [
-    # production environment
-    LdapFluff::CONFIG,
-    # rpm build environment
-    '/opt/rh/ruby193/root' + LdapFluff::CONFIG,
-    # on travis and in development environment
-    File.join(Gem.loaded_specs['ldap_fluff'].full_gem_path, 'etc', 'ldap_fluff.yml')]
-config_file_path = candidates.find { |path| File.exist? path }
-raise "missing LdapFluff config file, candidates: #{candidates.join(' ')}" if config_file_path.nil?
-LdapFluff::CONFIG = config_file_path unless LdapFluff::CONFIG == config_file_path
-
 module Src
   class Application < Rails::Application
+
+    require 'katello/middleware/log_request_uuid'
+    config.middleware.insert_after ActionDispatch::RequestId, Katello::Middleware::LogRequestUUID
 
     # use dabase configuration form katello.yml instead database.yml
     config.class_eval do
@@ -82,6 +68,9 @@ module Src
         Katello.database_configs
       end
     end
+
+    # Setup additional routes by loading all routes file from routes directory
+    config.paths["config/routes"] += Dir[Rails.root.join("config/routes/**/*.rb")]
 
     # set the relative url for rails
     config.relative_url_root = Katello.config.url_prefix
@@ -141,10 +130,6 @@ module Src
       app.routes.append{match '*a', :to => 'errors#routing'}
     end
 
-    # set actions to profile (eg. %w(user_sessions#new))
-    # profiles will be stored in tmp/profiles/
-    config.do_profiles = []
-
     # logging configuration
     config.colorize_logging = Katello.config.logging.colorize
 
@@ -164,6 +149,8 @@ module Src
     config.assets.enabled = true
     config.assets.version = '1.0'
     config.assets.initialize_on_precompile = false
+
+    config.assets.paths << Rails.root.join("app", "assets")
 
     config.assets.precompile << Proc.new do |path|
       if path =~ /\.(css|js)\z/
@@ -198,3 +185,7 @@ FastGettext.add_text_domain('katello', {
 }.update(old_fast_gettext ? { :ignore_obsolete => true } : { :report_warning => false }))
 
 FastGettext.default_text_domain = 'katello'
+
+if defined? Dynflow
+  Dir[File.join(Rails.root,'lib/{katello,headpin}/actions/*.rb')].each { |f| require f }
+end

@@ -28,14 +28,14 @@ class OrganizationDestroyer
   def setup(organization)
     raise NotImplementedError unless options[:async]
 
-    task                 = self.async(:organization => organization).run
-    organization.task_id = task.id
+    task = self.async.run
+    organization.deletion_task_id = task.id
     organization.save!
     return task
   end
 
   def run
-    organization = Organization.find organization_id
+    organization = Organization.find(organization_id)
     organization.destroy
 
     Notify.success _("Successfully removed organization '%s'.") % organization.name,

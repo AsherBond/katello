@@ -53,6 +53,7 @@ module Glue
         all_rows      = false
         sort_by       = search_options[:sort_by] || 'name'
         sort_order    = search_options[:sort_order] || 'ASC'
+        total_count   = 0
 
         # set the query default field, if one was provided.
         query_options = {}
@@ -64,9 +65,9 @@ module Glue
           @query_string = search_options[:simple_query]
         end
 
-        total_count = total_items
-        page_size = search_options[:page_size] || total_count
+        page_size = search_options[:page_size] || total_items
         filters = @filters
+        filters = [filters] if !filters.is_a? Array
 
         @results = @obj_class.search :load=>false do
           query do
@@ -79,12 +80,13 @@ module Glue
 
           sort {by sort_by, sort_order.to_s.downcase } if sort_by && sort_order
 
-          filters = [filters] if !filters.is_a? Array
           filters.each{ |i| filter  :terms, i } if !filters.empty?
 
           size page_size
           from start
         end
+
+        total_count = @results.total
 
         if search_options[:load_records?]
           @results = load_records
@@ -95,7 +97,7 @@ module Glue
 
         @results = []
       ensure
-        return @results
+        return @results, total_count
       end
 
       # Loads the ActiveRecord objects from the database that match
@@ -122,6 +124,7 @@ module Glue
       def total_items
         @total = 0
         filters = @filters
+        filters = [filters] if !filters.is_a? Array
 
         results = @obj_class.search do
           query do

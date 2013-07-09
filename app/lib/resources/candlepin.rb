@@ -168,7 +168,8 @@ module Resources
         def consume_entitlement uuid, pool, quantity = nil
           uri = join_path(path(uuid), 'entitlements') + "?pool=#{pool}"
           uri += "&quantity=#{quantity}" if quantity
-          self.post(uri, "", self.default_headers).body
+          response = self.post(uri, "", self.default_headers).body
+          response.blank? ? [] : JSON.parse(response)
         end
 
         def remove_entitlement uuid, ent_id
@@ -207,7 +208,13 @@ module Resources
         def compliance uuid
           response = Candlepin::CandlepinResource.get(join_path(path(uuid), 'compliance'), self.default_headers).body
           unless response.empty?
-            JSON.parse(response).with_indifferent_access
+            json = JSON.parse(response).with_indifferent_access
+            if json['reasons']
+              json['reasons'].sort!{|x,y| x['attributes']['name'] <=> y['attributes']['name']}
+            else
+              json['reasons'] = []
+            end
+            json
           else
             return nil
           end
@@ -282,9 +289,9 @@ module Resources
             JSON.parse(owner_json).with_indifferent_access
         end
 
-        def update key, organization
-          owner = find key
-          owner['displayName'] = organization.name
+        def update(key, attrs)
+          owner = find(key)
+          owner.merge!(attrs)
           self.put(path(key), JSON.generate(owner), self.default_headers).body
         end
 

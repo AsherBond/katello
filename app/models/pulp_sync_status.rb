@@ -21,7 +21,7 @@ class PulpSyncProgress
       ht = HashUtil.new
 
       details =  ht.null_safe_get(progress_attrs, nil, ['progress','yum_importer', 'content'] )    ||
-            ht.null_safe_get(progress_attrs, nil, ['details','packages', 'sync_report'] )
+            ht.null_safe_get(progress_attrs, nil, ['progress', 'details','packages', 'sync_report'] )
 
       @total_size  = ht.null_safe_get(details, 0, ['size_total'])
       @size_left   = ht.null_safe_get(details, 0, ['size_left'])
@@ -36,9 +36,10 @@ end
 class PulpSyncStatus < PulpTaskStatus
   use_index_of TaskStatus
 
-  SUCCESS   = "success"
+  HISTORY_ERROR = 'failed'
+  HISTORY_SUCCESS = 'success'
   FINISHED  = "finished"
-  ERROR     = "failed"
+  ERROR     = "error"
   RUNNING   = "running"
   WAITING   = "waiting"
   CANCELED  = "canceled"
@@ -71,6 +72,32 @@ class PulpSyncStatus < PulpTaskStatus
     if [FINISHED].include?(self.state) && !self.progress.error_details.blank?
       self.state = ERROR
       self.save! if not self.new_record?
+    end
+  end
+
+  # Pulp history items are moved from the task item, but are different
+  #  and as a result we need to convert the structure
+  # @option [Array] history_list list of pulp sync history hashes
+  def self.convert_history(history_list)
+    #history item attributes
+    #["_id", "_ns", "added_count", "completed", "details", "error_message", "exception", "id",
+    # "importer_id", "importer_type_id", "removed_count", "repo_id", "result", "started", "summary",
+    # "traceback", "updated_count"]
+
+    #task status attributes
+    #["task_group_id", "exception", "traceback", "_href", "task_id", "call_request_tags", "reasons",
+    # "start_time", "tags", "state", "finish_time", "dependency_failures", "schedule_id", "progress",
+    # "call_request_group_id", "call_request_id", "principal_login", "response", "result"]
+    history_list.collect do |history|
+      result = history['result']
+      result = ERROR if result == HISTORY_ERROR
+      result = FINISHED if result == HISTORY_SUCCESS
+      {
+          :state =>  result,
+          :progress => {:details=> history["details"]},
+          :finish_time => history['completed'],
+          :start_time => history['started']
+      }.with_indifferent_access
     end
   end
 

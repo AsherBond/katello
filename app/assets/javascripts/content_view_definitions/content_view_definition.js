@@ -591,6 +591,13 @@ KT.content_view_definition_filters = (function(){
             return;
         }
 
+        $("#rule_input").unbind('keypress').keypress(function(event) {
+            if(event.keyCode === 13) {
+                event.preventDefault();
+                $("#add_rule").click();
+            }
+        });
+
         $('#add_rule').unbind('click').click(function() {
             var rule_input = $('input#rule_input').val(),
                 data;
@@ -698,12 +705,12 @@ KT.content_view_definition_filters = (function(){
     disable_version_selector = function(selector) {
         disable(selector.find('select.version_type'));
         disable(selector.find('input.input'));
-        disable(selector.find('a.save_version'))
+        disable(selector.find('a.save_version'));
     },
     enable_version_selector = function(selector) {
         enable(selector.find('select.version_type'));
         enable(selector.find('input.input'));
-        enable(selector.find('a.save_version'))
+        enable(selector.find('a.save_version'));
     },
     disable = function(button) {
         button.attr('disabled', 'disabled').addClass('disabled');

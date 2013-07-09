@@ -13,3 +13,7 @@
 
 //= require "alchemy/login"
 //= require "alchemy/password"
+//= require "widgets/widgets.module.js"
+//= require "widgets/org_switcher"
+//= require "user_sessions/user-sessions.module"
+//= require "user_sessions/user-sessions.controller"

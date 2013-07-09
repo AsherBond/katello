@@ -33,12 +33,13 @@ module Katello
                     search use_foreman password_reset_expiration redhat_repository_url port
                     elastic_url rest_client_timeout elastic_index
                     katello_version pulp email_reply_address
-                    embed_yard_documentation logging system_lang)
+                    embed_yard_documentation logging system_lang profiling
+                    exception_paranoia hide_exceptions)
 
           has_values :app_mode, %w(katello headpin)
-          has_values :url_prefix, %w(/headpin /sam /cfse /katello)
-
+          has_values :url_prefix, %w(/headpin /sam /katello)
           is_not_empty :system_lang
+          is_type :profiling, Array, nil
 
           validate :logging do
             has_keys *%w(console_inline colorize log_trace loggers)
@@ -60,7 +61,7 @@ module Katello
           end
 
           are_booleans :use_cp, :use_foreman, :use_pulp, :use_elasticsearch, :use_ssl, :ldap_roles,
-                       :profiling, :validate_ldap
+                       :validate_ldap, :gravatar, :exception_paranoia, :hide_exceptions
 
           if !early? && environment != :build
             validate :database do
@@ -93,7 +94,8 @@ module Katello
             rpm_command_present = system('which rpm &>/dev/null')
             if rpm_command_present
               package = config.katello? ? 'katello-common' : 'katello-headpin'
-              `rpm -q #{package} --queryformat '%{VERSION}-%{RELEASE}' 2>&1`
+              version = `rpm -q #{package} --queryformat '%{VERSION}-%{RELEASE}' 2>&1`
+              $? == 0 ? version : ""
             else
               hash = `git rev-parse --short HEAD 2>/dev/null`
               $? == 0 ? "git hash (#{hash.chop})" : "Unknown"

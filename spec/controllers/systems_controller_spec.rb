@@ -182,12 +182,6 @@ describe SystemsController do
         end
       end
 
-      it "should throw an exception when the search parameters are invalid" do
-        controller.should notify.exception
-        get :items, :search => 1
-        response.should_not be_success
-      end
-
       describe 'and requesting individual data' do
         before (:each) do
           @system = System.create!(:name=>"verbose", :environment => @environment, :cp_type=>"system", :facts=>{"Test1"=>1, "verbose_facts" => "Test facts"})
@@ -298,13 +292,6 @@ describe SystemsController do
         assigns[:system].releaseVer.should == "6Server"
       end
 
-      # The params to #update_subscriptions are entirely wrong here. The only reason the test
-      # used to pass was because the error handler was not passing back an error status
-      it "should not update a subscription", :katello => true do #TODO headpin
-        put :update_subscriptions, { :id => @system.id, :system => { :name=> "foo" }}
-        response.should_not be_success
-      end
-
       it "should throw an error with bad parameters", :katello => true do #TODO headpin
         invalid_name = " Foo   "
         put :update, { :id => @system.id, :system => { :name=> invalid_name }}
@@ -352,66 +339,6 @@ describe SystemsController do
       end
     end
 
-    describe 'creating a system' do
-      render_views
-
-      before (:each) do
-        System.stub!(:save!).and_return true
-
-        # Stub out System.where().search_for()
-        @system = System.create!(:name=>"bar", :environment => @environment, :cp_type=>"system", :facts=>{"Test" => ""})
-        System.stub!(:where).and_return @system
-        @system.stub!(:search_for).and_return [@system]
-      end
-
-      # GET :index should not render an env_select until the :new is called
-      it "should create a system in env", :katello => true do #TODO headpin
-        get :index
-        response.should_not render_template(:partial=>"_env_select")
-
-        get :new
-        response.should render_template(:partial=>"_new")
-        response.should render_template(:partial=>"_env_select")
-
-        controller.should notify(:success, :message)
-        post :create, {:system=>{:name=>"sys1", :environment_id=>@env1.id, :sockets=>2},
-                       :arch=>{:arch_id=>1},
-                       :system_type=>{:virtualized=>'virtual'}}
-        response.should be_success
-      end
-
-      # GET :index should render an env_select but not on the :new response
-      it "should create a system in env", :katello => true do #TODO headpin
-        get :environments, :env_id=>@env2.id
-        response.should render_template(:partial=>"_env_select")
-
-        # The link to :new should include env_id
-        # NOTE: This can't be tested since the url is modified by javascript
-        #response.should have_selector("a", :id=>'new', :href=>"#", 'data-ajax_url'=>"/headpin/systems/new?env_id=#{@env2.id}")
-
-        get :new, {:env_id=>@env2.id}
-        response.should render_template(:partial=>"_new")
-        response.should_not render_template(:partial=>"_env_select")
-
-        # The hidden env_id form field should have correct id
-        response.should have_selector("input", :id=>'system_environment_id', :value=>"#{@env2.id}")
-
-        controller.should notify(:success, :message)
-        post :create, {:system=>{:name=>"sys1", :environment_id=>@env2.id, :sockets=>2},
-                       :arch=>{:arch_id=>1},
-                       :system_type=>{:virtualized=>'virtual'}}
-        response.should be_success
-        response.should contain '{"no_match":true}'
-      end
-      it_should_behave_like "bad request"  do
-        let(:req) do
-          post :create, {:system=>{:bad_foo=> true,:name=>"sys1", :environment_id=>@env2.id, :sockets=>2},
-                         :arch=>{:arch_id=>1},
-                         :system_type=>{:virtualized=>'virtual'}}
-        end
-      end
-    end
-
     describe "system groups" do
       before (:each) do
         @system = System.create!(:name=>"bar1", :environment => @environment, :cp_type=>"system", :facts=>{"Test" => ""})
@@ -423,7 +350,14 @@ describe SystemsController do
 
       describe "listing/viewing" do
         it "retrieves the system groups to display", :katello => true do #TODO headpin
-          SystemGroup.should_receive(:where).with(:organization_id => @organization).and_return([@group1, @group2])
+          System.any_instance.tap do |any|
+            any.stub(:editable?).and_return true
+            any.stub(:readable?).and_return true
+          end
+          SystemGroup.
+              should_receive(:where).
+              with(:organization_id => @organization).
+              and_return mock.tap { |m| m.stub_chain(:select, :joins, :group, :order).and_return([@group1, @group2]) }
           get :system_groups, :id => @system.id
         end
 
@@ -523,7 +457,7 @@ describe SystemsController do
           @group1.max_systems = 1
           @group1.systems << @system1
           @group1.save!
-          controller.should notify.exception
+          controller.should notify.error
           put :bulk_add_system_group, {:ids => [@system2.id], :group_ids => [@group1.id]}
           response.should_not be_success
         end

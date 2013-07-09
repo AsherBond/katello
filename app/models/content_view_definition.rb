@@ -29,6 +29,7 @@ class ContentViewDefinition < ContentViewDefinitionBase
 
   validates_with Validators::KatelloNameFormatValidator, :attributes => :name
   validates_with Validators::KatelloLabelFormatValidator, :attributes => :label
+  validates_with Validators::KatelloDescriptionFormatValidator, :attributes => :description
 
   scope :composite, where(:composite=>true)
   scope :non_composite, where(:composite=>false)
@@ -59,7 +60,6 @@ class ContentViewDefinition < ContentViewDefinitionBase
       version.save!
       generate_repos(view, options[:notify])
     end
-
     view
   end
 
@@ -71,6 +71,7 @@ class ContentViewDefinition < ContentViewDefinitionBase
     # Copy all pkg groups over
     # Copy all distro over
     # Start Filtering errata in the copied
+    # Make sure packages belonging to the errata are included/excluded
     # Start Filtering package groups in the copied repo
     # Start Filtering packages in the copied repo
     # Remove all empty errata
@@ -88,10 +89,11 @@ class ContentViewDefinition < ContentViewDefinitionBase
       async_tasks << repo.clone_contents(clone)
       cloned_repos << clone
     end
-    PulpTaskStatus::wait_for_tasks async_tasks.flatten(1)
+    PulpTaskStatus::wait_for_tasks(async_tasks.flatten(1))
 
     unassociate_contents(cloned_repos)
-
+    view.update_cp_content(view.organization.library)
+    PulpTaskStatus::wait_for_tasks(view.versions.first.generate_metadata)
     if notify
       message = _("Successfully published content view '%{view_name}' from definition '%{definition_name}'.") %
           {:view_name => view.name, :definition_name => self.name}
@@ -120,6 +122,7 @@ class ContentViewDefinition < ContentViewDefinitionBase
   # by the filters and filter rules
   def unassociate_contents(repos)
     # Start Filtering errata in the copied repo
+    # Make sure packages belonging to the errata are included/excluded
     # Start Filtering package groups in the copied repo
     # Start Filtering packages in the copied repo
     repos.each do |repo|
@@ -128,6 +131,13 @@ class ContentViewDefinition < ContentViewDefinitionBase
         if filter_clauses
           pulp_task = repo.unassociate_by_filter(content_type, filter_clauses)
           PulpTaskStatus::wait_for_tasks [pulp_task]
+          if content_type == FilterRule::ERRATA
+            pkg_clause = errata_package_unassociate_clauses(filter_clauses)
+            unless pkg_clause.empty?
+              pulp_task = repo.unassociate_by_filter(FilterRule::PACKAGE, pkg_clause)
+              PulpTaskStatus::wait_for_tasks [pulp_task]
+            end
+          end
         end
       end
     end
@@ -158,6 +168,7 @@ class ContentViewDefinition < ContentViewDefinitionBase
     false
   end
 
+  #NOTE: this function will most likely become obsolete once we drop api v1
   def as_json(options = {})
     result = self.attributes
     result["organization"] = self.organization.try(:name)
@@ -197,6 +208,15 @@ class ContentViewDefinition < ContentViewDefinitionBase
   end
 
   protected
+
+  def errata_package_unassociate_clauses(errata_clauses)
+    ret = {}
+    unless errata_clauses.empty?
+      pkg_filenames = Errata.list_by_filter_clauses(errata_clauses).collect(&:package_filenames).flatten
+      ret = {'filename' => {"$in" => pkg_filenames}} unless pkg_filenames.empty?
+    end
+    ret
+  end
 
   def unassociation_clauses(repo, content_type)
     # find applicable filters
@@ -240,8 +260,6 @@ class ContentViewDefinition < ContentViewDefinitionBase
   def validate_content
     if has_content? && self.composite?
       errors.add(:base, _("cannot contain products, or repositories if composite definition"))
-    elsif has_component_views? && !self.composite?
-      errors.add(:base, _("cannot contain views if not composite definition"))
     end
   end
 

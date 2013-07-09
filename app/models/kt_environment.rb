@@ -16,13 +16,21 @@ class KTEnvironment < ActiveRecord::Base
   include Glue::ElasticSearch::Environment if Katello.config.use_elasticsearch
   include Glue if Katello.config.use_cp || Katello.config.use_pulp
 
+  include Glue::Event
+  def create_event
+    Katello::Actions::EnvironmentCreate
+  end
+  def destroy_event
+    Katello::Actions::EnvironmentDestroy
+  end
+
   self.table_name = "environments"
   include Ext::LabelFromName
   include Ext::PermissionTagCleanup
   acts_as_reportable
 
   # RAILS3458: before_destroys before associations. see http://tinyurl.com/rails3458
-  before_destroy :confirm_last_env
+  before_destroy :is_deletable?
   before_destroy :delete_default_view_version
 
   belongs_to :organization, :inverse_of => :environments
@@ -50,7 +58,7 @@ class KTEnvironment < ActiveRecord::Base
 
   has_many :changeset_history, :conditions => {:state => Changeset::PROMOTED}, :foreign_key => :environment_id, :dependent => :destroy, :class_name=>"Changeset", :dependent => :destroy, :inverse_of => :environment
 
-  has_many :content_view_version_environments, :foreign_key=>:environment_id
+  has_many :content_view_version_environments, :foreign_key=>:environment_id, :dependent=>:destroy
   has_many :content_view_versions, :through=>:content_view_version_environments, :inverse_of=>:environments
   has_many :content_view_environments, :foreign_key=>:environment_id, :inverse_of=>:environment, :dependent=>:destroy
 
@@ -74,6 +82,7 @@ class KTEnvironment < ActiveRecord::Base
   after_create :create_default_content_view_version
 
   after_destroy :unset_users_with_default
+
    ERROR_CLASS_NAME = "Environment"
 
   def library?
@@ -146,17 +155,20 @@ class KTEnvironment < ActiveRecord::Base
         'task_statuses.state' => [TaskStatus::Status::WAITING,  TaskStatus::Status::RUNNING])
   end
 
-  def confirm_last_env
-    # when deleting env while org is deleted, self.organization is nil (and we
-    # can't do this logic properly)
-    # we don't have to check this anyway, all environments will be destroyed
-    # with the org.
-    return true unless self.organization
+  def is_deletable?
+    return true if self.organization.nil? || self.organization.being_deleted?
 
-    return true if successor.nil?
-    errors.add :base,
-               _("Environment %s has a successor.  Only the last environment on a path can be deleted") % self.name
-    return false
+    if library?
+      errors.add :base,
+                _("Library environments may not be deleted.")
+      return false
+    elsif !successor.nil?
+      errors.add :base,
+                 _("Environment %s has a successor.  Only the last environment on a path can be deleted") % self.name
+      return false
+    end
+
+    return true
   end
 
   #Unlike path which only gives the path from this environment going forward
