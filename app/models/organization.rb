@@ -67,7 +67,7 @@ class Organization < ActiveRecord::Base
   validates_with Validators::KatelloLabelFormatValidator, :attributes => :label
   validates_with Validators::KatelloDescriptionFormatValidator, :attributes => :description
   validate :unique_name_and_label
-  validates_with Validators::DefaultInfoNotBlankValidator, :attributes => :default_info
+  validates_with Validators::DefaultInfoValidator, :attributes => :default_info
 
 
   # Ensure that the name and label namespaces do not overlap
@@ -174,6 +174,39 @@ class Organization < ActiveRecord::Base
 
   def run_apply_info(ids_and_types, custom_info)
     CustomInfo.apply_to_set(ids_and_types, custom_info)
+  end
+
+  def auto_attaching_all_systems?
+    return false if self.owner_auto_attach_all_systems_task_id.nil?
+    ! TaskStatus.find_by_id(self.owner_auto_attach_all_systems_task_id).finished?
+  end
+
+  def auto_attach_all_systems
+    jobs = self.owner_auto_attach
+    task = self.async(:organization => self, :task_type => "monitor owner all_systems auto_attach").monitor_owner_auto_attach(jobs)
+    self.owner_auto_attach_all_systems_task_id = task.id
+    self.save!
+    return task
+  end
+
+  def monitor_owner_auto_attach(jobs, options = {})
+    options = { :pause => 5 }.merge(options)
+    complete = false
+    consumer_ids = []
+    while !complete
+      complete = true
+      jobs.each do |job|
+        if Resources::Candlepin::Job.not_finished?(Resources::Candlepin::Job.get(job["id"]))
+          complete = false
+          consumer_ids = []
+          sleep options[:pause]
+          break
+        else
+          consumer_ids << job["targetId"]
+        end
+      end
+    end
+    return consumer_ids
   end
 
 end

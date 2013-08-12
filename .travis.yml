@@ -3,6 +3,7 @@ language:
 
 rvm:
   - "1.9.3"
+  - "2.0.0"
 
 <<<<<<< HEAD
 script:
@@ -24,11 +25,13 @@ script:
   - "./script/ci/katello_pr_$JOB.sh"
 
 env:
-  - JOB=minitest
   - JOB=rspec
+<<<<<<< HEAD
   - JOB=headpin_rspec
 <<<<<<< HEAD
 >>>>>>> cf40be3dbfef9dce1fdd5ed8ca5273c35c9332f8
 =======
+=======
+>>>>>>> 7a37c128fb000a83402af349cd687abc21e3b5b0
   - JOB=other
 >>>>>>> 42fd1e0a69d2ad9e0cb432e1ce553334428259cf

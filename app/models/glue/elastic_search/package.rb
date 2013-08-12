@@ -21,6 +21,8 @@ module Glue::ElasticSearch::Package
           "nvrea_sort" => nvrea.downcase,
           "nvrea" => nvrea,
           "nvrea_autocomplete" => nvrea,
+          "sortable_version" => sortable_version,
+          "sortable_release" => sortable_release,
           "name_autocomplete" => name
         }
       end
@@ -46,7 +48,9 @@ module Glue::ElasticSearch::Package
               :nvrea_autocomplete  => { :type=> 'string', :analyzer=>'autcomplete_name_analyzer'},
               :nvrea         => { :type=> 'string', :analyzer=>:kt_name_analyzer},
               :nvrea_sort    => { :type => 'string', :index=> :not_analyzed },
-              :repoids       => { :type=> 'string', :index=>:not_analyzed}
+              :repoids       => { :type=> 'string', :index=>:not_analyzed},
+              :sortable_version => { :type => 'string', :index => :not_analyzed },
+              :sortable_release => { :type => 'string', :index => :not_analyzed }
             }
           }
         }
@@ -117,9 +121,8 @@ module Glue::ElasticSearch::Package
         search.results
       end
 
-      def self.search query, start, page_size, repoids=nil, sort=[:nvrea_sort, "ASC"],
-                                            search_mode = :all, default_field = 'nvrea'
-
+      def self.search(query, start=0, page_size=15, repoids=nil, sort=[:nvrea_sort, "ASC"],
+                      search_mode = :all, default_field = 'nvrea', filters=[])
         if !Tire.index(self.index).exists? || (repoids && repoids.empty?)
           return Util::Support.array_with_total
         end
@@ -144,6 +147,12 @@ module Glue::ElasticSearch::Package
            from start
           end
           sort { by sort[0], sort[1] } unless !all_rows
+        end
+
+        if filters
+          filters.each do |filter|
+            search.filter(filter.keys.first, filter.values.first)
+          end
         end
 
         if repoids

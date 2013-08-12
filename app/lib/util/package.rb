@@ -152,5 +152,35 @@ module Util
           search_results.filter :or, repo_filter_ids
       end
     end
+
+    def self.version_filter(minimum=nil, maximum=nil)
+      filters = []
+      filters << PackageFilter.new(minimum, "gt").clauses if minimum
+      filters << PackageFilter.new(maximum, "lt").clauses if maximum
+
+      filters
+    end
+
+    def self.version_eq_filter(version)
+      [PackageFilter.new(version, "eq").clauses]
+    end
+
+    # Converts a package version to a sortable string
+    #
+    # See the Fedora docs for what chars are accepted
+    # https://fedoraproject.org/wiki/Archive:Tools/RPM/VersionComparison
+    #
+    # See Pulp's documentation for more info about this algorithm
+    # http://pulp-rpm-dev-guide.readthedocs.org/en/latest/sort-index.html
+    #
+    # @param version [String] a package version (e.g. "3.9")
+    # @return [String] a string that can be sorted (e.g. "01-3.01-9")
+    def self.sortable_version(version)
+      return "" if version.blank?
+      pieces = version.scan(/([A-Za-z]+|\d+)/).flatten.map do |chunk|
+        chunk =~ /\d+/ ? "#{"%02d" % chunk.length}-#{chunk}" : "$#{chunk}"
+      end
+      pieces.join(".")
+    end
   end
 end
