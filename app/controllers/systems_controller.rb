@@ -95,7 +95,8 @@ class SystemsController < ApplicationController
       :system_groups => read_system,
       :add_system_groups => edit_system,
       :remove_system_groups => edit_system,
-      :custom_info => read_system
+      :custom_info => read_system,
+      :releases => read_system
     }
   end
 
@@ -131,7 +132,7 @@ class SystemsController < ApplicationController
     @system_groups = SystemGroup.where(:organization_id => current_organization).order(:name)
 
     if current_user.experimental_ui
-      render :index_nutupane, :locals => { :experimental_ui => true }
+      render 'bastion/systems/index', :layout => 'bastion/layouts/application'
     else
       @auto_attach_task = TaskStatus.find_by_id(current_organization.owner_auto_attach_all_systems_task_id)
       render :index
@@ -259,15 +260,28 @@ class SystemsController < ApplicationController
     render :partial=>"more_products", :locals=>{:system=>@system, :products=>@products}
   end
 
-  def edit
-    begin
-      releases = @system.available_releases
-    rescue => e
-      releases_error = e.to_s
-      Rails.logger.error e.to_s
+  def releases
+    releases = {"" => _("System Default")}
+    @system.available_releases.each do |release|
+      releases[release] = release
     end
-    releases ||= []
-    releases_error ||= nil
+    render :json => releases
+  end
+
+  def edit
+    if Katello.config.katello?
+      begin
+        releases = @system.available_releases
+      rescue => e
+        releases_error = e.to_s
+        Rails.logger.error e.to_s
+      end
+      releases ||= []
+      releases_error ||= nil
+    else
+      releases = nil
+      releases_error = nil
+    end
 
     # Stuff into var for use in spec tests
     @locals_hash = { :system => @system, :editable => @system.editable?,

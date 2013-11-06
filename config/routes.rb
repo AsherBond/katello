@@ -236,6 +236,7 @@ Src::Application.routes.draw do
       put :add_system_groups
       put :remove_system_groups
       get :custom_info
+      get :releases
     end
     collection do
       get :auto_complete
@@ -497,4 +498,5 @@ Src::Application.routes.draw do
 
   match 'about', :to => "application_info#about", :as => "about"
 
+  match '/i18n/dictionary' => 'i18n#show', :via=>:get
 end

@@ -34,4 +34,8 @@ env:
 =======
 >>>>>>> 7a37c128fb000a83402af349cd687abc21e3b5b0
   - JOB=other
+<<<<<<< HEAD
 >>>>>>> 42fd1e0a69d2ad9e0cb432e1ce553334428259cf
+=======
+  - JOB=javascript
+>>>>>>> c75fe6b4b6f78cec4a67d05e3c9b9a84fd03f845
