@@ -43,6 +43,23 @@ class ChangesetTest < MiniTest::Rails::ActiveSupport::TestCase
     end
   end
 
+  def test_add_content_view_check_promotion_exception
+    changeset = FactoryGirl.build_stubbed(:promotion_changeset)
+    library   = FactoryGirl.build_stubbed(:library)
+    env       = FactoryGirl.build_stubbed(:environment)
+    view      = FactoryGirl.build_stubbed(:content_view)
+    version   = FactoryGirl.build_stubbed(:content_view_version)
+    library.stubs(:content_view_versions).returns(mock(:find_by_content_view_id => version))
+    library.stubs(:content_views).returns([view])
+    env.stubs(:content_view_versions).returns(mock(:find_by_content_view_id => version))
+    env.stubs(:prior).returns(library)
+    changeset.environment = env
+
+    assert_raises(Errors::ChangesetContentException) do
+      changeset.add_content_view!(view)
+    end
+  end
+
   def test_content_view_changeset_promotion
     skip 'skipped temporarily to get travis tests working'
     Repository.any_instance.stubs(:clone_contents).returns([])
@@ -82,7 +99,7 @@ class ChangesetTest < MiniTest::Rails::ActiveSupport::TestCase
                                       :environment => @dev,
                                       :state => Changeset::REVIEW)
     assert_equal changeset.add_content_view!(@library_view), [@library_view, nil]
-    # assert changeset.apply( :async => false, :notify => false )
+    # assert changeset.apply(:async => false, :notify => false)
   end
 
   def test_invalid_content_view_deletion_changeset
@@ -160,4 +177,13 @@ class ChangesetTest < MiniTest::Rails::ActiveSupport::TestCase
     end
   end
 
+  def test_destroy
+    content_view = ContentView.find(content_views(:library_view))
+
+    changeset = FactoryGirl.create(:promotion_changeset,
+                                   :environment => @dev)
+    changeset.add_content_view!(content_view)
+
+    assert changeset.destroy
+  end
 end

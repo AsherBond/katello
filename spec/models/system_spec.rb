@@ -77,7 +77,7 @@ describe System do
   it "registers system in candlepin and pulp on create", :katello => true do
     Resources::Candlepin::Consumer.should_receive(:create).once.with(@environment.id.to_s, @organization.name,
                                                                       system_name, cp_type, facts, installed_products,
-                                                                      nil, nil, nil, nil).and_return({:uuid => uuid,
+                                                                      nil, nil, nil, "1234", nil).and_return({:uuid => uuid,
                                                                                                 :owner => {:key => uuid}})
     Katello.pulp_server.extensions.consumer.should_receive(:create).once.with(uuid, {:display_name => system_name}).and_return({:id => uuid}) if Katello.config.katello?
     @system.save!
@@ -297,6 +297,7 @@ describe System do
   context "pulp attributes", :katello => true do
     it "should update package-profile" do
       Katello.pulp_server.extensions.consumer.should_receive(:upload_profile).once.with(uuid, 'rpm', package_profile).and_return(true)
+      System.any_instance.should_receive(:generate_applicability).once
       @system.upload_package_profile(package_profile)
     end
   end
@@ -346,7 +347,6 @@ describe System do
       @system.available_releases.should == @releases.sort
     end
   end
-
 
   describe "find system by a pool id" do
     let(:pool_id_1) {"POOL_ID_123"}
@@ -416,7 +416,6 @@ describe System do
 
   end
 
-
   describe "a user with no permissions" do
     before :each do
       #give access to the org
@@ -435,7 +434,6 @@ describe System do
       @system.deletable?.should == false
     end
   end
-
 
   describe "a user with environment system perms" do
     before :each do
@@ -493,7 +491,6 @@ describe System do
       @system.editable?.should == false
       @system.deletable?.should == true
     end
-
 
   end
 

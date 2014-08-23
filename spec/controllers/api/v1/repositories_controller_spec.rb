@@ -15,6 +15,7 @@ require 'spec_helper'
 describe Api::V1::RepositoriesController, :katello => true do
   include OrchestrationHelper
   include LoginHelperMethods
+  include LocaleHelperMethods
   include AuthorizationHelperMethods
   include OrchestrationHelper
   include ProductHelperMethods
@@ -45,12 +46,13 @@ describe Api::V1::RepositoriesController, :katello => true do
       @product.stub(:arch).and_return('noarch')
       @product.save!
       Product.stub!(:find).and_return(@product)
-      Product.stub!(:where).and_return([@product])
+      Product.stub(:find_by_cp_id => @product)
       @repo = new_test_repo(@organization.library, @product, "repo_1", "#{@organization.name}/Library/prod/repo")
       Repository.stub(:find).and_return(@repo)
       PulpSyncStatus.stub(:using_pulp_task).and_return(task_stub)
       Katello.pulp_server.extensions.package_group.stub(:all => {})
       Katello.pulp_server.extensions.package_category.stub(:all => {})
+      @test_gpg_content = File.open("#{Rails.root}/spec/assets/gpg_test_key").read
     end
 
     describe "for create" do
@@ -93,7 +95,7 @@ describe Api::V1::RepositoriesController, :katello => true do
 
     describe "for update" do
       let(:action) { :update }
-      let(:req) { put :update, :id => 1, :repository => { :gpg_key_name => "test" } }
+      let(:req) { put :update, :id => 1, :repository => { :gpg_key_name => "test", :url => "" } }
       let(:authorized_user) do
         user_with_permissions { |u| u.can(:update, :providers, @provider.id, @organization) }
       end
@@ -154,6 +156,8 @@ describe Api::V1::RepositoriesController, :katello => true do
       @request.env["HTTP_ACCEPT"] = "application/json"
       login_user_api
 
+      @test_gpg_content = File.open("#{Rails.root}/spec/assets/gpg_test_key").read
+
       disable_authorization_rules
     end
 
@@ -168,15 +172,46 @@ describe Api::V1::RepositoriesController, :katello => true do
 
     describe "create a repository" do
       before do
-        Product.stub(:where => [@product])
+        Product.stub(:find_by_cp_id => @product)
         @product.stub!(:custom?).and_return(true)
       end
 
       it 'should call pulp and candlepin layer' do
-        Product.should_receive(:where).with(:cp_id=>'product_1').and_return([@product])
+        Product.should_receive(:find_by_cp_id).with('product_1').and_return(@product)
         @product.should_receive(:add_repo).and_return({})
 
         post 'create', :name => 'repo_1', :label => 'repo_1', :url => 'http://www.repo.org', :product_id => 'product_1', :organization_id => @organization.label
+      end
+
+      describe 'with content_type' do
+        let(:attrs) do
+          {:name => 'repo_1',
+           :label => 'repo_1',
+           :url => 'http://www.repo.org',
+           :product_id => 'product_1',
+           :organization_id => @organization.label,
+           :content_type => "puppet"
+          }
+        end
+
+        it "should use the content_type parameter" do
+          @product.should_receive(:add_repo).with(anything, anything, anything,
+                                                  'puppet', anything, anything).and_return({})
+          post 'create', attrs
+          response.should be_success
+        end
+
+        it "should use the default content type if content_type parameter is blank" do
+          @product.should_receive(:add_repo).with(anything, anything, anything,
+                                                  'yum', anything, anything).and_return({})
+          post 'create', attrs.merge(:content_type => "")
+          response.should be_success
+        end
+
+        it "should return 400 if content_type is not yum or puppet" do
+          post 'create', attrs.merge(:content_type => 'wat')
+          response.code.should eql("422")
+        end
       end
 
       context 'red hat providers' do
@@ -196,8 +231,8 @@ describe Api::V1::RepositoriesController, :katello => true do
       end
 
       context 'some gpg key is assigned to the product' do
-        let(:product_gpg) { GpgKey.create!(:name => "Product GPG", :content => "100", :organization => @organization) }
-        let(:repo_gpg) { GpgKey.create!(:name => "Repo GPG", :content => "200", :organization => @organization) }
+        let(:product_gpg) { GpgKey.create!(:name => "Product GPG", :content => @test_gpg_content, :organization => @organization) }
+        let(:repo_gpg) { GpgKey.create!(:name => "Repo GPG", :content => @test_gpg_content, :organization => @organization) }
 
         before do
           @product.update_attributes!(:gpg_key => product_gpg)
@@ -249,10 +284,16 @@ describe Api::V1::RepositoriesController, :katello => true do
         end
 
         context "the url is empty" do
-          let(:req) do
-            post 'create', :name => 'repo_1', :label => 'repo_1', :url => '', :product_id => 'product_1', :organization_id => @organization.label, :gpg_key_name => ""
+          it "should succesfully call Repository.create!" do
+            disable_repo_orchestration
+            repo = {}
+            repo.should_receive(:generate_metadata).and_return(true)
+            Repository.should_receive(:create!).and_return(repo)
+            post 'create', :name => 'repo_1', :label => 'repo_1', :url => '',
+              :product_id => 'product_1', :gpg_key_name => "",
+              :organization_id => @organization.label
+            response.should be_success
           end
-          it_should_behave_like "bad request"
         end
       end
     end
@@ -310,7 +351,7 @@ describe Api::V1::RepositoriesController, :katello => true do
 
       context 'there is already a repo for the product with the same name' do
         before do
-          Product.stub(:where => [@product])
+          Product.stub(:find_by_cp_id => @product)
           @product.stub(:add_repo).and_return { raise Errors::ConflictException }
           @product.stub!(:custom?).and_return(true)
         end
@@ -342,7 +383,7 @@ describe Api::V1::RepositoriesController, :katello => true do
       it "should call async task correctly with no forwarded header" do
         @repo.should_receive(:async).and_return(@fake_async)
         @fake_async.should_receive(:after_sync)
-        params = { :task_id => "123", :payload => { :repo_id => "123" } }
+        params = { :call_report => {:task_id => "123"}, :payload => { :repo_id => "123" } }
         post :sync_complete, params
         response.should be_success
       end
@@ -351,7 +392,7 @@ describe Api::V1::RepositoriesController, :katello => true do
         request.env["HTTP_X_FORWARDED_FOR"] = '127.0.0.1'
         @repo.should_receive(:async).and_return(@fake_async)
         @fake_async.should_receive(:after_sync)
-        params = { :task_id => "123", :payload => { :repo_id => "123" } }
+        params = { :call_report => {:task_id => "123"}, :payload => { :repo_id => "123" } }
         post :sync_complete, params
         response.should be_success
       end
@@ -360,7 +401,7 @@ describe Api::V1::RepositoriesController, :katello => true do
         request.env["HTTP_X_FORWARDED_FOR"] = '::1'
         @repo.should_receive(:async).and_return(@fake_async)
         @fake_async.should_receive(:after_sync)
-        params = { :task_id => "123", :payload => { :repo_id => "123" } }
+        params = { :call_report => {:task_id => "123"}, :payload => { :repo_id => "123" } }
         post :sync_complete, params
         response.should be_success
       end

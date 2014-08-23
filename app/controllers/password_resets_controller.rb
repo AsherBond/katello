@@ -25,8 +25,8 @@ class PasswordResetsController < ApplicationController
 
   def param_rules
     {
-      :create =>[:username, :email],
-      :update => {:user  => [:password]}
+      :create => [:username, :email],
+      :update => {:user => [:password, :password_confirmation]}
     }
   end
 
@@ -36,40 +36,47 @@ class PasswordResetsController < ApplicationController
     # note: we provide a success notice regardless of whether or not there are any users associated with the email
     # address provided... this is done on purpose for security
     flash[:success] = _("Email sent to '%s' with password reset instructions.") % params[:email]
-    render :partial=>"password_refresh"
+    render :partial => "password_resets/password_refresh.js"
   end
 
   def edit
     if @user.password_reset_sent_at < password_reset_expiration.minutes.ago
-      notify.warning _("Password reset token has expired for user '%s'.") % @user.username
+      flash[:warning] = _("Password reset token has expired for user '%s'.") % @user.username
       redirect_to login_path(:card => 'password_reset')
     else
-      redirect_to new_user_session_path
+      render :partial => "user_sessions/change_password"
     end
   end
 
   def update
     if @user.password_reset_sent_at < password_reset_expiration.minutes.ago
       notify.warning _("Password reset token has expired for user '%s'.") % @user.username
-      redirect_to new_password_reset_path and return
+      redirect_to new_password_reset_path
+    end
+
+    unless params[:user][:password] == params[:user][:password_confirmation]
+      flash[:error] = _("Password and Password Confirmation do not match.")
+      render :partial => "password_resets/password_refresh.js"
+      return
     end
 
     # update the password and reset the 'password reset token' so that it cannot be reused
     params[:user][:password_reset_token]   = nil
     params[:user][:password_reset_sent_at] = nil
+    params[:user].delete('password_confirmation')
 
     if @user.update_attributes(params[:user])
-      notify.success _("Password has been reset for user '%s'.") % @user.username, :persist => false
-      render :nothing => true
+      flash[:success] = _("Password has been reset for user '%s'.") % @user.username
+      render :partial => "password_resets/password_refresh.js"
     else
-      notify.invalid_record @user
+      flash[:error] = _("Failed to update password for user '%s'.") % @user.username
       render :nothing => true
     end
   end
 
   def email_logins
     # request to have the usernames associated with the email address provided, sent (in email) to that address
-    UserMailer.send_logins(@users) if !@users.empty?
+    UserMailer.send_logins(@users) unless @users.empty?
 
     # note: we provide a success notice regardless of whether or not there are any users associated with the email
     # address provided... this is done on purpose for security
@@ -92,8 +99,8 @@ class PasswordResetsController < ApplicationController
   def find_user_by_token
     @user = User.find_by_password_reset_token!(params[:id])
     User.current = @user
-  rescue ActiveRecord::RecordNotFound => error
-    notify.error _("Request received has either an invalid or expired token. Token: '%s'") % params[:id]
+  rescue ActiveRecord::RecordNotFound
+    flash[:error] = _("Request received has either an invalid or expired token. Token: '%s'") % params[:id]
     redirect_to root_url
     execute_after_filters
   end

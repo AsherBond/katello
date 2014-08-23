@@ -44,19 +44,21 @@ class SystemPackagesController < ApplicationController
                            { :s => @system['name'], :p => params[:packages] }
       else
         notify.error _("One or more errors found in Package names '%s'.") % params[:packages]
-        render :text => '' and return
+        render :text => ''
+        return
       end
 
     elsif !params[:groups].blank?
       # user entered one or more package group names (as comma-separated list) in the content box
-      groups = params[:groups].split(/ *, */ )
+      groups = params[:groups].split(/ *, */)
       task = @system.install_package_groups groups
       notify.success _("Install of Package Groups '%{g}' scheduled for System '%{s}'.") %
                          { :s => @system['name'], :g => params[:groups] }
     else
       notify.error _("Empty request received to install Packages or Package Groups for System '%s'.") %
                        @system['name']
-      render :text => '' and return
+      render :text => ''
+      return
     end
 
     render :text => task.id
@@ -80,19 +82,21 @@ class SystemPackagesController < ApplicationController
                            { :s => @system['name'], :p => params[:packages] }
       else
         notify.error _("One or more errors found in Package names '%s'.") % params[:packages]
-        render :text => '' and return
+        render :text => ''
+        return
       end
 
     elsif !params[:groups].blank?
       # user entered one or more package group names (as comma-separated list) in the content box
-      groups = params[:groups].split(/ *, */ )
+      groups = params[:groups].split(/ *, */)
       task = @system.uninstall_package_groups groups
       notify.success _("Uninstall of Package Groups '%{p}' scheduled for System '%{s}'.") %
                          { :s => @system['name'], :p => groups.join(',') }
     else
       notify.error _("Empty request received to uninstall Packages or Package Groups for System '%s'.") %
                        @system['name']
-      render :text => '' and return
+      render :text => ''
+      return
     end
 
     render :text => task.id
@@ -119,17 +123,17 @@ class SystemPackagesController < ApplicationController
 
   def packages
     if @system.class == Hypervisor
-      render :partial=>"systems/hypervisor",
-             :locals=>{:system=>@system,
-                       :message=>_("Hypervisors do not have packages")}
+      render :partial => "systems/hypervisor",
+             :locals => {:system => @system,
+                         :message => _("Hypervisors do not have packages")}
       return
     end
 
     offset = current_user.page_size
-    packages = @system.simple_packages.sort {|a,b| a.nvrea.downcase <=> b.nvrea.downcase}
+    packages = @system.simple_packages.sort {|a, b| a.nvrea.downcase <=> b.nvrea.downcase}
     total_packages = packages.length
     if total_packages > 0
-      if params.has_key? :pkg_order
+      if params.key? :pkg_order
         if params[:pkg_order].downcase == "desc"
           packages.reverse!
         end
@@ -143,25 +147,25 @@ class SystemPackagesController < ApplicationController
     group_tasks = @system.tasks.where(:task_type => [:package_group_install, :package_group_remove],
                                       :state => [:waiting, :running])
 
-    render :partial=>"packages", :locals=>{:system => @system, :packages => packages,
-                                           :total_packages => total_packages,
-                                                                       :package_tasks => package_tasks,
-                                                                       :group_tasks => group_tasks,
-                                                                       :offset => offset, :editable => @system.editable?}
+    render :partial => "packages", :locals => {:system => @system, :packages => packages,
+                                               :total_packages => total_packages,
+                                               :package_tasks => package_tasks,
+                                               :group_tasks => group_tasks,
+                                               :offset => offset, :editable => @system.editable?}
   end
 
   def more_packages
-    packages = @system.simple_packages.sort {|a,b| a.nvrea.downcase <=> b.nvrea.downcase}
+    packages = @system.simple_packages.sort {|a, b| a.nvrea.downcase <=> b.nvrea.downcase}
 
-    if params.has_key? :pkg_order
+    if params.key? :pkg_order
       if params[:pkg_order].downcase == "desc"
         packages.reverse!
       end
     end
 
-    render :partial=>"package_items", :locals=>{:packages => packages, :package_tasks => nil,
-                                                :group_tasks => nil, :offset=> 0,
-                                                :editable => @system.editable?}
+    render :partial => "package_items", :locals => {:packages => packages, :package_tasks => nil,
+                                                    :group_tasks => nil, :offset => 0,
+                                                    :editable => @system.editable?}
   end
 
   def package_status
@@ -184,12 +188,12 @@ class SystemPackagesController < ApplicationController
     return 'system'
   end
 
-  def sort_order_limit systems
-      sort_columns(COLUMNS, systems) if params[:order]
-      offset = params[:offset].to_i if params[:offset]
-      offset ||= 0
-      last = offset + current_user.page_size
-      last = systems.length if last > systems.length
-      systems[offset...last]
+  def sort_order_limit(systems)
+    sort_columns(COLUMNS, systems) if params[:order]
+    offset = params[:offset].to_i if params[:offset]
+    offset ||= 0
+    last = offset + current_user.page_size
+    last = systems.length if last > systems.length
+    systems[offset...last]
   end
 end

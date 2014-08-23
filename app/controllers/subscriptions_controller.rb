@@ -15,13 +15,12 @@ require 'ostruct'
 # TODO: start / end dates in left subscriptions list
 # TODO: start date range not working?  start:2012-01-31 fails but start:"2012-01-31" works
 
-
 class SubscriptionsController < ApplicationController
 
   before_filter :find_provider
-  before_filter :find_subscription, :except=>[:index, :items, :new, :upload, :delete_manifest, :history, :history_items, :edit_manifest, :refresh_manifest]
+  before_filter :find_subscription, :except => [:index, :items, :new, :upload, :delete_manifest, :history, :history_items, :edit_manifest, :refresh_manifest]
   before_filter :authorize
-  before_filter :setup_options, :only=>[:index, :items]
+  before_filter :setup_options, :only => [:index, :items]
 
   # two pane columns and mapping for sortable fields
   COLUMNS = {'name' => 'name_sort'}
@@ -36,7 +35,7 @@ class SubscriptionsController < ApplicationController
       :products => read_provider_test,
       :consumers => read_provider_test,
       :history => read_provider_test,
-      :history_items=> read_provider_test,
+      :history_items => read_provider_test,
       :new => read_provider_test,
       :upload => edit_provider_test,
       :refresh_manifest => edit_provider_test,
@@ -64,26 +63,21 @@ class SubscriptionsController < ApplicationController
       end
     end
 
-    if current_user.experimental_ui
-      render :index_nutupane, :locals => { :experimental_ui => true }
-    else
-      render :index
-    end
+    render :index
   end
 
   # TODO: remove this method and route since nutupane (experimental mode) uses the api method subscriptions_controller#organization_index
   def items
-    order = split_order(params[:order])
     query_string = params[:search]
     offset = params[:offset].to_i || 0
     filters = []
 
     # Limit subscriptions to current org and Red Hat provider
-    filters << {:org=>[current_organization.label]}
-    filters << {:provider_id=>[current_organization.redhat_provider.id]}
+    filters << {:term => {:org => current_organization.label}}
+    filters << {:term => {:provider_id => current_organization.redhat_provider.id}}
 
     options = {
-        :filter => filters,
+        :filters => filters,
         :load_records? => false,
         :default_field => :name
     }
@@ -100,6 +94,7 @@ class SubscriptionsController < ApplicationController
 
     items = Glue::ElasticSearch::Items.new(Pool)
     subscriptions, total_count = items.retrieve(query_string, offset, options)
+    @panel_options[:total_count] = total_count
 
     render_panel_results(subscriptions, items.total_items, @panel_options)
   end
@@ -109,41 +104,46 @@ class SubscriptionsController < ApplicationController
   end
 
   def products
-    render :partial=>"products", :locals=>{:subscription=>@subscription, :editable => false, :name => controller_display_name}
+    render :partial => "products", :locals => {:subscription => @subscription, :editable => false, :name => controller_display_name}
   end
 
   def consumers
     systems = current_organization.systems.readable(current_organization)
     systems = systems.all_by_pool(@subscription.cp_id)
 
-    activation_keys = ActivationKey.joins(:pools).where('pools.cp_id'=>@subscription.cp_id).readable(current_organization)
+    activation_keys = ActivationKey.joins(:pools).where('pools.cp_id' => @subscription.cp_id).readable(current_organization)
     activation_keys = [] if !activation_keys
 
     distributors = current_organization.distributors.readable(current_organization)
     distributors = distributors.all_by_pool(@subscription.cp_id)
 
-    render :partial=>"consumers", :locals=>{:subscription=>@subscription, :systems=>systems, :activation_keys=>activation_keys, :distributors=>distributors, :editable => false, :name => controller_display_name}
+    render :partial => "consumers", :locals => {:subscription => @subscription,
+                                                :systems => systems,
+                                                :activation_keys => activation_keys,
+                                                :distributors => distributors,
+                                                :editable => false,
+                                                :name => controller_display_name}
   end
 
   def new
     get_manifest_details
     can_refresh = @upstream['idCert'] && @upstream['idCert']['cert']
-    render :partial=>"new", :locals=>{:provider=>@provider, :statuses=>@statuses, :details=>@details, :upstream=>@upstream,
-                                      :name => controller_display_name, :can_refresh=>can_refresh}
+    render :partial => "new", :locals => {:provider => @provider, :statuses => @statuses, :details => @details, :upstream => @upstream,
+                                          :name => controller_display_name, :can_refresh => can_refresh}
   end
 
   def edit_manifest
     get_manifest_details
-    render :partial=>"edit_manifest", :locals=>{:provider=>@provider, :statuses=>@statuses, :details=>@details, :upstream=>@upstream, :name => controller_display_name}
+    render :partial => "edit_manifest", :locals => {:provider => @provider, :statuses => @statuses, :details => @details, :upstream => @upstream, :name => controller_display_name}
   end
 
   def history
     begin
       @statuses = @provider.owner_imports
-    rescue => error
+    rescue # rubocop:disable HandleExceptions
       # quietly ignore
     end
-    render :template => "subscriptions/_history", :locals=>{:provider=>@provider, :statuses=>@statuses, :name => controller_display_name}
+    render :template => "subscriptions/_history", :locals => {:provider => @provider, :statuses => @statuses, :name => controller_display_name}
   end
 
   def history_items
@@ -158,11 +158,11 @@ class SubscriptionsController < ApplicationController
       Rails.logger.error "Error fetching subscription history from Candlepin"
       Rails.logger.error error
       Rails.logger.error error.backtrace.join("\n")
-      render :partial=>"history_items", :status => :bad_request, :locals=>{:provider=>@provider, :name => controller_display_name, :statuses=>@statuses}
+      render :partial => "history_items", :status => :bad_request, :locals => {:provider => @provider, :name => controller_display_name, :statuses => @statuses}
       return
     end
 
-    render :partial=>"history_items", :locals=>{:provider=>@provider, :name => controller_display_name, :statuses=>@statuses}
+    render :partial => "history_items", :locals => {:provider => @provider, :name => controller_display_name, :statuses => @statuses}
   end
 
   def delete_manifest
@@ -180,18 +180,17 @@ class SubscriptionsController < ApplicationController
       notify.exception @provider.delete_error_message(display_message), error
     end
 
-    render :json=>{'state' => 'running'}
+    render :json => {'state' => 'running'}
   end
 
   def upload
-    if !params[:provider].blank? and params[:provider].has_key? :contents
-      temp_file = nil
+    if !params[:provider].blank? && params[:provider].key?(:contents)
       begin
         temp_file_path = create_temp_file('import') {|tmp| tmp.write params[:provider][:contents].read }
         # force must be a string value
         force_update = params[:force_import] == "1" ? "true" : "false"
         @provider.import_manifest File.expand_path(temp_file_path), :force => force_update,
-                                  :async => true, :notify => true
+                                                                    :async => true, :notify => true
       rescue => error
         if error.respond_to?(:response)
           display_message = ApplicationController.parse_display_message(error.response)
@@ -213,7 +212,7 @@ class SubscriptionsController < ApplicationController
       notify.error _("Subscription manifest must be specified on upload.")
     end
 
-    render :json=>{'state' => 'running'}
+    render :json => {'state' => 'running'}
   end
 
   def refresh_manifest
@@ -232,7 +231,7 @@ class SubscriptionsController < ApplicationController
       notify.exception @provider.refresh_error_message(display_message), error
     end
 
-    render :json=>{'state' => 'running'}
+    render :json => {'state' => 'running'}
   end
 
   def section_id
@@ -272,7 +271,7 @@ class SubscriptionsController < ApplicationController
     f.close unless f.nil?
   end
 
-  def split_order order
+  def split_order(order)
     if order
       order.split
     else
@@ -286,19 +285,19 @@ class SubscriptionsController < ApplicationController
 
   def setup_options
     @panel_options = { :title => _('Subscriptions'),
-                      :col => ["name"],
-                      :titles => [_("Name")],
-                      :custom_rows => true,
-                      :enable_create => @provider.editable?,
-                      :create_label => _("+ Import Manifest"),
-                      :enable_sort => true,
-                      :name => controller_display_name,
-                      :list_partial => 'subscriptions/list_subscriptions',
-                      :ajax_load  => true,
-                      :ajax_scroll => items_subscriptions_path(),
-                      :actions => nil,
-                      :search_class => ::Pool,
-                      :accessor => 'unused'
+                       :col => ["name"],
+                       :titles => [_("Name")],
+                       :custom_rows => true,
+                       :enable_create => @provider.editable?,
+                       :create_label => _("+ Import Manifest"),
+                       :enable_sort => true,
+                       :name => controller_display_name,
+                       :list_partial => 'subscriptions/list_subscriptions',
+                       :ajax_load  => true,
+                       :ajax_scroll => items_subscriptions_path,
+                       :actions => nil,
+                       :search_class => ::Pool,
+                       :accessor => 'unused'
                       }
   end
 
@@ -307,7 +306,7 @@ class SubscriptionsController < ApplicationController
   end
 
   def find_provider
-      @provider = current_organization.redhat_provider
+    @provider = current_organization.redhat_provider
   end
 
 end

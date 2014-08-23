@@ -11,11 +11,33 @@
  http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 */
 
+$(document).ready(function() {
+    $(".toggle").live('click', function(){
+        var btn = $(this);
+        var parent = btn.parents(".product_entry");
+        if(parent.hasClass("disabled")){
+            return;
+        }
+
+        if (btn.hasClass("collapsed")){
+            btn.addClass("expanded").removeClass("collapsed");
+        }
+        else {
+            btn.removeClass("expanded").addClass("collapsed");
+        }
+
+        btn.parent().find(".options").toggle();
+    });
+});
+
 KT.panel.list.registerPage('content_view_definitions', { create : 'new_content_view_definition' });
 
 KT.panel.set_expand_cb(function() {
     $('a.remove.disabled').tipsy({ fade:true, gravity:'s', delayIn:500, html:true, className:'content_definition-tipsy',
         title:function() { return $('.hidden-text.hidden').html();} });
+
+    KT.product_input.register();
+    KT.repo_input.register();
 
     KT.object.label.initialize();
     KT.content_view_definition.initialize();
@@ -28,6 +50,7 @@ KT.panel.set_expand_cb(function() {
 KT.content_view_definition = (function(){
     var status_updater,
         view_repos,
+        repos,
         view_conflicts = [],
 
     initialize = function() {
@@ -247,13 +270,24 @@ KT.content_view_definition = (function(){
     },
     repo_in_common = function(view_id_1, view_id_2) {
         // Does view 1 have any repos in common with view 2?
+        // Or do view 1 and view 2 both have puppet repos?
         var in_common = false,
-            view_1_repos = view_repos[view_id_1]['repos'],
-            view_2_repos = view_repos[view_id_2]['repos'];
+            view_1_repos = view_repos[view_id_1].repos,
+            view_2_repos = view_repos[view_id_2].repos;
 
         KT.utils.each(view_1_repos, function(view_1_repo) {
             if (KT.utils.contains(view_2_repos, view_1_repo)) {
-                in_common = true;
+                in_common = "repos_in_common";
+            }
+        });
+
+        KT.utils.each(view_1_repos, function(view_1_repo) {
+            if(repos[view_1_repo].content_type === "puppet") {
+                KT.utils.each(view_2_repos, function(view_2_repo) {
+                    if(repos[view_2_repo].content_type === "puppet") {
+                        in_common = "has_puppet_repo";
+                    }
+                });
             }
         });
         return in_common;
@@ -409,6 +443,7 @@ KT.content_view_definition = (function(){
             event.preventDefault();
             var view_id = $(this).closest('tr.view_version').prev('tr.view').attr('id');
             disable_remove_view(view_id);
+            $(this).tipsy().hide();
 
             $.ajax({
                 type: 'POST',
@@ -438,7 +473,8 @@ KT.content_view_definition = (function(){
         initialize_composite_content : initialize_composite_content,
         initialize_create            : initialize_create,
         initialize_views             : initialize_views,
-        set_view_repos               : function(vp) {view_repos = vp;}
+        set_view_repos               : function(vp) {view_repos = vp;},
+        set_repos                    : function(rs) {repos = rs;}
     };
 }());
 
@@ -457,13 +493,33 @@ KT.content_view_definition_filters = (function(){
         initialize_checkboxes($("#filters_form"));
     },
     initialize_filter = function() {
-        var pane = $("#filter");
+        var pane = $("#filter"),
+            filter_tabs = $("#filter_tabs");
+
         if (pane.length === 0) {
             return;
         }
-        $("#filter_tabs").tabs().show();
+
+        filter_tabs.tabs().tabs('select', filter_tabs.data('active_tab')).show();
+
+        $('a[href="##rules"]').click(function(){
+            initialize_rules();
+        });
+
         register_remove($("#rules_form"));
         initialize_checkboxes($("#rules_form"));
+        initialize_rules();
+    },
+    initialize_rules = function() {
+        if (($('table#product_list ').find('.product_entry').length > 0) ||
+            ($('select[name=puppet_repository_id]').val() !== '')) {
+            // The user hasn't selected any products/repos for the filter
+            $('#rules_list').show();
+            $('#rules_list_warning').hide();
+        } else {
+            $('#rules_list').hide();
+            $('#rules_list_warning').show();
+        }
     },
     initialize_rule = function() {
         var pane = $("#rule");
@@ -496,15 +552,16 @@ KT.content_view_definition_filters = (function(){
             });
         });
 
-        initialize_version_save($('.save_version'));
+        initialize_parameter_save($('.save_parameters'));
         initialize_version_select($('.version_type'));
         initialize_version_input($('.input.input'));
+        initialize_author_input($('input.author'));
 
         initialize_common_rule_params();
         initialize_errata_rule_params();
     },
-    initialize_version_save = function(version_save_button) {
-        version_save_button.unbind('click').click(function(e) {
+    initialize_parameter_save = function(save_button) {
+        save_button.unbind('click').click(function(e) {
             // user clicked save to commit some changes to a pkg filter rule
             e.preventDefault();
             var parameter_name,
@@ -512,9 +569,13 @@ KT.content_view_definition_filters = (function(){
                 version,
                 min_version,
                 max_version,
-                range_inputs;
+                range_inputs,
+                parameters;
 
-            parameter_name = $(this).closest('tr').find('td.parameter_name').find('.parameter_checkbox').data('id');
+            disable_version_selector(version_selector);
+            disable_author_input(version_selector);
+
+            parameter_name = $(this).closest('tr').find('.parameter_checkbox').data('id');
 
             type = version_selector.find('.version_type').val();
             if (type === 'version') {
@@ -529,24 +590,27 @@ KT.content_view_definition_filters = (function(){
                 max_version = range_inputs.last().val();
             }
 
-            disable_version_selector(version_selector);
+            parameters = { 'parameter':
+                             { 'unit' :
+                                 { 'name' : parameter_name,
+                                   'version' : version,
+                                   'min_version' : min_version,
+                                   'max_version' : max_version
+                                 }
+                             }
+                         };
+
+            if ($("input.author")) {
+                parameters["parameter"]["unit"]["author"] = $("input.author").val();
+            }
 
             $.ajax({
                 type: 'PUT',
                 url: $(this).attr('href'),
-                data:
-                { 'parameter':
-                    { 'unit' :
-                        { 'name' : $(this).closest('tr').find('td.parameter_name').find('.parameter_checkbox').data('id'),
-                          'version' : version,
-                          'min_version' : min_version,
-                          'max_version' : max_version
-                        }
-                    }
-                },
+                data: parameters,
                 cache: false,
                 success: function(html) {
-                    version_selector.find('.save_version').hide();
+                    version_selector.find('.save_parameters').hide();
                     if (type === 'all_versions') {
                         version_selector.find('input.input').val('');
                     } else if (type === 'version_range') {
@@ -555,9 +619,11 @@ KT.content_view_definition_filters = (function(){
                         version_selector.find('input.range').val('');
                     }
                     enable_version_selector(version_selector);
+                    enable_author_input(version_selector);
                 },
                 error: function() {
                     enable_version_selector(version_selector);
+                    enable_author_input(version_selector);
                 }
             });
         });
@@ -576,16 +642,28 @@ KT.content_view_definition_filters = (function(){
                 version_selector.find('.range').hide();
                 version_selector.find('.version').show();
             }
-            version_selector.find('.save_version').show();
+            version_selector.find('.save_parameters').show();
         });
     },
     initialize_version_input = function(version_input) {
         version_input.unbind('keypress').keypress(function() {
             var version_selector = $(this).parent('.version_selector');
-            version_selector.find('.save_version').show();
+            version_selector.find('.save_parameters').show();
         });
         // setup the tipsy
         $(".rule-search-tipsy").tipsy();
+    },
+    initialize_author_input = function(author_input) {
+        var module_name = author_input.parent(".author_name").next(".parameter_name").find("label.module_name").text(),
+            filter_id = $("#add_rule").data("filter_id");
+
+        author_input.unbind('keypress').keypress(function() {
+            var version_selector = $(this).parent('.author_name').nextAll('td.version_selector').first();
+            version_selector.find('.save_parameters').show();
+        });
+        author_input.autocomplete({
+            source: KT.routes.author_auto_complete_puppet_modules_path({filter_id: filter_id, module_name: $.trim(module_name)})
+        });
     },
     initialize_common_rule_params = function() {
         var pane = $("#parameter_list"),
@@ -612,6 +690,10 @@ KT.content_view_definition_filters = (function(){
             $("#rule_input").autocomplete({
                 source: KT.routes.auto_complete_packages_path({filter_id: filter_id})
             });
+        } else if (rule_type === "puppet_module") {
+            $("#rule_input").autocomplete({
+                source: KT.routes.auto_complete_puppet_modules_path({filter_id: filter_id})
+            });
         }
 
         $('#add_rule').unbind('click').click(function() {
@@ -636,9 +718,10 @@ KT.content_view_definition_filters = (function(){
                         initialize_checkboxes($("#parameters_form"));
 
                         var new_parameter = $('.parameter_checkbox[data-id="' + rule_input + '"]').closest('tr');
-                        initialize_version_save(new_parameter.find('.save_version'));
+                        initialize_parameter_save(new_parameter.find('.save_parameters'));
                         initialize_version_select(new_parameter.find('.version_type'));
                         initialize_version_input(new_parameter.find('.input.input'));
+                        initialize_author_input(new_parameter.find('.author'));
                     }
                 });
             }
@@ -721,12 +804,18 @@ KT.content_view_definition_filters = (function(){
     disable_version_selector = function(selector) {
         disable(selector.find('select.version_type'));
         disable(selector.find('input.input'));
-        disable(selector.find('a.save_version'));
+        disable(selector.find('a.save_parameters'));
     },
     enable_version_selector = function(selector) {
         enable(selector.find('select.version_type'));
         enable(selector.find('input.input'));
-        enable(selector.find('a.save_version'));
+        enable(selector.find('a.save_parameters'));
+    },
+    disable_author_input = function(selector) {
+        disable(selector.prevAll(".author_name").find("input.author"));
+    },
+    enable_author_input = function(selector) {
+        enable(selector.prevAll(".author_name").find("input.author"));
     },
     disable = function(button) {
         button.attr('disabled', 'disabled').addClass('disabled');

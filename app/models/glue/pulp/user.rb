@@ -10,7 +10,6 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-
 module Glue::Pulp::User
   def self.included(base)
     base.send :include, InstanceMethods
@@ -24,7 +23,7 @@ module Glue::Pulp::User
 
   module InstanceMethods
 
-    def initialize(attrs = nil, options={})
+    def initialize(attrs = nil, options = {})
       attrs = prune_pulp_only_attributes(attrs)
       super
     end
@@ -39,8 +38,12 @@ module Glue::Pulp::User
       return attrs
     end
 
-    def set_pulp_user
-      Katello.pulp_server.resources.user.create(self.remote_id, {:name => self.remote_id, :password => Password.generate_random_string(16)})
+    def set_pulp_user(args = {})
+      password = args.fetch(:password, Password.generate_random_string(16))
+
+      Katello.pulp_server.resources.user.create(self.remote_id,
+                                                {:name => self.remote_id,
+                                                 :password => password})
     rescue RestClient::ExceptionWithResponse => e
       if e.http_code == 409
         Rails.logger.info "pulp user #{self.remote_id}: already exists. continuing"
@@ -73,9 +76,9 @@ module Glue::Pulp::User
 
     def save_pulp_orchestration
       case self.orchestration_for
-        when :create
-          pre_queue.create(:name => "create pulp user: #{self.remote_id}", :priority => 3, :action => [self, :set_pulp_user])
-          pre_queue.create(:name => "add 'super-user' to: #{self.remote_id}", :priority => 4, :action => [self, :set_super_user_role])
+      when :create
+        pre_queue.create(:name => "create pulp user: #{self.remote_id}", :priority => 3, :action => [self, :set_pulp_user])
+        pre_queue.create(:name => "add 'super-user' to: #{self.remote_id}", :priority => 4, :action => [self, :set_super_user_role])
       end
     end
 

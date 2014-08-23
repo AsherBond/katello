@@ -34,7 +34,8 @@ class EnvironmentsController < ApplicationController
       :update => manage_rule,
       :destroy => manage_rule,
       :products => view_akey_rule,
-      :content_views => view_akey_rule
+      :content_views => view_akey_rule,
+      :registerable_paths => lambda{ true }
     }
   end
 
@@ -45,34 +46,32 @@ class EnvironmentsController < ApplicationController
     }
   end
 
-
   # GET /environments/new
   def new
     @environment = KTEnvironment.new(:organization => @organization)
     setup_new_edit_screen
-    render :partial=>"new"
+    render :partial => "new"
   end
-
 
   # GET /environments/1/edit
   def edit
     # Create a hash of the available environments and convert to json to be included
     # the edit view
     prior_envs = envs_no_successors - [@environment] - @environment.path
-    env_labels = Hash[ *prior_envs.collect { |p| [ p.id, p.display_name ] }.flatten]
+    env_labels = Hash[*prior_envs.collect { |p| [p.id, p.display_name] }.flatten]
     @env_labels_json = ActiveSupport::JSON.encode(env_labels)
 
     @selected = @environment.prior.nil? ? env_labels[""] : env_labels[@environment.prior.id]
-    render :partial=>"edit", :locals=>{:editable=> @organization.environments_manageable?}
+    render :partial => "edit", :locals => {:editable => @organization.environments_manageable?}
   end
 
   # POST /environments
   def create
     env_params = {:name => params[:kt_environment][:name],
-              :description => params[:kt_environment][:description],
-              :prior => params[:kt_environment][:prior],
-              :label => params[:kt_environment][:label],
-              :organization_id => @organization.id}
+                  :description => params[:kt_environment][:description],
+                  :prior => params[:kt_environment][:prior],
+                  :label => params[:kt_environment][:label],
+                  :organization_id => @organization.id}
 
     env_params[:label], label_assigned = generate_label(env_params[:name], 'environment') if env_params[:label].blank?
 
@@ -91,7 +90,7 @@ class EnvironmentsController < ApplicationController
     prior_updated = !params[:kt_environment][:prior].nil?
 
     unless params[:kt_environment][:description].nil?
-      params[:kt_environment][:description] = params[:kt_environment][:description].gsub("\n",'')
+      params[:kt_environment][:description] = params[:kt_environment][:description].gsub("\n", '')
     end
 
     @environment.update_attributes(params[:kt_environment])
@@ -105,7 +104,7 @@ class EnvironmentsController < ApplicationController
 
     notify.success _("Environment '%s' was updated.") % @environment.name
 
-    render :text =>escape_html(result)
+    render :text => escape_html(result)
   end
 
   # DELETE /environments/1
@@ -113,7 +112,7 @@ class EnvironmentsController < ApplicationController
     @environment.destroy
     if @environment.destroyed?
       notify.success _("Environment '%s' was deleted.") % @environment.name
-      render :partial => "common/post_delete_close_subpanel", :locals => {:path=>edit_organization_path(@organization.label)}
+      render :partial => "common/post_delete_close_subpanel", :locals => {:path => edit_organization_path(@organization.label)}
     else
       err_msg = N_("Removal of the environment failed. If you continue having trouble with this, please contact an Administrator.")
       notify.error err_msg
@@ -124,11 +123,11 @@ class EnvironmentsController < ApplicationController
   # GET /environments/1/products
   def products
     @products = if params[:content_view_id]
-      view = ContentView.find(params[:content_view_id])
-      view.try(:products, @environment) || []
-    else
-      @environment.library? ? current_organization.products : @environment.products
-    end
+                  view = ContentView.find(params[:content_view_id])
+                  view.try(:products, @environment) || []
+                else
+                  @environment.library? ? current_organization.products : @environment.products
+                end
 
     respond_to do |format|
       format.html {render :partial => "products", :locals => {:products => @products}, :content_type => 'text/html'}
@@ -139,12 +138,21 @@ class EnvironmentsController < ApplicationController
   # GET /environments/1/content_views
   def content_views
     content_views = if params[:include_default]
-      @environment.content_views.readable(current_organization)
-    else
-      ContentView.readable(current_organization).in_environment(@environment)
-    end
+                      @environment.content_views.readable(current_organization)
+                    else
+                      ContentView.readable(current_organization).in_environment(@environment)
+                    end
     respond_to do |format|
       format.json {render :json => content_views}
+    end
+  end
+
+  # GET /environments/registerable_paths
+  def registerable_paths
+    paths = environment_paths(library_path_element("systems_readable?"),
+                              environment_path_element("systems_readable?"))
+    respond_to do |format|
+      format.json { render :json => paths }
     end
   end
 
@@ -161,7 +169,7 @@ class EnvironmentsController < ApplicationController
   end
 
   def setup_new_edit_screen
-    @env_labels = (envs_no_successors - [@environment]).collect {|p| [ p.display_name, p.id ]}
+    @env_labels = (envs_no_successors - [@environment]).collect {|p| [p.display_name, p.id]}
     @selected = @environment.prior.nil? ? "" : @environment.prior.id
   end
 

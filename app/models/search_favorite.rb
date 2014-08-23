@@ -13,7 +13,7 @@
 class SearchFavorite < ActiveRecord::Base
   include SearchHelper
 
-  belongs_to :user
+  belongs_to :user, :inverse_of => :search_favorites
   validate :max_favorites
   validates :params, :length => { :maximum => 255 }
   validates :path, :length => { :maximum => 255 }
@@ -27,8 +27,8 @@ class SearchFavorite < ActiveRecord::Base
     end
   end
 
-  def count_favorites path
-    count = ::SearchFavorite.where(:user_id => self.user_id, :path => path).count(:id)
+  def count_favorites(path)
+    ::SearchFavorite.where(:user_id => self.user_id, :path => path).count(:id)
   end
 
 end

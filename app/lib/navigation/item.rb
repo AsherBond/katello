@@ -10,12 +10,12 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-
 module Navigation
   class Item
     include Navigation::Utils
 
-    attr_reader :key, :display, :authorization, :url
+    attr_accessor :authorization # Dynamically sets the authorization rule
+    attr_reader :key, :display, :url
 
     # Initalizer for the Navigation Item object
     #
@@ -40,18 +40,13 @@ module Navigation
       end
     end
 
-    # Dynamically sets the authorization rule
-    def authorization=(authorization)
-      @authorization = authorization
-    end
-
     # Defines the JSON structure for navigation menu items
     #
     # @return [String] the JSON representation of the navigation item
     def as_json(*args)
       {
         :key    => @key,
-        :display=> @display,
+        :display => @display,
         :url    => @url
       }
     end

@@ -25,7 +25,8 @@ class RepositoriesController < ApplicationController
     read_any_test = lambda{Provider.any_readable?(current_organization)}
     read_test = lambda{@product.readable?}
     edit_test = lambda{@product.editable?}
-    org_edit = lambda{current_organization.editable?}
+    org_edit = lambda{current_organization.redhat_manageable?}
+
     {
       :new => edit_test,
       :create => edit_test,
@@ -48,8 +49,8 @@ class RepositoriesController < ApplicationController
 
   def edit
     render :partial => "edit",
-           :locals=>{
-               :editable=> (@product.editable? and not @repository.promoted?),
+           :locals => {
+               :editable => (@product.editable? && !@repository.promoted?),
                :cloned_in_environments => @repository.product.environments.select {|env| @repository.is_cloned_in?(env)}.map(&:name)
            }
   end
@@ -58,14 +59,14 @@ class RepositoriesController < ApplicationController
     repo_params = params[:repo]
     repo_params[:label], label_assigned = generate_label(repo_params[:name], 'repository') if repo_params[:label].blank?
 
-    raise HttpErrors::BadRequest, _("Repository can be only created for custom provider.") unless @product.custom?
+    fail HttpErrors::BadRequest, _("Repository can be only created for custom provider.") unless @product.custom?
 
-    gpg = GpgKey.readable(current_organization).find(repo_params[:gpg_key]) if repo_params[:gpg_key] and repo_params[:gpg_key] != ""
+    gpg = GpgKey.readable(current_organization).find(repo_params[:gpg_key]) if repo_params[:gpg_key] && repo_params[:gpg_key] != ""
     # Bundle these into one call, perhaps move to Provider
-    # Also fix the hard coded yum
 
     repo_params[:unprotected] ||= false
-    @product.add_repo(repo_params[:label],repo_params[:name], repo_params[:feed], 'yum', repo_params[:unprotected], gpg)
+    @product.add_repo(repo_params[:label], repo_params[:name], repo_params[:feed],
+                      repo_params[:content_type], repo_params[:unprotected], gpg)
     @product.save!
 
     notify.success _("Repository '%s' created.") % repo_params[:name] unless params[:ignore_success_notice]
@@ -96,14 +97,14 @@ class RepositoriesController < ApplicationController
     @repository.enabled = params[:repo] == "1"
     @repository.save!
     product_content = @repository.product.product_content_by_id(@repository.content_id)
-    render :json => {:id=>@repository.id, :can_disable_repo_set=>product_content.can_disable?}
+    render :json => {:id => @repository.id, :can_disable_repo_set => product_content.can_disable?}
   end
 
   def destroy
     @repository.destroy
     if @repository.destroyed?
       notify.success _("Repository '%s' removed.") % @repository.name
-      render :partial => "common/post_delete_close_subpanel", :locals => {:path=>products_repos_provider_path(@provider.id)}
+      render :partial => "common/post_delete_close_subpanel", :locals => {:path => products_repos_provider_path(@provider.id)}
     else
       err_msg = N_("Removal of the repository failed. If you continue having trouble with this, please contact an Administrator.")
       notify.error err_msg
@@ -113,7 +114,7 @@ class RepositoriesController < ApplicationController
 
   def auto_complete_library
     # retrieve and return a list (array) of repo names in library that contain the 'term' that was passed in
-    term = Util::Search::filter_input params[:term]
+    term = Util::Search.filter_input params[:term]
     name = 'name:' + term
     name_query = name + ' OR ' + name + '*'
     ids = Repository.readable(current_organization.library).collect{|r| r.id}
@@ -125,10 +126,10 @@ class RepositoriesController < ApplicationController
       ]
     end
 
-    render :json => repos.map{|repo|
+    render :json => (repos.map do |repo|
       label = _("%{repo} (Product: %{product})") % {:repo => repo.name, :product => repo.product}
       {:id => repo.id, :label => label, :value => repo.name}
-    }
+    end)
   end
 
   protected

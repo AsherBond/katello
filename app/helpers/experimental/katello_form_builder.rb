@@ -59,6 +59,7 @@ module Experimental
 
       tag_options = {}
       tag_options[:name] = "%s[%s]" % [@object_name, name.to_s]
+      # rubocop:disable SymbolName
       tag_options[:'data-url'] = options[:'data-url'] || options[:data_url] || @options[:data_url]
       tag_options.update(options[:tag]) if options.key? :tag
 
@@ -146,17 +147,17 @@ module Experimental
       tag_options.merge!({:class => options[:input_wrapper][:class]})
 
       if options[:help]
-        content_tag(:div, tag_options ) do
+        content_tag(:div, tag_options) do
           yield +
           content_tag(:i, '', :class => 'details-icon', 'data-help' => options[:help])
         end
       elsif options[:note]
-        content_tag(:div, tag_options ) do
+        content_tag(:div, tag_options) do
           yield +
           content_tag(:span, options[:note], :class => 'note')
         end
       else
-        content_tag(:div, tag_options ) { yield }
+        content_tag(:div, tag_options) { yield }
       end
     end
 

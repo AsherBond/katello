@@ -3,7 +3,7 @@ language:
 
 rvm:
   - "1.9.3"
-  - "2.0.0"
+  #- "2.0.0"
 
 <<<<<<< HEAD
 script:
@@ -38,4 +38,12 @@ env:
 >>>>>>> 42fd1e0a69d2ad9e0cb432e1ce553334428259cf
 =======
   - JOB=javascript
+<<<<<<< HEAD
 >>>>>>> c75fe6b4b6f78cec4a67d05e3c9b9a84fd03f845
+=======
+
+#matrix:
+  #exclude:
+    #- rvm: "1.9.3"
+      #env: "JOB=javascript"
+>>>>>>> 6ba40451675c5ce517af14198b6081670305f712

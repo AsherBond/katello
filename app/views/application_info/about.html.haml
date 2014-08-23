@@ -3,13 +3,13 @@
 .about-information
   %h2.about-header= _("About")
 
-  .sixty
+  .column
 
     - if can_read_system_info?
       .dash
         .dashhead
           %h4= _("System Status")
-        .widget.scroll-pane
+        .widget
           %table.about-info
             %tr.header
               %th
@@ -25,7 +25,7 @@
     .dash
       .dashhead
         %h4= _("System Information")
-      .widget.scroll-pane
+      .widget
         %table.about-info
           %tr.header
             %th= _("Parameter")
@@ -35,7 +35,7 @@
               %td= param
               %td= val
 
-  .forty
+  .column
 
     .dash
       .dashhead
@@ -50,9 +50,9 @@
 
 
     - if can_read_system_info?
-      .dash
+      .dash.packages
         .dashhead
           %h4= _("Installed Packages")
-        .widget.scroll-pane.packages
+        .widget.scroll-pane
           - @packages.each do |package|
             .package= package

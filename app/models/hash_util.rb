@@ -18,7 +18,7 @@ class HashUtil
       begin
         # If we got back null lets assign the default
         return hash[params[0]] || default
-      rescue => e
+      rescue
         # If we errored out trying to fetch the value we return
         # default value.
         return default
@@ -26,7 +26,7 @@ class HashUtil
     end
     subhash = hash[params.first]
     # If we don't have a subhash don't try and recurse down
-    if !subhash.nil? and !subhash.empty?
+    if !subhash.nil? && !subhash.empty?
       self.null_safe_get(subhash, default, params[1..-1])
     else
       default

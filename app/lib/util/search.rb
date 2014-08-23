@@ -20,12 +20,12 @@ module Util
         "kt_name_analyzer" => {
           "type"      => "custom",
           "tokenizer" => "keyword",
-          "filter"    => ["lowercase", "asciifolding"]
+          "filter"    => %w(lowercase asciifolding)
         },
         "autcomplete_name_analyzer" => {
             "type"      => "custom",
             "tokenizer" => "keyword",
-            "filter"    => ["standard", "lowercase", "asciifolding", "ngram_filter"]
+            "filter"    => %w(standard lowercase asciifolding ngram_filter)
         }
       }
     end
@@ -42,18 +42,23 @@ module Util
     end
 
     # Filter the search input, escaping unsupported lucene syntax (e.g. usage of - operator)
-    def self.filter_input search
+    def self.filter_input(search)
       return nil if search.nil?
       DISABLED_LUCENE_SPECIAL_CHARS.each do |chr|
-        search = search.gsub(chr, '\\'+chr)
+        search = search.gsub(chr, '\\' + chr)
       end
       return search
     end
 
     def self.active_record_search_classes
-      ignore_list =  ["CpConsumerUser", "PulpSyncStatus", "PulpTaskStatus", "Hypervisor", "Pool"]
+      ignore_list =  %w(CpConsumerUser Pool)
       classes = get_subclasses(ActiveRecord::Base)
-      classes.select{ |c| !ignore_list.include?(c.name) && c.respond_to?(:index) }.sort_by(&:name)
+      classes = classes.select{ |c| !ignore_list.include?(c.name) && c.respond_to?(:index) }
+
+      #we need index base classes first (TaskStatus) before child classes (PulpTaskStatus)
+      initial_list = classes.select{|c| c.superclass == ActiveRecord::Base}
+      subclass_list = classes - initial_list
+      initial_list + subclass_list
     end
 
     def self.get_subclasses(obj_class)

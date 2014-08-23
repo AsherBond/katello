@@ -18,9 +18,11 @@ class User < ActiveRecord::Base
   include Glue if Katello.config.use_cp || Katello.config.use_pulp
 
   include Glue::Event
+
   def create_event
     Headpin::Actions::UserCreate
   end
+
   def destroy_event
     Headpin::Actions::UserDestroy
   end
@@ -45,12 +47,15 @@ class User < ActiveRecord::Base
   has_many :roles_users, :dependent => :destroy
   has_many :roles, :through => :roles_users, :before_remove => :super_admin_check, :uniq => true, :extend => RolesPermissions::UserOwnRole
   validates_with Validators::OwnRolePresenceValidator, :attributes => :roles
-  has_many :help_tips
-  has_many :user_notices
+  has_many :help_tips, :dependent => :destroy
+  has_many :user_notices, :dependent => :destroy
   has_many :notices, :through => :user_notices
+  has_many :task_statuses, :dependent => :destroy
   has_many :search_favorites, :dependent => :destroy
   has_many :search_histories, :dependent => :destroy
-  belongs_to :default_environment, :class_name => "KTEnvironment"
+  has_many :activation_keys, :dependent => :destroy
+  has_many :changeset_users, :dependent => :destroy
+  belongs_to :default_environment, :class_name => "KTEnvironment", :inverse_of => :users
   serialize :preferences, HashWithIndifferentAccess
 
   validates :username, :uniqueness => true, :presence => true
@@ -78,7 +83,7 @@ class User < ActiveRecord::Base
   # hash the password before creating or updateing the record
   def hash_password
     if Katello.config.warden != 'ldap'
-      self.password = Password::update(self.password) if self.password && self.password.length != 192
+      self.password = Password.update(self.password) if self.password && self.password.length != 192
     end
   end
 
@@ -100,7 +105,6 @@ class User < ActiveRecord::Base
     end
     return true
   end
-
 
   def not_ldap_mode?
     return Katello.config.warden != 'ldap'
@@ -160,18 +164,17 @@ class User < ActiveRecord::Base
   def allowed_organizations
     #test for all orgs
     perms = Permission.joins(:role).joins("INNER JOIN roles_users ON roles_users.role_id = roles.id").
-        where("roles_users.user_id = ?", self.id).where(:organization_id => nil).count()
+        where("roles_users.user_id = ?", self.id).where(:organization_id => nil).count
     return Organization.without_deleting.all if perms > 0
 
     Organization.without_deleting.joins(:permissions => {:role => :users}).where(:users => {:id => self.id}).uniq
   end
 
   def disable_helptip(key)
-    return if !self.helptips_enabled? #don't update helptips if user has it disabled
-    return if not HelpTip.where(:key => key, :user_id => self.id).empty?
-    help      = HelpTip.new
-    help.key  = key
-    help.user = self
+    return false unless self.helptips_enabled? #don't update helptips if user has it disabled
+    return true if HelpTip.where(key: key, user_id: self.id).first
+
+    help = HelpTip.new key: key, user: self
     help.save
   end
 
@@ -180,9 +183,10 @@ class User < ActiveRecord::Base
     notices = Notice.for_user(self).for_org(organization).unread.limit(count == :all ? nil : count)
     notices.each { |notice| notice.user_notices.each(&:read!) }
 
-    return notices.map do |notice|
-      { :text => notice.text, :level => notice.level, :request_type => notice.request_type }
+    notices = notices.map do |notice|
+      {:text => notice.text, :level => notice.level, :request_type => notice.request_type}
     end
+    return notices
   end
 
   def enable_helptip(key)
@@ -226,7 +230,7 @@ class User < ActiveRecord::Base
   end
 
   def create_or_update_default_system_registration_permission
-    return if default_environment.nil? or (not default_environment.changed?)
+    return if default_environment.nil? || !default_environment.changed?
     own_role.create_or_update_default_system_registration_permission(default_environment.organization, default_environment)
   end
 
@@ -235,17 +239,17 @@ class User < ActiveRecord::Base
   end
 
   def default_locale=(locale)
-    self.preferences[:user] = { } unless self.preferences.has_key? :user
+    self.preferences[:user] = { } unless self.preferences.key? :user
     self.preferences[:user][:locale] = locale
   end
 
-  def experimental_ui
-    self.preferences[:user][:experimental_ui] rescue nil
+  def legacy_mode
+    self.preferences[:user][:legacy_mode] rescue nil
   end
 
-  def experimental_ui=(use_experimental_ui)
-    self.preferences[:user] = { } unless self.preferences.has_key? :user
-    self.preferences[:user][:experimental_ui] = use_experimental_ui.to_bool
+  def legacy_mode=(use_legacy_mode)
+    self.preferences[:user] = { } unless self.preferences.key? :user
+    self.preferences[:user][:legacy_mode] = use_legacy_mode.to_bool
   end
 
   def default_org
@@ -260,7 +264,7 @@ class User < ActiveRecord::Base
 
   #set the default org if it's an actual org_id
   def default_org=(org_id)
-    self.preferences[:user] = { } unless self.preferences.has_key? :user
+    self.preferences[:user] = { } unless self.preferences.key? :user
     if !org_id.nil? && org_id != "nil"
       organization = Organization.find_by_id(org_id)
       self.preferences[:user][:default_org] = organization.id
@@ -274,7 +278,7 @@ class User < ActiveRecord::Base
   end
 
   def subscriptions_match_system_preference=(flag)
-    self.preferences[:user] = { } unless self.preferences.has_key? :user
+    self.preferences[:user] = { } unless self.preferences.key? :user
     self.preferences[:user][:subscriptions_match_system] = flag
   end
 
@@ -283,7 +287,7 @@ class User < ActiveRecord::Base
   end
 
   def subscriptions_match_installed_preference=(flag)
-    self.preferences[:user] = { } unless self.preferences.has_key? :user
+    self.preferences[:user] = { } unless self.preferences.key? :user
     self.preferences[:user][:subscriptions_match_installed] = flag
   end
 
@@ -292,7 +296,7 @@ class User < ActiveRecord::Base
   end
 
   def subscriptions_no_overlap_preference=(flag)
-    self.preferences[:user] = { } unless self.preferences.has_key? :user
+    self.preferences[:user] = { } unless self.preferences.key? :user
     self.preferences[:user][:subscriptions_no_overlap] = flag
   end
 
@@ -330,24 +334,24 @@ class User < ActiveRecord::Base
   # flush existing ldap roles + load & save new ones
   def set_ldap_roles
     # first, delete existing ldap roles
-    clear_existing_ldap_roles
+    clear_existing_ldap_roles!
     # load groups from ldap
     groups = Ldap.ldap_groups(self.username)
     groups.each do |group|
       # find corresponding
       group_roles = LdapGroupRole.find_all_by_ldap_group(group)
       group_roles.each do |group_role|
-        if group_role
-          role_user = RolesUser.new(:role => group_role.role, :user => self, :ldap => true)
-          self.roles_users << role_user unless self.roles.include?(group_role.role)
+        if group_role && !self.roles.reload.include?(group_role.role)
+          self.roles_users << RolesUser.new(:role => group_role.role, :user => self, :ldap => true)
         end
       end
     end
     self.save
   end
 
-  def clear_existing_ldap_roles
+  def clear_existing_ldap_roles!
     self.roles = self.roles_users.select { |r| !r.ldap }.map { |r| r.role }
+    self.save!
   end
 
   def ldap_roles
@@ -360,7 +364,7 @@ class User < ActiveRecord::Base
   end
 
   def create_or_update_search_history(path, search_params)
-    unless search_params.nil? or search_params.blank? or empty_display_attributes?(search_params)
+    unless search_params.nil? || search_params.blank? || empty_display_attributes?(search_params)
       if history = search_histories.find_or_create_by_path_and_params(path, search_params)
         history.update_attributes(:updated_at => Time.now)
       end
@@ -391,21 +395,22 @@ class User < ActiveRecord::Base
 
   # generate a random token, that is unique within the User table for the column provided
   def generate_token(column)
-    begin
+    loop do
       self[column] = SecureRandom.hex(32)
-    end while User.exists?(column => self[column])
+      break unless User.exists?(column => self[column])
+    end
   end
 
-  def log_roles verbs, resource_type, tags, org, any_tags = false
-      verbs_str = verbs ? verbs.join(',') :"perform any verb"
-      tags_str  = "any tags"
-      if tags
-        tag_str = any_tags ? "any tag in #{tags.join(',')}" : "all the tags in #{tags.join(',')}"
-      end
+  def log_roles(verbs, resource_type, tags, org, any_tags = false)
+    verbs_str = verbs ? verbs.join(',') : "perform any verb"
+    tags_str  = "any tags"
+    if tags
+      tags_str = any_tags ? "any tag in #{tags.join(',')}" : "all the tags in #{tags.join(',')}"
+    end
 
-      org_str = org ? "organization #{org.name} (#{org.name})" :" any organization"
-      logger.debug "Checking if user #{username} is allowed to #{verbs_str} in #{resource_type.inspect} " +
-                       "scoped for #{tags_str} in #{org_str}"
+    org_str = org ? "organization #{org.name} (#{org.name})" : " any organization"
+    logger.debug "Checking if user #{username} is allowed to #{verbs_str} in #{resource_type.inspect} " +
+      "scoped for #{tags_str} in #{org_str}"
   end
 
   def create_own_role
@@ -417,7 +422,7 @@ class User < ActiveRecord::Base
     roles.destroy_own_role
   end
 
-  def super_admin_check role
+  def super_admin_check(role)
     if role.superadmin? && role.users.length == 1
       message = _("Cannot dissociate user '%{username}' from '%{role}' role. Need at least one user in the '%{role}' role.") % {:username => username, :role => role.name}
       errors[:base] << message
@@ -436,9 +441,9 @@ class User < ActiveRecord::Base
 
   def generate_remote_id
     if self.username.ascii_only?
-      "#{Util::Model::labelize(self.username)}-#{SecureRandom.hex(4)}"
+      "#{Util::Model.labelize(self.username)}-#{SecureRandom.hex(4)}"
     else
-      Util::Model::uuid
+      Util::Model.uuid
     end
   end
 

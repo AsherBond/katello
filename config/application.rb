@@ -16,7 +16,7 @@ require 'katello/url_constrained_cookie_store'
 
 # bundler_ext does not support inline gem's currently so we have to mount
 # the engine through a requires instead of within the Gemfile
-require './engines/bastion/lib/bastion'
+require File.expand_path("../engines/bastion/lib/bastion", File.dirname(__FILE__))
 
 # If you have a Gemfile, require the gems listed there, including any gems
 # you've limited to :test, :development, or :production.
@@ -29,14 +29,12 @@ if File.exist?(File.expand_path('../../Gemfile.in', __FILE__))
   # Webmock rubygem have very strong default setting - it blocks all HTTP connections
   # after it is required. Therefore we want to turn off this behavior for all environments
   # except test since with bundler_ext we load ALL groups by default.
-  if defined? WebMock and Rails.env != "test"
+  if defined?(WebMock) && Rails.env != "test"
     WebMock.allow_net_connect!(:net_http_connect_on_start => true)
   end
 else
   # In Bundler mode we load only specified groups
-  if ENV['BUNDLE_GEMFILE']
-    gemfile = ENV['BUNDLE_GEMFILE']
-  else
+  unless ENV['BUNDLE_GEMFILE']
     ENV['BUNDLE_GEMFILE'] = File.expand_path('../../Gemfile', __FILE__)
   end
   if defined?(Bundler)
@@ -50,12 +48,12 @@ else
              when :development
                basic_groups + [:development, :debugging, :build, :development_boost, :assets]
              when :test
-               # TODO replace ENV['TRAVIS'] with configuration
+               # TODO: replace ENV['TRAVIS'] with configuration
                basic_groups + [:development, :test, (:debugging if ENV['TRAVIS'] != 'true')]
              else
                raise "unknown environment #{Rails.env.to_sym}"
              end.compact
-    Bundler.require *groups
+    Bundler.require(*groups)
   end
 end
 
@@ -124,12 +122,14 @@ module Src
             Katello.config.host,
             (":#{Katello.config.port}" if Katello.config.port),
             Katello.config.url_prefix].compact.join,
-        :protocol => Katello.config.use_ssl ? 'https' : 'http' }
+        :protocol => Katello.config.use_ssl ? 'https' : 'http'
+    }
 
     config.after_initialize do |app|
       require 'string_to_bool'
       #default all non-matched route to our special 404 page
       # cannot be added to routes.rb due to conflicting with engines
+      app.routes.append{match '/api*a', :to => 'api/v1/errors#render_404'}
       app.routes.append{match '*a', :to => 'errors#routing'}
     end
 
@@ -155,7 +155,7 @@ module Src
 
     config.assets.paths << Rails.root.join("app", "assets")
 
-    config.assets.precompile << Proc.new do |path|
+    config.assets.precompile << proc do |path|
       if path =~ /\.(css|js)\z/
         full_path = Rails.application.assets.resolve(path).to_path
         app_assets_path = Rails.root.join('app', 'assets').to_path
@@ -185,10 +185,14 @@ FastGettext.add_text_domain('katello', {
   :path => File.expand_path("../../locale", __FILE__),
   :type => :po,
   :ignore_fuzzy => true
-}.update(old_fast_gettext ? { :ignore_obsolete => true } : { :report_warning => false }))
+}.update(old_fast_gettext ? {:ignore_obsolete => true} : {:report_warning => false}))
 
 FastGettext.default_text_domain = 'katello'
 
 if defined? Dynflow
-  Dir[File.join(Rails.root,'lib/{katello,headpin}/actions/*.rb')].each { |f| require f }
+  Dir[File.join(Rails.root, 'lib/{katello,headpin}/actions/*.rb')].each { |f| require f }
+end
+
+if Katello.config.use_pulp && !Object.constants.include?(:Fort)
+  require File.expand_path("../engines/fort/lib/fort", File.dirname(__FILE__))
 end

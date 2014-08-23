@@ -17,7 +17,7 @@ class OrganizationsController < ApplicationController
   before_filter :find_organization, :only => [:edit, :update, :destroy, :events, :default_info]
   before_filter :find_organization_by_id, :only => [:environments_partial, :download_debug_certificate]
   before_filter :authorize #call authorize after find_organization so we call auth based on the id instead of cp_id
-  before_filter :setup_options, :only=>[:index, :items]
+  before_filter :setup_options, :only => [:index, :items]
   before_filter :search_filter, :only => [:auto_complete_search]
   skip_before_filter :require_org
 
@@ -73,22 +73,24 @@ class OrganizationsController < ApplicationController
   def items
     ids = Organization.without_deleting.readable.collect(&:id)
     render_panel_direct(Organization, @panel_options, params[:search], params[:offset], [:name_sort, 'asc'],
-                        {:default_field => :name, :filter=>[{"id"=>ids}]})
+                        {:default_field => :name, :filter => [{"id" => ids}]})
   end
 
   def show
     if params[:id] == 'new'
-      render :partial=>"new"
+      render :partial => "new"
     else
       find_organization
-      render :partial=>"common/list_update", :locals => {:item => @organization, :accessor => 'label', :columns => ['name']}
+      render :partial => "common/list_update", :locals => {:item => @organization, :accessor => 'label', :columns => ['name']}
     end
   end
 
+  # TODO: break up method
+  # rubocop:disable MethodLength
   def create
     org_label_assigned = ""
-    org_params = params[:organization] or
-        return render_bad_parameters
+    org_params = params[:organization]
+    return render_bad_parameters if org_params.nil?
     org_params[:label], org_label_assigned = generate_label(org_params[:name], 'organization') if org_params[:label].blank?
     @organization = Organization.new(:name => org_params[:name], :label => org_params[:label], :description => org_params[:description])
     @organization.save!
@@ -117,7 +119,7 @@ class OrganizationsController < ApplicationController
       else
         notify.message env_label_assigned unless env_label_assigned.blank?
       end
-      render :partial=>"common/list_item", :locals=>{:item=>@organization, :accessor=>"label", :columns=>['name'], :name=>controller_display_name}
+      render :partial => "common/list_item", :locals => {:item => @organization, :accessor => "label", :columns => ['name'], :name => controller_display_name}
     else
       notify.message _("'%s' did not meet the current search criteria and is not being shown.") % @organization["name"]
       render :json => { :no_match => true }
@@ -125,7 +127,7 @@ class OrganizationsController < ApplicationController
 
   ensure
     if @organization && @organization.persisted? && @new_env && @new_env.new_record?
-      @organization.destroy
+      OrganizationDestroyer.destroy(@organization, :async => false, :notify => false, :user => User.hidden.first)
     end
   end
 
@@ -141,8 +143,8 @@ class OrganizationsController < ApplicationController
     else
       @org_label = _("Make this my default organization.")
     end
-    @env_choices =  @organization.environments.collect {|p| [ p.name, p.name ]}
-    render :partial=>"edit", :locals=>{:organization=>@organization, :editable=>@organization.editable?, :name => controller_display_name, :org_label=>@org_label}
+    @env_choices =  @organization.environments.collect {|p| [p.name, p.name]}
+    render :partial => "edit", :locals => {:organization => @organization, :editable => @organization.editable?, :name => controller_display_name, :org_label => @org_label}
   end
 
   def update
@@ -152,7 +154,7 @@ class OrganizationsController < ApplicationController
     @organization.name = params[:organization][:name] unless params[:organization][:name].nil?
 
     unless params[:organization][:description].nil?
-      result = @organization.description = params[:organization][:description].gsub("\n",'')
+      result = @organization.description = params[:organization][:description].gsub("\n", '')
     end
 
     unless params[:organization][:service_level].nil?
@@ -162,7 +164,7 @@ class OrganizationsController < ApplicationController
     @organization.save!
     notify.success _("Organization '%s' was updated.") % @organization["name"]
 
-    if not search_validate(Organization, @organization.id, params[:search])
+    if !search_validate(Organization, @organization.id, params[:search])
       notify.message _("'%s' no longer matches the current search criteria.") % @organization["name"],
                      :asynchronous => false
     end
@@ -171,25 +173,26 @@ class OrganizationsController < ApplicationController
   end
 
   def destroy
-    found_errors= @organization.validate_destroy(current_organization)
+    found_errors = @organization.validate_destroy(current_organization)
     if found_errors
       notify.error found_errors
-      render :text=>found_errors[1], :status=>:bad_request and return
+      render :text => found_errors[1], :status => :bad_request
+      return
     end
 
     # log off all users for this organization
-    # TODO - since we use cookie-based session this is not possible (need to switch over to db-based sessions first)
+    # TODO: since we use cookie-based session this is not possible (need to switch over to db-based sessions first)
 
     # schedule background deletion
     id = @organization.label
     OrganizationDestroyer.destroy @organization, :notify => true
     notify.success _("Organization '%s' has been scheduled for background deletion.") % @organization.name
-    render :partial => "common/list_remove", :locals => {:id=> id, :name=> controller_display_name}
+    render :partial => "common/list_remove", :locals => {:id => id, :name => controller_display_name}
   end
 
   def environments_partial
     @organization = Organization.find(params[:id])
-    env_user_id = params[:user_id]?params[:user_id].to_s : nil
+    env_user_id = params[:user_id] ? params[:user_id].to_s : nil
     if env_user_id == current_user.id.to_s && (!current_user.editable?)
       accessible_envs = KTEnvironment.systems_registerable(@organization)
     else
@@ -198,16 +201,16 @@ class OrganizationsController < ApplicationController
 
     setup_environment_selector(@organization, accessible_envs)
     @environment = first_env_in_path(accessible_envs, true, @organization)
-    render :partial=>"environments", :locals=>{:accessible_envs => accessible_envs}
+    render :partial => "environments", :locals => {:accessible_envs => accessible_envs}
   end
 
   def events
-    entries = @organization.events.collect {|e|
+    entries = @organization.events.collect do |e|
       entry = {}
       entry['timestamp'] = Date.parse(e['timestamp'])
       entry['message'] = e['messageText']
       entry
-    }
+    end
     #entries.compact!  # To remove the nils inserted for rejected entries
 
     # TODO: add more/paging to these results instead of truncating at 250
@@ -228,7 +231,7 @@ class OrganizationsController < ApplicationController
     task_state = (task.blank? ? nil : task.state)
     task_uuid = (task.blank? ? nil : task.uuid)
     render :partial => "default_info",
-      :locals => { :org => @organization, :informable_type => params[:informable_type], :task_state => task_state, :task_uuid => task_uuid }
+           :locals => { :org => @organization, :informable_type => params[:informable_type], :task_state => task_state, :task_uuid => task_uuid }
   end
 
   protected
@@ -239,7 +242,8 @@ class OrganizationsController < ApplicationController
       message = _("Couldn't find organization with ID %s") % params[:id]
       notify.error message
       execute_after_filters
-      render :text => message, :status => :not_found and return false
+      render :text => message, :status => :not_found
+      return false
     end
   end
 
@@ -249,16 +253,16 @@ class OrganizationsController < ApplicationController
 
   def setup_options
     @panel_options = { :title => _('Organizations'),
-               :col => ['name'],
-               :titles => [_('Name')],
-               :create => _('Organization'),
-               :create_label => _('+ New Organization'),
-               :name => controller_display_name,
-               :accessor => :label,
-               :ajax_load  => true,
-               :ajax_scroll => items_organizations_path(),
-               :enable_create => Organization.creatable?,
-               :search_class=>Organization}
+                       :col => ['name'],
+                       :titles => [_('Name')],
+                       :create => _('Organization'),
+                       :create_label => _('+ New Organization'),
+                       :name => controller_display_name,
+                       :accessor => :label,
+                       :ajax_load  => true,
+                       :ajax_scroll => items_organizations_path,
+                       :enable_create => Organization.creatable?,
+                       :search_class => Organization}
   end
 
   def search_filter

@@ -109,7 +109,6 @@ describe SystemsController do
           it_should_behave_like "protected action"
         end if perm == :update_systems
 
-
         describe "show manageable environments with #{perm} on #{resource} " do
           let(:action) {:environments}
           let(:req) { get :environments, :id => @system.id}
@@ -150,12 +149,6 @@ describe SystemsController do
       before (:each) do
         100.times{|a| create_system(:name=>"bar#{a}", :environment => @environment, :cp_type=>"system", :facts=>{"Test" => ""})}
         @systems = System.select(:id).where(:environment_id => @environment.id).all.collect{|s| s.id}
-      end
-
-      it "should show the system 2 pane list" do
-        get :index
-        response.should be_success
-        response.should render_template("index")
       end
 
       it "should render the first 25 systems" do
@@ -309,7 +302,6 @@ describe SystemsController do
       end
 
     end
-
 
     describe 'bulk deleting a system' do
       before (:each) do

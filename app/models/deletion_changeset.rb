@@ -10,7 +10,6 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-
 require 'set'
 class DeletionChangeset < Changeset
   use_index_of Changeset if Katello.config.use_elasticsearch
@@ -46,7 +45,6 @@ class DeletionChangeset < Changeset
     update_progress! '30'
     delete_views from_env
     update_progress! '70'
-    from_env.content_view_environment.update_cp_content
     update_progress! '100'
 
     self.promotion_date = Time.now

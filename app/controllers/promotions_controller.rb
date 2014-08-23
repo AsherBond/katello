@@ -16,11 +16,11 @@ class PromotionsController < ApplicationController
   before_filter :authorize
 
   def rules
-    show_test = lambda {
+    show_test = lambda do
       to_ret = @environment && (@environment.contents_readable? || @environment.changesets_deletable?)
       to_ret ||=  @next_environment.changesets_readable? if @next_environment
       to_ret
-    }
+    end
 
     content_view_test = lambda{ContentView.any_readable?(@environment.organization)}
     {
@@ -41,17 +41,17 @@ class PromotionsController < ApplicationController
     @deletion_changesets = @environment.working_deletion_changesets if (@environment && @environment.changesets_readable?)
 
     @locals_hash = {
-      :accessible_envs=> access_envs,
-      :manage_deletion_changesets => (@environment && @environment.changesets_manageable?)? true : false,
-      :manage_promotion_changesets => (@next_environment && @next_environment.changesets_manageable?)? true : false,
-      :apply_promotion_changesets => (@next_environment && @next_environment.changesets_promotable?)? true : false,
-      :apply_deletion_changesets => (@environment && @environment.changesets_deletable?)? true : false,
-      :read_deletion_changesets => (@environment && @environment.changesets_readable?)? true : false,
-      :read_promotion_changesets => (@next_environment && @next_environment.changesets_readable?)? true : false,
-      :read_contents => (@environment && @environment.contents_readable?)? true: false
+      :accessible_envs => access_envs,
+      :manage_deletion_changesets => (@environment && @environment.changesets_manageable?) ? true : false,
+      :manage_promotion_changesets => (@next_environment && @next_environment.changesets_manageable?) ? true : false,
+      :apply_promotion_changesets => (@next_environment && @next_environment.changesets_promotable?) ? true : false,
+      :apply_deletion_changesets => (@environment && @environment.changesets_deletable?) ? true : false,
+      :read_deletion_changesets => (@environment && @environment.changesets_readable?) ? true : false,
+      :read_promotion_changesets => (@next_environment && @next_environment.changesets_readable?) ? true : false,
+      :read_contents => (@environment && @environment.contents_readable?) ? true : false
     }
 
-    render :show, :locals=>@locals_hash
+    render :show, :locals => @locals_hash
   end
 
   # AJAX Calls
@@ -64,8 +64,8 @@ class PromotionsController < ApplicationController
                                 @next_environment.content_view_versions.non_default_view.
                                 pluck("content_view_versions.id").to_set
 
-    render :partial=>"content_views", :locals => {:environment => @environment, :content_view_versions => view_versions,
-                                                  :next_env_view_version_ids => next_env_view_version_ids}
+    render :partial => "content_views", :locals => {:environment => @environment, :content_view_versions => view_versions,
+                                                    :next_env_view_version_ids => next_env_view_version_ids}
   end
 
   private
@@ -73,7 +73,7 @@ class PromotionsController < ApplicationController
   def find_environment
     if current_organization
       @organization = current_organization
-      @environment = KTEnvironment.where(:name=>params[:id]).where(:organization_id=>@organization.id).first if params[:id]
+      @environment = KTEnvironment.where(:name => params[:id]).where(:organization_id => @organization.id).first if params[:id]
       @environment ||= first_env_in_path(accessible_environments, true)
       #raise Errors::SecurityViolation, _("Cannot find a readable environment.") if @environment.nil?
 

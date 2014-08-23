@@ -3,7 +3,7 @@ class AddLabelsToRepository < ActiveRecord::Migration
     change_table(:repositories) do |t|
       t.column :label, :string, :bulk => true
       Repository.all.each do |repo|
-        execute "update repositories set label = '#{Util::Model::labelize(repo.name)}' where id= #{repo.id}"
+        execute "update repositories set label = '#{Util::Model.labelize(repo.name)}' where id= #{repo.id}"
       end
       t.change :label, :string, :null => false
     end
@@ -11,7 +11,7 @@ class AddLabelsToRepository < ActiveRecord::Migration
   end
 
   def self.down
-    remove_index(:repositories, :column =>[:label, :environment_product_id])
+    remove_index(:repositories, :column => [:label, :environment_product_id])
     change_table(:repositories) { |t| t.remove :label}
   end
 end

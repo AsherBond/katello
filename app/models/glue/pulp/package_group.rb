@@ -17,22 +17,35 @@ module Glue::Pulp::PackageGroup
     base.class_eval do
       attr_accessor :name, :package_group_id, :default_package_names, :id, :repoid, :conditional_package_names,
                       :mandatory_package_names, :description, :optional_package_names
+
+      def self.list_by_filter_clauses(clauses)
+        package_groups = Katello.pulp_server.extensions.package_group.search(::PackageGroup::CONTENT_TYPE,
+                                :filters => clauses)
+        if package_groups
+          groups = package_groups.collect do |attrs|
+            ::PackageGroup.new(attrs) if attrs
+          end
+          groups.compact
+        else
+          []
+        end
+      end
     end
 
   end
 
   module InstanceMethods
 
-    def initialize(params = {}, options={})
+    def initialize(params = {}, options = {})
       params['package_group_id'] = params['id']
       params['id'] = params.delete('_id')
-      params.each_pair {|k,v| instance_variable_set("@#{k}", v) unless v.nil? }
+      params.each_pair {|k, v| instance_variable_set("@#{k}", v) unless v.nil? }
 
-      [:default_package_names,:conditional_package_names,
-        :optional_package_names,:mandatory_package_names].each do |attr|
+      [:default_package_names, :conditional_package_names,
+       :optional_package_names, :mandatory_package_names].each do |attr|
         values = send(attr)
         values = values.collect do |v|
-          v.split(",")
+          v.split(", ")
         end.flatten
         send("#{attr}=", values)
       end

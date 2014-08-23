@@ -17,12 +17,13 @@ class ErrorsController < ApplicationController
   # handles unknown routes from both / and /api namespaces
   def routing
     path = params['a']
-    ex = HttpErrors::NotFound.new( _("Route does not exist:") + " #{path}" )
+    ex = HttpErrors::NotFound.new(_("Route does not exist:") + " #{path}")
 
     if path.match('/api/')
       # custom message which will render in JSON
       logger.error ex.message
       respond_to do |format|
+        # rubocop:disable SymbolName
         format.json { render :json => {:displayMessage => ex.message, :errors => [ex.message]}, :status => 404}
         format.all { render :text => "#{ex.message}", :status => 404}
       end

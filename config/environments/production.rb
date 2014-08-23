@@ -32,7 +32,7 @@ Src::Application.configure do
 
   # Disable Rails's static asset server
   # In production, Apache or nginx will already do this
-  config.serve_static_assets = true
+  config.serve_static_assets = false
 
   # Compress JavaScripts and CSS
   config.assets.compress = true
@@ -61,7 +61,8 @@ Src::Application.configure do
 
   # Be sure to restart your server when you modify this setting.
   config.session_store ::Katello::UrlConstrainedCookieStore,
-    :key => '_katello_session', :expire_after => 1.hour, :expiration_exceptions => "/notices"
+                       :key => '_katello_session', :expire_after => 1.hour,
+                       :expiration_exceptions => "/notices"
 
   # Do not update compass SASS files in production (we precompile them)
   Sass::Plugin.options[:never_update] = true

@@ -24,7 +24,9 @@ angular.module('Bastion.systems', [
     'alch-templates',
     'ui.compat',
     'Bastion.widgets',
-    'Bastion.subscriptions'
+    'Bastion.subscriptions',
+    'Bastion.nodes',
+    'Bastion.system-groups'
 ]);
 
 /**
@@ -44,7 +46,7 @@ angular.module('Bastion.systems').config(['$stateProvider', function($stateProvi
     });
 
     $stateProvider.state('systems.index', {
-        url: '/index',
+        url: '/systems',
         views: {
             'table': {
                 templateUrl: 'systems/views/systems-table-full.html'
@@ -52,9 +54,23 @@ angular.module('Bastion.systems').config(['$stateProvider', function($stateProvi
         }
     });
 
+    $stateProvider.state('systems.register', {
+        url: '/system/register',
+        collapsed: true,
+        views: {
+            'table': {
+                templateUrl: 'systems/views/systems-table-collapsed.html'
+            },
+            'action-panel': {
+                controller: 'SystemRegisterController',
+                templateUrl: 'systems/views/register.html'
+            }
+        }
+    });
+
     $stateProvider.state("systems.details", {
         abstract: true,
-        url: '/system/:systemId',
+        url: '/systems/:systemId',
         collapsed: true,
         views: {
             'table': {
@@ -65,13 +81,30 @@ angular.module('Bastion.systems').config(['$stateProvider', function($stateProvi
                 templateUrl: 'systems/details/views/system-details.html'
             }
         }
-    });
-
-    $stateProvider.state('systems.details.info', {
+    })
+    .state('systems.details.info', {
         url: '/info',
         collapsed: true,
         controller: 'SystemDetailsInfoController',
         templateUrl: 'systems/details/views/system-info.html'
+    });
+
+    $stateProvider.state('systems.details.events', {
+        abstract: true,
+        collapsed: true,
+        controller: 'SystemEventsController',
+        template: '<div ui-view></div>'
+    })
+    .state('systems.details.events.index', {
+        url: '/events',
+        collapsed: true,
+        templateUrl: 'systems/details/views/system-events.html'
+    })
+    .state('systems.details.events.details', {
+        url: '/events/:eventId',
+        collapsed: true,
+        controller: 'SystemEventDetailsController',
+        templateUrl: 'systems/details/views/system-event-details.html'
     });
 
     $stateProvider.state('systems.details.subscriptions', {
@@ -81,37 +114,50 @@ angular.module('Bastion.systems').config(['$stateProvider', function($stateProvi
         templateUrl: 'systems/details/views/system-subscriptions.html'
     });
 
-    $stateProvider.state('systems.alter-content', {
+    $stateProvider.state("systems.bulk-actions", {
+        abstract: true,
+        collapsed: true,
         views: {
+            'table': {
+                templateUrl: 'systems/views/systems-table-collapsed.html'
+            },
             'action-panel': {
                 controller: 'SystemsBulkActionController',
-                templateUrl: 'systems/views/alter-content-bulk.html'
+                templateUrl: 'systems/views/bulk-actions.html'
             }
         }
     });
 
-    $stateProvider.state('systems.alter-system-groups', {
-        views: {
-            'action-panel': {
-                controller: 'SystemsBulkActionController',
-                templateUrl: 'systems/views/alter-systems-group-bulk.html'
-            }
-        }
+    $stateProvider.state('systems.bulk-actions.list', {
+        url: '/systems/bulk-actions',
+        collapsed: true,
+        controller: 'SystemsBulkActionController',
+        templateUrl: 'systems/views/bulk-actions-list.html'
     });
 
-    $stateProvider.state('systems.bulk-delete', {
-        views: {
-            'action-panel': {
-                controller: 'SystemsBulkActionController',
-                templateUrl: 'systems/views/systems-delete-bulk.html'
-            }
-        }
+    $stateProvider.state('systems.details.packages', {
+        url: '/packages/',
+        collapsed: true,
+        controller: 'SystemPackagesController',
+        templateUrl: 'systems/content/views/system-packages.html'
     });
+
+
+    $stateProvider.state('systems.details.errata', {
+         abstract: true,
+         collapsed: true,
+         controller: 'SystemErrataController',
+         template: '<div ui-view></div>'
+     })
+    .state('systems.details.errata.index', {
+        url: '/errata/',
+        collapsed: true,
+        templateUrl: 'systems/content/views/system-errata.html'
+    })
+    .state('systems.details.errata.details', {
+        url: '/errata/:errataId/',
+        collapsed: true,
+        templateUrl: 'systems/content/views/errata-details.html'
+    });
+
 }]);
-
-angular.module('Bastion.systems').run(['$rootScope', '$state', '$stateParams',
-    function ($rootScope, $state, $stateParams) {
-        $rootScope.$state = $state;
-        $rootScope.$stateParams = $stateParams;
-    }
-]);

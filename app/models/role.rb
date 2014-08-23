@@ -17,8 +17,8 @@ class Role < ActiveRecord::Base
   acts_as_reportable
 
   has_many :roles_users, :dependent => :destroy
-  has_many :users, :through => :roles_users, :before_remove =>:super_admin_check
-  has_many :permissions, :dependent => :destroy, :inverse_of =>:role, :class_name=>"Permission", :extend => RolesPermissions::DefaultSystemRegistrationPermission
+  has_many :users, :through => :roles_users, :before_remove => :super_admin_check
+  has_many :permissions, :dependent => :destroy, :inverse_of => :role, :class_name => "Permission", :extend => RolesPermissions::DefaultSystemRegistrationPermission
   has_many :ldap_group_roles, :dependent => :destroy, :inverse_of => :role
   has_many :resource_types, :through => :permissions
 
@@ -34,10 +34,9 @@ class Role < ActiveRecord::Base
   #validates_associated :permissions
   accepts_nested_attributes_for :permissions, :allow_destroy => true
 
-
   def add_ldap_group(group_name)
     self.ldap_group_roles.create!(:ldap_group => group_name)
-    User.all.each { |user| user.set_ldap_roles }
+    User.visible.each { |user| user.set_ldap_roles }
     self.save
   end
 
@@ -47,7 +46,6 @@ class Role < ActiveRecord::Base
     ldap_group.destroy
     self.users.each { |user| user.set_ldap_roles }
   end
-
 
   def self.search_by_verb(key, operator, value)
     permissions = Permission.all(:conditions => "verbs.verb #{operator} '#{value_to_sql(operator, value)}'", :include => :verbs)
@@ -78,7 +76,7 @@ class Role < ActiveRecord::Base
     nil
   end
 
-  def self.make_readonly_role name, organization = nil
+  def self.make_readonly_role(name, organization = nil)
     #nil for organization implies all orgs
     role = Role.find_or_create_by_name(
             :name => name, :description => 'Read only role.')
@@ -91,19 +89,18 @@ class Role < ActiveRecord::Base
       perm_name =  "Read #{key.to_s.capitalize}"
       unless Permission.where(:role_id => role, :name => perm_name).count > 0
         Permission.create!(:role => role,
-                     :resource_type => ResourceType.find_or_create_by_name(key),
-                     :all_tags => true,
-                     :verbs => verbs.collect{|verb| Verb.find_or_create_by_verb(verb)},
-                     :name => perm_name,
-                     :organization=> organization,
-                     :description => "Read #{key.to_s.capitalize} permission")
+                           :resource_type => ResourceType.find_or_create_by_name(key),
+                           :all_tags => true,
+                           :verbs => verbs.collect{|verb| Verb.find_or_create_by_verb(verb)},
+                           :name => perm_name,
+                           :organization => organization,
+                           :description => "Read #{key.to_s.capitalize} permission")
       end
     end
 
     role
 
   end
-
 
   ADMINISTRATOR = 'Administrator'
 
@@ -116,19 +113,20 @@ class Role < ActiveRecord::Base
     superadmin_role = Role.find_or_create_by_name(
       :name => ADMINISTRATOR,
       :description => 'Super administrator with all access.')
-    raise "Unable to create super-admin role: #{format_errors superadmin_role}" if superadmin_role.nil? or superadmin_role.errors.size > 0
+    raise "Unable to create super-admin role: #{superadmin_role}" if superadmin_role.nil? || superadmin_role.errors.size > 0
+
+    #unlock role in case permission needs to be created
+    superadmin_role.update_attributes(:locked => false)
 
     superadmin_role_perm = Permission.find_or_create_by_name(
-      :name=> "super-admin-perm",
+      :name => "super-admin-perm",
       :description => 'Super Admin permission',
       :role => superadmin_role, :all_types => true)
-    raise "Unable to create super-admin role permission: #{format_errors superadmin_role_perm}" if superadmin_role_perm.nil? or superadmin_role_perm.errors.size > 0
+    raise "Unable to create super-admin role permission: #{superadmin_role_perm}" if superadmin_role_perm.nil? || superadmin_role_perm.errors.size > 0
 
     superadmin_role.update_attributes(:locked => true)
     superadmin_role
   end
-
-
 
   # returns the candlepin role (for RHSM)
   def self.candlepin_role
@@ -144,12 +142,12 @@ class Role < ActiveRecord::Base
   def i18n_name
     if locked
       case name
-        when "Administrator"
-          _("Administrator")
-        when "Read Everything"
-          _("Read Everything")
-        else
-          name
+      when "Administrator"
+        _("Administrator")
+      when "Read Everything"
+        _("Read Everything")
+      else
+        name
       end
     else
       name
@@ -159,12 +157,12 @@ class Role < ActiveRecord::Base
   def i18n_description
     if locked
       case description
-        when "Super administrator with all access."
-          _("Super administrator with all access.")
-        when "Read only role."
-          _("Read only role.")
-        else
-          description
+      when "Super administrator with all access."
+        _("Super administrator with all access.")
+      when "Read only role."
+        _("Read only role.")
+      else
+        description
       end
     else
       description
@@ -173,7 +171,7 @@ class Role < ActiveRecord::Base
 
   private
 
-  def super_admin_check user
+  def super_admin_check(user)
     if superadmin? && users.length == 1
       message = _("Cannot dissociate user '%{user}' from '%{role}' role. Need at least one user in the '%{role}' role.") % {:user => user.username, :role => name}
       errors[:base] << message

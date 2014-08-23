@@ -38,7 +38,7 @@ describe Api::V1::SystemsController do
   let(:user_with_create_permissions) { user_with_permissions { |u| u.can([:register_systems], :environments, @environment_1.id, @organization) } }
   let(:user_without_create_permissions) { user_with_permissions { |u| u.can(:read_systems, :organizations, nil, @organization) } }
   let(:user_with_update_permissions) { user_with_permissions { |u| u.can([:read_systems, :update_systems], :organizations, nil, @organization) } }
-  let(:user_without_update_permissions) { user_without_permissions }
+  let(:user_without_update_permissions) {  user_without_permissions }
   let(:user_with_destroy_permissions) { user_with_permissions { |u| u.can([:delete_systems], :organizations, nil, @organization) } }
   let(:user_without_destroy_permissions) { user_with_permissions { |u| u.can([:read_systems], :organizations, nil, @organization) } }
   let(:user_with_register_permissions) { user_with_permissions { |u| u.can([:register_systems], :organizations, nil, @organization) } }
@@ -51,6 +51,7 @@ describe Api::V1::SystemsController do
     disable_system_orchestration
 
     System.stub(:index).and_return(stub.as_null_object)
+    System.stub(:prepopulate!).and_return(true)
 
     Resources::Candlepin::Consumer.stub!(:create).and_return({ :uuid => uuid, :owner => { :key => uuid } })
     Resources::Candlepin::Consumer.stub!(:update).and_return(true)
@@ -58,7 +59,7 @@ describe Api::V1::SystemsController do
 
     if Katello.config.katello?
       Katello.pulp_server.extensions.consumer.stub!(:create).and_return({ :id => uuid })
-      Katello.pulp_server.extensions.consumer.stub!(:update).and_return(true)
+      Katello.pulp_server.extensions.consumer.stub!(:regenerate_applicability).and_return(TaskStatus.new)
     end
 
     System.any_instance.stub(:consumer_as_json).and_return({})
@@ -97,13 +98,6 @@ describe Api::V1::SystemsController do
       System.should_receive(:create!).with(hash_including(content_view: @cv, environment: @environment_1, cp_type: "system", name: "test"))
       post :create, :organization_id => @organization.name, :environment_id => @environment_1.id, :name => 'test', :cp_type => 'system',
         :content_view_id => @cv.id
-    end
-
-    it "should refresh ES index" do
-      System.index.should_receive(:refresh)
-      System.stub(:create!).and_return({})
-      post :create, :organization_id => @organization.name, :environment_id => @environment_1.id, :name => 'test',
-        :cp_type => 'system', :installedProducts => installed_products, :content_view_id => @cv.id
     end
 
     context "in organization with one environment" do
@@ -224,10 +218,6 @@ describe Api::V1::SystemsController do
           System.last.content_view_id.should eql(@activation_key_3.content_view.id)
         end
 
-        it "should refresh ES index" do
-          System.index.should_receive(:refresh)
-          post :activate, @system_data
-        end
       end
 
       context "and they are not in the system" do
@@ -283,7 +273,6 @@ describe Api::V1::SystemsController do
       JSON.parse(response.body).should == cp_response
     end
   end
-
 
   describe "list systems" do
 
@@ -376,7 +365,6 @@ describe Api::V1::SystemsController do
 
     context "update permissions" do
       let(:authorized_user) { user_with_update_permissions }
-      let(:unauthorized_user) { user_without_update_permissions }
       it_should_behave_like "protected action"
 
       it "successfully with update permissions" do
@@ -386,9 +374,22 @@ describe Api::V1::SystemsController do
       end
     end
 
+    context "update permissions ignored on users without permission" do
+      let(:authorized_user) { user_without_update_permissions }
+      let(:action) {:upload_package_profile}
+      it_should_behave_like "protected action"
+
+      it "Don't successfully with update permissions" do
+        login_user_api(user_without_update_permissions)
+        #unauthorized user, shouldn't talk to pulp and should return nothing
+        Katello.pulp_server.extensions.consumer.should_not_receive(:upload_profile)
+        put :upload_package_profile, :id => uuid, :_json => package_profile[:profile], :format => :json
+        response.body.should == {}.to_json
+      end
+    end
+
     context "update permissions" do
       let(:authorized_user) { user_with_register_permissions }
-      let(:unauthorized_user) { user_without_register_permissions }
       it_should_behave_like "protected action"
 
       it "successfully with register permissions" do
@@ -508,8 +509,10 @@ describe Api::V1::SystemsController do
       @sys.facts = {}
       System.any_instance.stub(:guest).and_return('false')
       System.any_instance.stub(:guests).and_return([])
+      System.any_instance.stub(:regenerate_applicability).and_return(TaskStatus.new)
       Resources::Candlepin::Consumer.should_receive(:update).once.with(uuid, {}, nil, nil, nil, nil, nil,
                                                             "#{@environment_2.id}-#{@sys.content_view.id}", nil, nil).and_return(true)
+      System.any_instance.should_receive(:update_pulp_consumer).and_return(true)
       put :update, :id => uuid, :environment_id => @environment_2.id
       response.body.should == @sys.to_json
       response.should be_success
@@ -531,14 +534,11 @@ describe Api::V1::SystemsController do
       @sys.capabilities = {:name => 'cores'}
       System.any_instance.stub(:guest).and_return('false')
       Resources::Candlepin::Consumer.should_receive(:update).once.with(uuid, {"sockets" => 0}, nil, nil, nil, nil, nil, anything, {:name => "cores"}, nil).and_return(true)
+      System.any_instance.should_receive(:update_pulp_consumer).and_return(true)
+
       put :update, :id => uuid, :environment_id => @environment_2.id
       response.body.should == @sys.to_json
       response.should be_success
-    end
-
-    it "should refresh ES index" do
-      System.index.should_receive(:refresh)
-      put :update, :id => uuid, :name => "foo_name"
     end
 
   end
@@ -607,7 +607,7 @@ describe Api::V1::SystemsController do
     end
 
     it "should retrieve Consumer's errata from pulp" do
-      Katello.pulp_server.extensions.consumer.should_receive(:applicable_errata).with(@system.uuid)
+      Katello.pulp_server.extensions.consumer.should_receive(:applicable_errata).with([@system.uuid]).and_return([])
       get :errata, :id => @system.uuid
     end
   end
@@ -690,39 +690,43 @@ describe Api::V1::SystemsController do
     let(:enabled_repos_empty) { { "repos" => [] } }
 
     it "should not bind any" do
-      Katello.pulp_server.extensions.consumer.should_receive(:retrieve_bindings).with(@system.uuid).once.and_return([{ 'repo_id' => 'a' }, { 'repo_id' => 'b' }])
+      Katello.pulp_server.extensions.consumer.should_receive(:retrieve_bindings).with(@system.uuid).once.and_return(
+          [{ 'repo_id' => 'a', 'type_id' =>'yum_distributor'  }, { 'repo_id' => 'b', 'type_id' => 'yum_distributor'}])
 
       put :enabled_repos, :id => @system.uuid, :enabled_repos => enabled_repos
       response.status.should == 200
     end
 
     it "should bind one" do
-      Katello.pulp_server.extensions.consumer.should_receive(:retrieve_bindings).with(@system.uuid).once.and_return([{ 'repo_id' => 'a' }])
-      Katello.pulp_server.extensions.consumer.should_receive(:bind_all).with(@system.uuid, 'b', false).once.and_return([])
+      Katello.pulp_server.extensions.consumer.should_receive(:retrieve_bindings).with(@system.uuid).once.and_return(
+          [{ 'repo_id' => 'a', 'type_id' => 'yum_distributor' }])
+      Katello.pulp_server.extensions.consumer.should_receive(:bind_all).with(@system.uuid, 'b', "yum_distributor", {:notify_agent=>false}).once.and_return([])
       put :enabled_repos, :id => @system.uuid, :enabled_repos => enabled_repos
       response.status.should == 200
     end
 
     it "should bind two" do
       Katello.pulp_server.extensions.consumer.should_receive(:retrieve_bindings).with(@system.uuid).once.and_return({})
-      Katello.pulp_server.extensions.consumer.should_receive(:bind_all).with(@system.uuid, 'a', false).once.once.and_return([])
-      Katello.pulp_server.extensions.consumer.should_receive(:bind_all).with(@system.uuid, 'b', false).once.once.and_return([])
+      Katello.pulp_server.extensions.consumer.should_receive(:bind_all).with(@system.uuid, 'a', "yum_distributor", {:notify_agent=>false}).once.once.and_return([])
+      Katello.pulp_server.extensions.consumer.should_receive(:bind_all).with(@system.uuid, 'b', "yum_distributor", {:notify_agent=>false}).once.once.and_return([])
       put :enabled_repos, :id => @system.uuid, :enabled_repos => enabled_repos
       response.status.should == 200
     end
 
     it "should bind one and unbind one" do
-      Katello.pulp_server.extensions.consumer.should_receive(:retrieve_bindings).with(@system.uuid).once.and_return([{ 'repo_id' => 'b' }, { 'repo_id' => 'c' }])
-      Katello.pulp_server.extensions.consumer.should_receive(:bind_all).with(@system.uuid, 'a', false).once.once.and_return([])
-      Katello.pulp_server.extensions.consumer.should_receive(:unbind_all).with(@system.uuid, 'c').once.and_return([])
+      Katello.pulp_server.extensions.consumer.should_receive(:retrieve_bindings).with(@system.uuid).once.and_return(
+          [{ 'repo_id' => 'b', 'type_id' =>'yum_distributor'  }, { 'repo_id' => 'c', 'type_id' =>'yum_distributor'  }])
+      Katello.pulp_server.extensions.consumer.should_receive(:bind_all).with(@system.uuid, 'a', "yum_distributor", {:notify_agent=>false}).once.once.and_return([])
+      Katello.pulp_server.extensions.consumer.should_receive(:unbind_all).with(@system.uuid, 'c', 'yum_distributor').once.and_return([])
       put :enabled_repos, :id => @system.uuid, :enabled_repos => enabled_repos
       response.status.should == 200
     end
 
     it "should unbind two" do
-      Katello.pulp_server.extensions.consumer.should_receive(:retrieve_bindings).with(@system.uuid).once.and_return([{ 'repo_id' => 'a' }, { 'repo_id' => 'b' }])
-      Katello.pulp_server.extensions.consumer.should_receive(:unbind_all).with(@system.uuid, 'a').once.once.and_return([])
-      Katello.pulp_server.extensions.consumer.should_receive(:unbind_all).with(@system.uuid, 'b').once.once.and_return([])
+      Katello.pulp_server.extensions.consumer.should_receive(:retrieve_bindings).with(@system.uuid).once.and_return(
+          [{ 'repo_id' => 'a', 'type_id' =>'yum_distributor'  }, { 'repo_id' => 'b', 'type_id' =>'yum_distributor'  }])
+      Katello.pulp_server.extensions.consumer.should_receive(:unbind_all).with(@system.uuid, 'a', 'yum_distributor').once.once.and_return([])
+      Katello.pulp_server.extensions.consumer.should_receive(:unbind_all).with(@system.uuid, 'b', 'yum_distributor').once.once.and_return([])
       put :enabled_repos, :id => @system.uuid, :enabled_repos => enabled_repos_empty
       response.status.should == 200
     end

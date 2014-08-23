@@ -72,13 +72,12 @@ class Api::V1::SyncPlansController < Api::V1::ApiController
     respond :resource => @plan
   end
 
-
   api :POST, "/organizations/:organization_id/sync_plans", "Create a sync plan"
   param_group :sync_plan
   def create
     sync_date = params[:sync_plan][:sync_date].to_time
 
-    if not sync_date.kind_of? Time
+    if !sync_date.kind_of?(Time)
       raise _("Date format is incorrect.")
     end
 
@@ -90,9 +89,9 @@ class Api::V1::SyncPlansController < Api::V1::ApiController
   param :id, :number, :desc => "sync plan numeric identifier", :required => true
   param_group :sync_plan
   def update
-    sync_date = params[:sync_plan][:sync_date].to_time
+    sync_date = params[:sync_plan].try(:[], :sync_date).try(:to_time)
 
-    if not sync_date.nil? and not sync_date.kind_of? Time
+    if !sync_date.nil? && !sync_date.kind_of?(Time)
       raise _("Date format is incorrect.")
     end
 

@@ -13,14 +13,13 @@
 class ErratumRule < FilterRule
 
   ERRATA_TYPES = {'bugfix' => _('Bug Fix'),
-                    'enhancement' => _('Enhancement'),
-                    'security' => _('Security')}.with_indifferent_access
-
+                  'enhancement' => _('Enhancement'),
+                  'security' => _('Security')}.with_indifferent_access
 
   validates_with Validators::ErratumRuleParamsValidator, :attributes => :parameters
 
   def params_format
-    {:units => [[:id]], :date_range => [:start, :end], :errata_type => {}, :severity => {}}
+    {:units => [[:id]], :date_range => [:start, :end], :errata_type => {}}
   end
 
   [:start, :end].each do |date_type|
@@ -40,12 +39,12 @@ class ErratumRule < FilterRule
     end
   end
 
-  def errata_types= etypes
-    unless etypes.blank?
+  def errata_types=(etypes)
+    if etypes.blank?
+      parameters.delete(:errata_type)
+    else
       parameters[:errata_type] ||= {}
       parameters[:errata_type] = etypes
-    else
-      parameters.delete(:errata_type)
     end
   end
 
@@ -55,7 +54,7 @@ class ErratumRule < FilterRule
 
   def generate_clauses(repo)
     rule_clauses = []
-    if parameters.has_key? :units
+    if parameters.key? :units
       # TODO: WIll add this when we have a proper analyzer for
       # errata_id..
       # ids = parameters[:units].collect do |unit|
@@ -70,7 +69,7 @@ class ErratumRule < FilterRule
 
       {"id" => {"$in" => ids}}  unless ids.empty?
     else
-      if parameters.has_key? :date_range
+      if parameters.key? :date_range
         dr = {}
         dr["$gte"] = start_date.as_json if start_date
         dr["$lte"] = end_date.as_json if end_date
@@ -81,18 +80,13 @@ class ErratumRule < FilterRule
         rule_clauses << {"type" => {"$in" => errata_types}}
       end
 
-      if parameters.has_key?(:severity) && !parameters[:severity].empty?
-          # {"severity": {"$in": ["low", "moderate", "important", "critical"]}
-        rule_clauses << {"severity" => {"$in" => parameters[:severity]}}
-      end
-
       case rule_clauses.size
-        when 0
-          return
-        when 1
-          return rule_clauses.first
-        else
-          return {'$and' => rule_clauses}
+      when 0
+        return
+      when 1
+        return rule_clauses.first
+      else
+        return {'$and' => rule_clauses}
       end
     end
   end

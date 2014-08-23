@@ -4,8 +4,8 @@
 require "optparse"
 require "fileutils"
 
-NAME="katello-debug"
-PAD="  "
+NAME = "katello-debug"
+PAD = "  "
 
 # Set up the options
 options = {}
@@ -14,16 +14,16 @@ optparse = OptionParser.new do|opts|
   opts.banner = "Usage: #{NAME} [options] command"
 
   options[:basedir] = '/tmp'
-  opts.on( '--dir [DIRECTORY]', 'Directory to place the tarball. Defaults to /tmp' ) do |opt|
+  opts.on('--dir [DIRECTORY]', 'Directory to place the tarball. Defaults to /tmp') do |opt|
     options[:basedir] = opt
   end
 
   options[:archive] = true
-  opts.on( '--notar', 'Do not generate a tar file, just copy the files to target dir' ) do
+  opts.on('--notar', 'Do not generate a tar file, just copy the files to target dir') do
     options[:archive] = false
   end
 
-  opts.on( '--help', 'Display help and exit' ) do
+  opts.on('--help', 'Display help and exit') do
     puts opts
     exit
   end
@@ -41,7 +41,7 @@ end
 
 # Get the deployment type
 deployment = File.read("/etc/katello/client.conf").split("\n").grep(/^path.+/).first.split("/").last
-if (deployment == "headpin" || deployment == "sam")
+if deployment == "headpin" || deployment == "sam"
   deployment = "headpin"
 else
   deployment = "katello"
@@ -56,6 +56,7 @@ MISC = [
 ]
 
 CANDLEPIN = [
+"/var/log/candlepin",
 "/var/log/tomcat6",
 "/etc/candlepin/candlepin.conf",
 "/etc/tomcat6/server.xml"
@@ -98,6 +99,12 @@ FOREMAN = [
 "/etc/sysconfig/foreman"
 ]
 
+SIGNO = [
+"/etc/signo/thin.yml",
+"/etc/signo/sso.yml",
+"/var/log/signo"
+]
+
 # Exclude these files from the debug
 EXCLUDES = [
 "/etc/tomcat6/keystore",
@@ -113,7 +120,6 @@ EXCLUDES = [
 "/etc/katello/oauth_token-file"
 ]
 
-
 # sources list for katello or headpin deployment
 sources = []
 sources += MISC
@@ -121,9 +127,9 @@ sources += KATELLO_HEADPIN
 sources += ELASTIC_SEARCH
 sources += CANDLEPIN
 sources += PULP if deployment == 'katello'
+sources += SIGNO if deployment == 'katello'
 sources += FOREMAN if use_foreman
 sources += THUMBSLUG if deployment == 'headpin'
-
 
 # Collect the files
 timename =  "katello-debug-#{Time.now.strftime("%Y%m%d%H%M%S")}"
@@ -137,7 +143,7 @@ end
 FileUtils.mkdir_p(target_dir)
 puts("created directory #{target_dir}")
 
-missing_files = Array.new
+missing_files = []
 sources.each do |source|
   if File.exists?(source)
     complete_target = File.join(target_dir, File.dirname(source))
@@ -151,7 +157,7 @@ sources.each do |source|
 end
 
 # Store missing filenames to archive if there are any
-if not missing_files.empty?
+if missing_files.any?
   missing_target = File.join(target_dir, 'missing_files')
   File.open(missing_target, 'w') do |missing|
     missing.puts missing_files.join("\n")
@@ -172,7 +178,7 @@ if deployment == 'katello'
   `sed -i -e 's/^\\(default_password:\\)\\(.*\\)$/\\1 **********************/' #{File.join(target_dir, '/etc/pulp/server.conf')}`
   `sed -i -e 's/^\\(oauth_secret:\\)\\(.*\\)$/\\1 **********************/' #{File.join(target_dir, '/etc/pulp/server.conf')}`
   if use_foreman
-  `sed -i -e 's/^\\(.*password\\).*$/\\1: **********************/' #{File.join(target_dir, '/etc/foreman/database.yml')}`
+    `sed -i -e 's/^\\(.*password\\).*$/\\1: **********************/' #{File.join(target_dir, '/etc/foreman/database.yml')}`
   end
 end
 `sed -i -e 's/^\\(.*secret\\).*$/\\1 = **********************/' #{File.join(target_dir, '/etc/candlepin/candlepin.conf')}`
@@ -204,20 +210,20 @@ end
 # Also show firewall settings
 `iptables -L > #{File.join(target_dir, "iptables")}`
 
-if (options[:archive])
-    # Tar the output and log it
-    tarfile = target_dir + ".tar.gz"
-    pwd = Dir.pwd()
-    Dir.chdir(options[:basedir])
-    `tar -czf #{tarfile} #{timename}`
-    Dir.chdir(pwd)
+if options[:archive]
+  # Tar the output and log it
+  tarfile = target_dir + ".tar.gz"
+  pwd = Dir.pwd
+  Dir.chdir(options[:basedir])
+  `tar -czf #{tarfile} #{timename}`
+  Dir.chdir(pwd)
 
-    puts "A debug file has been created at #{tarfile}."
-    puts "Make sure it contains no security sensitive data before making it public!"
+  puts "A debug file has been created at #{tarfile}."
+  puts "Make sure it contains no security sensitive data before making it public!"
 
-    # Clean up
-    FileUtils.rm_r(target_dir)
+  # Clean up
+  FileUtils.rm_r(target_dir)
 else
-    puts "Debug files have been created at #{target_dir}"
-    puts "Make sure it contains no security sensitive data before making it public!"
+  puts "Debug files have been created at #{target_dir}"
+  puts "Make sure it contains no security sensitive data before making it public!"
 end

@@ -10,6 +10,7 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
+# rubocop:disable SymbolName
 class Api::V1::SystemsController < Api::V1::ApiController
   respond_to :json
 
@@ -25,16 +26,16 @@ class Api::V1::SystemsController < Api::V1::ApiController
                                         :add_system_groups, :remove_system_groups, :refresh_subscriptions, :checkin,
                                         :subscription_status]
   before_filter :find_content_view, :only => [:create, :update]
-  before_filter :authorize, :except => :activate
 
-  after_filter :refresh_index, :only => [:create, :activate, :update]
-
-  skip_before_filter :require_user, :only => [:activate]
+  before_filter :authorize, :except => [:activate, :upload_package_profile]
+  skip_before_filter :require_user, :only => [:activate, :upload_package_profile]
 
   def organization_id_keys
     [:organization_id, :owner]
   end
 
+  # TODO: break up this method
+  # rubocop:disable MethodLength
   def rules
     index_systems          = lambda { System.any_readable?(@organization) }
     register_system        = lambda { System.registerable?(@environment, @organization, @content_view) }
@@ -43,13 +44,13 @@ class Api::V1::SystemsController < Api::V1::ApiController
       subscribable = @content_view ? @content_view.subscribable? : true
       subscribable && (@system.editable? || User.consumer?)
     end
-    read_system            = lambda { @system.readable? or User.consumer? }
-    delete_system          = lambda { @system.deletable? or User.consumer? }
+    read_system            = lambda { @system.readable? || User.consumer? }
+    delete_system          = lambda { @system.deletable? || User.consumer? }
 
     # After a system registers, it immediately uploads its packages. Although newer subscription-managers send
     # certificate (User.consumer? == true), some do not. In this case, confirm that the user has permission to
     # register systems in the system's organization and environment.
-   upload_system_packages = lambda { @system.editable? or System.registerable?(@system.environment, @system.organization) or User.consumer? }
+   upload_system_packages = lambda { @system.editable? || System.registerable?(@system.environment, @system.organization) || User.consumer? }
 
     {
         :new                              => register_system,
@@ -112,9 +113,9 @@ Takes a hash representing the mapping: host system having geust systems, e.g.:
 
 See virt-who tool for more details.
 DESC
-  # TODO refactor render
+  # TODO: refactor render
   def hypervisors_update
-    cp_response, hypervisors = System.register_hypervisors(@environment, @content_view, params.except(:controller, :action))
+    cp_response, _ = System.register_hypervisors(@environment, @content_view, params.except(:controller, :action))
     render :json => cp_response
   end
 
@@ -171,11 +172,14 @@ Schedules the consumer identity certificate regeneration
     unless User.consumer?
       slice_attrs =  slice_attrs + [:environment_id, :content_view_id]
       attrs[:content_view_id] = nil if attrs[:content_view_id] == false
+      attrs[:content_view_id] = params[:content_view][:id] if params[:content_view]
+      attrs[:environment_id] = params[:environment][:id] if params[:environment]
     end
 
-    attrs[:installedProducts] = [] if attrs.has_key?(:installedProducts) && attrs[:installedProducts].nil?
+    attrs[:installedProducts] = [] if attrs.key?(:installedProducts) && attrs[:installedProducts].nil?
 
     @system.update_attributes!(attrs.slice(*slice_attrs))
+
     respond
   end
 
@@ -193,25 +197,27 @@ Schedules the consumer identity certificate regeneration
   param :name, String, :desc => "Filter systems by name"
   param :pool_id, String, :desc => "Filter systems by subscribed pool"
   param :search, String, :desc => "Filter systems by advanced search query"
+  param :uuid, String, :desc => "Filter systems by uuid"
   def index
     query_string = params[:name] ? "name:#{params[:name]}" : params[:search]
     filters      = []
 
     if params[:env_id]
       find_environment
-      filters << { :environment_id => [params[:env_id]] }
+      filters << {:terms => {:environment_id => [params[:env_id]] }}
     else
       filters << readable_filters
     end
 
-    filters << { :uuid => System.all_by_pool_uuid(params['pool_id']) } if params['pool_id']
+    filters << {:terms => {:uuid => System.all_by_pool_uuid(params['pool_id']) }} if params['pool_id']
+    filters << {:terms => {:uuid => [params['uuid']] }} if params['uuid']
 
     options = {
-        :filter        => filters,
+        :filters       => filters,
         :load_records? => true
     }
     options[:sort_by] = params[:sort_by] if params[:sort_by]
-    options[:sort_order]= params[:sort_order] if params[:sort_order]
+    options[:sort_order] = params[:sort_order] if params[:sort_order]
 
     if params[:paged]
       options[:page_size] = params[:page_size] || current_user.page_size
@@ -219,10 +225,11 @@ Schedules the consumer identity certificate regeneration
 
     items = Glue::ElasticSearch::Items.new(System)
     systems, total_count = items.retrieve(query_string, params[:offset], options)
+    System.prepopulate!(systems)
 
     if params[:paged]
       systems = {
-        :records  => systems,
+        :results  => systems,
         :subtotal => total_count,
         :total    => items.total_items
       }
@@ -255,9 +262,9 @@ Schedules the consumer identity certificate regeneration
   api :GET, "/systems/:id/pools", "List pools a system is subscribed to"
   param :id, String, :desc => "UUID of the system", :required => true
   def pools
-    match_system    = params.has_key?(:match_system) ? params[:match_system].to_bool : false
-    match_installed = params.has_key?(:match_installed) ? params[:match_installed].to_bool : false
-    no_overlap      = params.has_key?(:no_overlap) ? params[:no_overlap].to_bool : false
+    match_system    = params.key?(:match_system) ? params[:match_system].to_bool : false
+    match_installed = params.key?(:match_installed) ? params[:match_installed].to_bool : false
+    no_overlap      = params.key?(:no_overlap) ? params[:no_overlap].to_bool : false
 
     cp_pools = @system.filtered_pools(match_system, match_installed, no_overlap)
 
@@ -289,16 +296,30 @@ A hint for choosing the right value for the releaseVer param
   api :PUT, "/consumers/:id/profile", "Update installed packages"
   param :id, String, :desc => "UUID of the system", :required => true
   def upload_package_profile
-    if Katello.config.katello?
-      raise HttpErrors::BadRequest, _("No package profile received for %s") % @system.name unless params.has_key?(:_json)
-      @system.upload_package_profile(params[:_json])
+    #BZ 1020550
+    # Subscription manager will not send the client cert and will exit with non-zero exit code
+    # if we return a 401, so manually try to auth, and return nothing if auth fails
+    allowed = false
+    catch(:warden) do
+      require_user
+      User.current = current_user
+      allowed = rules[:upload_package_profile].call
     end
-    respond_for_update
+
+    if allowed && Katello.config.katello?
+      raise HttpErrors::BadRequest, _("No package profile received for %s") % @system.name unless params.key?(:_json)
+      @system.upload_package_profile(params[:_json])
+      respond_for_update
+    else
+      Rails.logger.warn(_("System %s not allowed to upload package profile.") % params[:id])
+      respond_for_update :resource => {}
+    end
   end
 
+  # TODO: break this mehtod up
   api :GET, "/environments/:environment_id/systems/report", "Get system reports for the environment"
   api :GET, "/organizations/:organization_id/systems/report", "Get system reports for the organization"
-  def report
+  def report # rubocop:disable MethodLength
     data = @environment.nil? ? @organization.systems.readable(@organization) : @environment.systems.readable(@organization)
 
     data = data.flatten.map do |r|
@@ -308,28 +329,21 @@ A hint for choosing the right value for the releaseVer param
       )
     end.flatten!
 
+    transforms = lambda do |r|
+      r.organization    = r.organization.name
+      r.environment     = r.environment.name
+      r.created_at      = r.created_at.to_s
+      r.updated_at      = r.updated_at.to_s
+      r.compliant_until = r.compliant_until.to_s
+      r.custom_info     = r.custom_info.collect { |info| info.to_s }.join(", ")
+    end
+
     system_report = Ruport::Data::Table.new(
         :data         => data,
-        :column_names => ["name",
-                          "uuid",
-                          "location",
-                          "organization",
-                          "environment",
-                          "created_at",
-                          "updated_at",
-                          "compliance_color",
-                          "compliant_until",
-                          "custom_info"
-        ],
+        :column_names => %w(name uuid location organization environment created_at updated_at compliance_color
+                            compliant_until custom_info),
         :record_class => Ruport::Data::Record,
-        :transforms   => lambda { |r|
-          r.organization    = r.organization.name
-          r.environment     = r.environment.name
-          r.created_at      = r.created_at.to_s
-          r.updated_at      = r.updated_at.to_s
-          r.compliant_until = r.compliant_until.to_s
-          r.custom_info     = r.custom_info.collect { |info| info.to_s }.join(", ")
-        }
+        :transforms   => transforms
     )
 
     pdf_options = { :pdf_format   => {
@@ -340,7 +354,7 @@ A hint for choosing the right value for the releaseVer param
                     :table_format => {
                         :width         => 585,
                         :cell_style    => { :size => 8 },
-                        :row_colors    => ["FFFFFF", "F0F0F0"],
+                        :row_colors    => %w(FFFFFF F0F0F0),
                         :column_widths => {
                             0 => 100,
                             1 => 100,
@@ -359,7 +373,10 @@ A hint for choosing the right value for the releaseVer param
     system_report.rename_column("custom_info", "custom info")
 
     respond_to do |format|
-      format.html { render :text => system_report.as(:html), :type => :html and return }
+      format.html do
+        render :text => system_report.as(:html), :type => :html
+        return
+      end
       format.text { render :text => system_report.as(:text, :ignore_table_width => true) }
       format.csv { render :text => system_report.as(:csv) }
       format.pdf do
@@ -376,20 +393,12 @@ A hint for choosing the right value for the releaseVer param
   param :system_name, String, :desc => "Name of the system"
   param :system_uuid, String, :desc => "UUID of the system"
   def tasks
-    query = TaskStatus.joins(:system).where(:"task_statuses.organization_id" => @organization.id)
-    if @environment
-      query = query.where(:"systems.environment_id" => @environment.id)
-    end
     if params[:system_name]
-      query = query.where(:"systems.name" => params[:system_name])
+      @tasks = System.where(:name => params[:system_name]).first.tasks
     elsif params[:system_uuid]
-      query = query.where(:"systems.uuid" => params[:system_uuid])
+      @tasks = System.where(:uuid => params[:system_uuid]).first.tasks
     end
 
-    task_ids = query.select('task_statuses.id')
-    TaskStatus.refresh(task_ids)
-
-    @tasks = TaskStatus.where(:id => task_ids)
     respond_for_index :collection => @tasks
   end
 
@@ -400,7 +409,7 @@ This information is then used for computing the errata available for the system.
   DESC
   param :enabled_repos, Hash, :required => true do
     param :repos, Array, :required => true do
-      params :baseurl, Array, :description=> "List of enabled repo urls for the repo (Only first is used.)", :required => false
+      params :baseurl, Array, :description => "List of enabled repo urls for the repo (Only first is used.)", :required => false
     end
   end
   def enabled_repos
@@ -427,13 +436,13 @@ This information is then used for computing the errata available for the system.
     end
 
     pulp_ids = repos.collect{|r| r.pulp_id}
-    processed_ids, error_ids = @system.enable_repos(pulp_ids)
+    processed_ids, error_ids = @system.enable_yum_repos(pulp_ids)
 
     result                  = {}
     result[:processed_ids]  = processed_ids
     result[:error_ids]      = error_ids
     result[:unknown_labels] = unknown_paths
-    if error_ids.count > 0 or unknown_paths.count > 0
+    if error_ids.present? || unknown_paths.present?
       result[:result] = "error"
     else
       result[:result] = "ok"
@@ -474,8 +483,11 @@ This information is then used for computing the errata available for the system.
   protected
 
   def find_only_environment
-    if !@environment && @organization && !params.has_key?(:environment_id)
-      raise HttpErrors::BadRequest, _("Organization %{org} has the '%{env}' environment only. Please create an environment for system registration.") % { :org => @organization.name, :env => "Library" } if @organization.environments.empty?
+    if !@environment && @organization && !params.key?(:environment_id)
+      if @organization.environments.empty?
+        raise HttpErrors::BadRequest, _("Organization %{org} has the '%{env}' environment only. Please create an environment for system registration.") %
+          { :org => @organization.name, :env => "Library" }
+      end
 
       # Some subscription-managers will call /users/$user/owners to retrieve the orgs that a user belongs to.
       # Then, If there is just one org, that will be passed to the POST /api/consumers as the owner. To handle
@@ -489,7 +501,9 @@ This information is then used for computing the errata available for the system.
           raise HttpErrors::BadRequest, _("Organization %s has more than one environment. Please specify target environment for system registration.") % @organization.name
         end
       else
-        @environment = @organization.environments.first and return
+        if @environment = @organization.environments.first
+          return
+        end
       end
     end
   end
@@ -510,7 +524,7 @@ This information is then used for computing the errata available for the system.
       cve = ContentViewEnvironment.where(key => value).first
       raise HttpErrors::NotFound, _("Couldn't find environment '%s'") % value unless cve
       if @organization.nil? || !@organization.readable?
-        unless cve.content_view.readable?
+        unless cve.content_view.readable? || User.consumer?
           raise Errors::SecurityViolation, _("Could not access content view in environment '%s'") % value
         end
       end
@@ -523,7 +537,7 @@ This information is then used for computing the errata available for the system.
   end
 
   def find_environment
-    return unless params.has_key?(:environment_id)
+    return unless params.key?(:environment_id)
 
     @environment = KTEnvironment.find(params[:environment_id])
     raise HttpErrors::NotFound, _("Couldn't find environment '%s'") % params[:environment_id] if @environment.nil?
@@ -535,10 +549,10 @@ This information is then used for computing the errata available for the system.
     # There are some scenarios (primarily create) where a system may be
     # created using the content_view_environment.cp_id which is the
     # equivalent of "environment_id"-"content_view_id".
-    return unless params.has_key?(:environment_id)
+    return unless params.key?(:environment_id)
 
     if params[:environment_id].is_a? String
-      if !params.has_key?(:content_view_id)
+      if !params.key?(:content_view_id)
         cve = get_content_view_environment_by_cp_id(params[:environment_id])
         @environment = cve.environment
         @organization = @environment.organization
@@ -558,7 +572,7 @@ This information is then used for computing the errata available for the system.
   def verify_presence_of_organization_or_environment
     # This has to grab the first default org associated with this user AND
     # the environment that goes with him.
-    return if params.has_key?(:organization_id) or params.has_key?(:owner) or params.has_key?(:environment_id)
+    return if params.key?(:organization_id) || params.key?(:owner) || params.key?(:environment_id)
 
     #At this point we know that they didn't supply an org or environment, so we can look up the default
     @environment = current_user.default_environment
@@ -596,11 +610,11 @@ This information is then used for computing the errata available for the system.
   end
 
   def readable_filters
-    { :environment_id => KTEnvironment.systems_readable(@organization).collect { |item| item.id } }
+    {:terms => {:environment_id => KTEnvironment.systems_readable(@organization).collect { |item| item.id } }}
   end
 
   def find_content_view
-    if(content_view_id = (params[:content_view_id] || params[:system].try(:[], :content_view_id)))
+    if (content_view_id = (params[:content_view_id] || params[:system].try(:[], :content_view_id)))
       setup_content_view(content_view_id)
     end
   end

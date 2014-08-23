@@ -10,8 +10,6 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-
-
 module Authorization::Organization
   extend ActiveSupport::Concern
 
@@ -29,34 +27,43 @@ module Authorization::Organization
       Organization.readable.count > 0
     end
 
-    def list_verbs global = false
+    def all_editable?
+      User.allowed_to?([:update, :create], :organizations, nil, nil)
+    end
+
+    # TODO: break up method
+    # rubocop:disable MethodLength
+    def list_verbs(global = false)
       if Katello.config.katello?
         org_verbs = {
           :update => _("Modify Organization and Administer Environments"),
           :read => _("Read Organization"),
           :read_systems => _("Read Systems"),
-          :register_systems =>_("Register Systems"),
+          :manage_nodes => _("Manage Nodes"),
+          :register_systems => _("Register Systems"),
           :update_systems => _("Modify Systems"),
           :delete_systems => _("Delete Systems"),
           :read_distributors => _("Read Distributors"),
-          :register_distributors =>_("Register Distributors"),
+          :register_distributors => _("Register Distributors"),
           :update_distributors => _("Modify Distributors"),
           :delete_distributors => _("Delete Distributors"),
           :sync => _("Sync Products"),
-          :gpg => _("Administer GPG Keys")
+          :gpg => _("Administer GPG Keys"),
+          :redhat_products => _("Administer Red Hat Products")
        }
       else
         org_verbs = {
           :update => _("Modify Organization and Administer Environments"),
           :read => _("Read Organization"),
           :read_systems => _("Read Systems"),
-          :register_systems =>_("Register Systems"),
+          :register_systems => _("Register Systems"),
           :update_systems => _("Modify Systems"),
           :delete_systems => _("Delete Systems"),
           :read_distributors => _("Read Distributors"),
-          :register_distributors =>_("Register Distributors"),
+          :register_distributors => _("Register Distributors"),
           :update_distributors => _("Modify Distributors"),
           :delete_distributors => _("Delete Distributors"),
+          :redhat_products => _("Administer Red Hat Products")
        }
       end
       org_verbs.merge!({
@@ -71,23 +78,22 @@ module Authorization::Organization
     end
 
     def no_tag_verbs
-      [:create]
+      [:create, :manage_nodes]
     end
 
-    def authorized_items verbs, resource = :organizations
+    def authorized_items(verbs, resource = :organizations)
       if !User.allowed_all_tags?(verbs, resource)
         where("organizations.id in (#{User.allowed_tags_sql(verbs, resource)})")
       end
     end
   end
 
-
   included do
 
     scope :readable, lambda {authorized_items(READ_PERM_VERBS)}
 
     def editable?
-        User.allowed_to?([:update, :create], :organizations, nil, self)
+      User.allowed_to?([:update, :create], :organizations, nil, self)
     end
 
     def deletable?
@@ -95,7 +101,7 @@ module Authorization::Organization
     end
 
     def readable?
-      User.allowed_to?(READ_PERM_VERBS, :organizations,nil, self)
+      User.allowed_to?(READ_PERM_VERBS, :organizations, nil, self)
     end
 
     def environments_manageable?
@@ -140,6 +146,10 @@ module Authorization::Organization
 
     def syncable?
       ::User.allowed_to?(SYNC_PERM_VERBS, :organizations, nil, self)
+    end
+
+    def redhat_manageable?
+      ::User.allowed_to?([:redhat_products], :organizations, nil, self)
     end
   end
 

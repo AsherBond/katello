@@ -10,53 +10,55 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-
-
 class ContentView < ActiveRecord::Base
   include Ext::LabelFromName
   include Authorization::ContentView
   include Glue::ElasticSearch::ContentView if Katello.config.use_elasticsearch
 
+  include Glue::Event
+
+  def create_event
+    Katello::Actions::ContentViewCreate
+  end
+
   before_destroy :confirm_not_promoted # RAILS3458: this needs to come before associations
 
-  belongs_to :content_view_definition
-  alias :definition :content_view_definition
+  belongs_to :content_view_definition, :inverse_of => :content_views
+  alias_method :definition, :content_view_definition
   belongs_to :organization, :inverse_of => :content_views
 
   has_many :content_view_environments, :dependent => :destroy
 
   has_many :content_view_versions, :dependent => :destroy
-  alias :versions :content_view_versions
-
-  belongs_to :environment_default, :class_name => "KTEnvironment", :inverse_of => :default_content_view,
-             :foreign_key => :environment_default_id # TODO this relation seems to be broken
+  alias_method :versions, :content_view_versions
 
   has_many :component_content_views, :dependent => :destroy
+  has_many :distributors, :dependent => :restrict
   has_many :composite_content_view_definitions,
     :through => :component_content_views, :source => "content_view_definition"
 
   has_many :changeset_content_views, :dependent => :destroy
   has_many :changesets, :through => :changeset_content_views
-  has_many :activation_keys
+  has_many :activation_keys, :dependent => :restrict
+  has_many :systems, :dependent => :restrict
 
   validates :label, :uniqueness => {:scope => :organization_id},
-    :presence => true
+                    :presence => true
   validates :name, :presence => true, :uniqueness => {:scope => :organization_id}
   validates :organization_id, :presence => true
 
   validates_with Validators::KatelloNameFormatValidator, :attributes => :name
   validates_with Validators::KatelloLabelFormatValidator, :attributes => :label
 
-
-  scope :default, where(:default=>true)
-  scope :non_default, where(:default=>false)
+  scope :default, where(:default => true)
+  scope :non_default, where(:default => false)
 
   def self.in_environment(env)
     joins(:content_view_versions => :content_view_version_environments).
       where("content_view_version_environments.environment_id = ?", env.id)
   end
 
-  def self.composite(composite=true)
+  def self.composite(composite = true)
     joins(:content_view_definition).where('content_view_definition_bases.composite = ?', composite)
   end
 
@@ -72,8 +74,9 @@ class ContentView < ActiveRecord::Base
       content_view_definition.component_content_views.select("distinct content_views.*").
               joins(:content_view_versions => :content_view_version_environments).
               where(["content_view_version_environments.content_view_version_id "\
-                 "NOT IN (SELECT content_view_version_id FROM "\
-                 "content_view_version_environments WHERE environment_id = ?)", env])
+                     "NOT IN (SELECT content_view_version_id FROM "\
+                     "content_view_version_environments WHERE environment_id = ?)",
+                     env])
     end
   end
 
@@ -130,7 +133,7 @@ class ContentView < ActiveRecord::Base
   end
 
   def version(env)
-    self.versions.in_environment(env).order('content_view_versions.id ASC').scoped(:readonly=>false).last
+    self.versions.in_environment(env).order('content_view_versions.id ASC').scoped(:readonly => false).last
   end
 
   def version_environment(env)
@@ -146,6 +149,10 @@ class ContentView < ActiveRecord::Base
     else
       []
     end
+  end
+
+  def library_repos
+    Repository.where(:id => library_repo_ids)
   end
 
   def library_repo_ids
@@ -172,13 +179,13 @@ class ContentView < ActiveRecord::Base
 
   #list all products associated to this view across all versions
   def all_version_products
-    Product.joins(:repositories).where('repositories.id'=>self.all_version_repos).uniq
+    Product.joins(:repositories).where('repositories.id' => self.all_version_repos).uniq
   end
 
   #get the library instances of all repos within this view
   def all_version_library_instances
-    all_repos = all_version_repos.where(:library_instance_id=>nil).pluck('repositories.id') + all_version_repos.pluck(:library_instance_id)
-    Repository.where(:id=>all_repos)
+    all_repos = all_version_repos.where(:library_instance_id => nil).pluck('repositories.id') + all_version_repos.pluck(:library_instance_id)
+    Repository.where(:id => all_repos)
   end
 
   def get_repo_clone(env, repo)
@@ -211,7 +218,7 @@ class ContentView < ActiveRecord::Base
 
     repos_to_promote = get_repos_to_promote(from_env, to_env)
     if replacing_version
-      PulpTaskStatus::wait_for_tasks prepare_repos_for_promotion(replacing_version.repos(to_env), repos_to_promote)
+      PulpTaskStatus.wait_for_tasks prepare_repos_for_promotion(replacing_version.repos(to_env), repos_to_promote)
     end
     tasks = promote_repos(promote_version, to_env, repos_to_promote)
 
@@ -249,7 +256,13 @@ class ContentView < ActiveRecord::Base
   end
 
   # Refresh the content view, creating a new version in the library.  The new version will be returned.
+  # TODO: break up method
+  # rubocop:disable MethodLength
   def refresh_view(options = { })
+    if !content_view_definition.ready_to_publish?
+      fail _("Cannot refresh view. Check definition for repository conflicts.")
+    end
+    content_view_definition.check_puppet_names!
     options = { :async => true, :notify => false }.merge options
 
     # retrieve the 'next' version id to use
@@ -266,8 +279,9 @@ class ContentView < ActiveRecord::Base
     version.save!
 
     #move all the existing repos over to the new version
-    library_version.repos(organization.library).each do |repo|
+    library_version.repos(organization.library).scoped(:readonly => false).each do |repo|
       repo.content_view_version = version
+      repo.save!
     end
     library_version.reload
     library_version.delete(self.organization.library)
@@ -300,7 +314,7 @@ class ContentView < ActiveRecord::Base
 
   def update_cp_content(env)
     # retrieve the environment and then update cp content
-    view_env = self.content_view_environments.where(:environment_id=>env.id).first
+    view_env = self.content_view_environments.where(:environment_id => env.id).first
     view_env.update_cp_content if view_env
   end
 
@@ -308,13 +322,13 @@ class ContentView < ActiveRecord::Base
   # a version of the view is promoted to an environment.  It is necessary for
   # candlepin to become aware that the view is available for consumers.
   def add_environment(env)
-    if self.content_view_environments.where(:environment_id => env.id ).empty?
+    if self.content_view_environments.where(:environment_id => env.id).empty?
       ContentViewEnvironment.create!(:name => env.name,
                                      :label => self.generate_cp_environment_label(env),
                                      :cp_id => self.generate_cp_environment_id(env),
                                      :environment_id => env.id,
                                      :content_view => self)
-      end
+    end
   end
 
   # Unassociate an environment from this content view. This can occur whenever
@@ -324,15 +338,8 @@ class ContentView < ActiveRecord::Base
     # Do not remove the content view environment, if there is still a view
     # version in the environment.
     if self.versions.in_environment(env).blank?
-      view_env = self.content_view_environments.where(:environment_id=>env.id)
+      view_env = self.content_view_environments.where(:environment_id => env.id)
       view_env.first.destroy unless view_env.blank?
-    end
-  end
-
-  def index_repositories(env)
-    self.repos(env).each do |repo|
-      repo.index_packages
-      repo.index_errata
     end
   end
 
@@ -385,7 +392,7 @@ class ContentView < ActiveRecord::Base
 
   def prepare_repos_for_promotion(repos_to_replace, repos_to_promote)
     tasks = repos_to_replace.inject([]) do |result, repo|
-      if repos_to_promote.has_key?(repo.library_instance_id)
+      if repos_to_promote.key?(repo.library_instance_id)
         # a version of this repo is being promoted, so clear it and later
         # we'll regenerate the content... this is more efficient than
         # destroying the repo and recreating it...

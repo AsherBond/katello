@@ -20,7 +20,7 @@ class Api::V1::ProvidersController < Api::V1::ApiController
   end
 
   before_filter :find_organization, :only => [:index, :create]
-  before_filter :find_provider, :only => [:show, :update, :destroy, :products, :import_products, :discovery,
+  before_filter :find_provider, :only => [:show, :update, :destroy, :products, :import_products,
                                           :refresh_products, :import_manifest, :delete_manifest, :product_create,
                                           :import_manifest_progress, :refresh_manifest]
   before_filter :authorize
@@ -38,7 +38,6 @@ class Api::V1::ProvidersController < Api::V1::ApiController
         :create                   => create_test,
         :update                   => edit_test,
         :destroy                  => delete_test,
-        :discovery                => edit_test,
         :products                 => read_test,
         :import_manifest          => edit_test,
         :import_manifest_progress => read_test,
@@ -106,7 +105,7 @@ class Api::V1::ProvidersController < Api::V1::ApiController
   def destroy
     #
     # TODO: these should really be done as validations, but the orchestration engine currently converts them into OrchestrationExceptions
-    #
+    # rubocop:disable LineLength
     raise HttpErrors::BadRequest, _("Provider cannot be deleted since one of its products or repositories has already been promoted. Using a changeset, please delete the repository from existing environments before deleting it.") if @provider.repositories.any? { |r| r.promoted? }
 
     @provider.destroy
@@ -120,18 +119,12 @@ class Api::V1::ProvidersController < Api::V1::ApiController
 
   api :GET, "/providers/:id/products", "List of provider's products"
   param :id, :number, :desc => "Provider numeric identifier", :required => true
+  param :include_marketing, :bool, :desc => "Include marketing products in results"
   def products
-    respond_for_index :collection => @provider.products.all_readable(@provider.organization).select("products.*, providers.name AS provider_name").joins(:provider)
-  end
+    products = params[:include_marketing] ? @provider.products : @provider.products.engineering
 
-  api :POST, "/providers/:id/discovery", "Discover repository urls with metadata and find candidate repos. Supports http, https and file based urls. Async task, returns the delayed job."
-  param :url, String, :required => true, :desc => "remote url to perform discovery"
-  def discovery
-    @provider.discovery_url = params[:url]
-    @provider.save
-    @provider.discover_repos
-    task = @provider.discovery_task
-    respond_for_async :resource => task
+    respond_for_index :collection => products.all_readable(@provider.organization).
+      select("products.*, providers.name AS provider_name").joins(:provider)
   end
 
   api :POST, "/providers/:id/import_manifest", "Import manifest for Red Hat provider"
@@ -151,7 +144,8 @@ class Api::V1::ProvidersController < Api::V1::ApiController
     end
 
     @provider.import_manifest File.expand_path(temp_file.path), :force => params[:force],
-                              :async                                   => true, :notify => false
+                                                                :async => true,
+                                                                :notify => false
     respond_for_async :resource => @provider.manifest_task
   end
 

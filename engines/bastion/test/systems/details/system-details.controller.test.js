@@ -11,41 +11,93 @@
  * http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
  **/
 
-describe('Controller: SystemDetailsInfoController', function() {
-    var $scope, $controller, System, mockSystem;
+describe('Controller: SystemDetailsController', function() {
+    var $scope,
+        $controller,
+        System,
+        Organization,
+        mockSystem;
 
-    // load the systems module and template
-    beforeEach(module('Bastion.systems', 'systems/views/systems.html'));
+    beforeEach(module('Bastion.systems',
+                       'systems/views/systems.html'));
 
-    // Initialize controller
-    beforeEach(inject(function(_$controller_, $rootScope) {
+    beforeEach(module(function($stateProvider) {
+        $stateProvider.state('systems.fake', {});
+    }));
+
+    beforeEach(inject(function(_$controller_, $rootScope, $state) {
         $controller = _$controller_;
         $scope = $rootScope.$new();
-        // Mocks
+
+        state = {
+            transitionTo: function() {}
+        };
+
         mockSystem = {
+            failed: false,
+            uuid: 2,
             facts: {
                 cpu: "Itanium",
                 "lscpu.architecture": "Intel Itanium architecture",
                 "lscpu.instructionsPerCycle": "6",
                 anotherFact: "yes"
+            },
+            $update: function(success, error) {
+                if (mockSystem.failed) {
+                    error({ data: {errors: {}}});
+                } else {
+                    success(mockSystem);
+                }
             }
         };
         System = {
-            get: function() {
+            get: function(params, callback) {
+                callback(mockSystem);
                 return mockSystem;
-            },
-            releaseVersions: function() {}
+            }
         };
+
+        Organization = {};
+
         spyOn(System, 'get').andCallThrough();
 
         $scope.$stateParams = {systemId: 2};
 
-        $controller('SystemDetailsController', {$scope: $scope, System: System});
+        $controller('SystemDetailsController', {
+            $scope: $scope,
+            $state: $state,
+            System: System,
+            Organization: Organization
+        });
     }));
 
     it("gets the system using the System service and puts it on the $scope.", function() {
-        expect(System.get).toHaveBeenCalledWith({id: 2});
+        expect(System.get).toHaveBeenCalledWith({id: 2}, jasmine.any(Function));
         expect($scope.system).toBe(mockSystem);
     });
+
+    it('provides a method to transition states when a system is present', function() {
+        expect($scope.transitionTo('systems.fake')).toBeTruthy();
+    });
+
+    it('should save the system and return a promise', function() {
+        var promise = $scope.save(mockSystem);
+
+        expect(promise.then).toBeDefined();
+    });
+
+    it('should save the system successfully', function() {
+        $scope.save(mockSystem);
+
+        expect($scope.saveSuccess).toBe(true);
+    });
+
+    it('should fail to save the system', function() {
+        mockSystem.failed = true;
+        $scope.save(mockSystem);
+
+        expect($scope.saveError).toBe(true);
+    });
+
 });
 

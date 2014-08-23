@@ -15,19 +15,21 @@ files = [
     '../../../vendor/assets/dev-components/angular-resource/angular-resource.js',
     '../../../vendor/assets/dev-components/ngInfiniteScroll/ng-infinite-scroll.js',
     '../../../vendor/assets/dev-components/alchemy/alchemy.js',
+    '../../../vendor/assets/dev-components/underscore/underscore.js',
     '../../../../../vendor/assets/javascripts/angular-ui-states.js',
+    '../../../vendor/assets/components/ng-upload.js',
 
     '../../../../../app/assets/javascripts/common/katello.global.js',
     '../../../../../app/assets/javascripts/common/katello.module.js',
     '../../../../../app/assets/javascripts/common/notices.js',
     '../../../../../app/assets/javascripts/common/experimental/katello-globals.module.js',
-    '../../../../../app/assets/javascripts/system_groups/system-groups.module.js',
 
     // Must load modules first
     '**/*.module.js',
     '**/*.js',
     '**/views/*.html',
 
+    '../../../test/test-mocks.module.js',
     '../../../test/**/*test.js'
 ];
 

@@ -43,18 +43,27 @@ module ContentViewDefinitionsHelper
     if definition.has_repo_conflicts?
       content_tag(:td,
                   tag(:input, {:type => 'button', :class => 'fr button',
-                                :value => _('Publish'), :disabled => true}),
+                               :value => _('Publish'), :disabled => true}),
                   :class => 'repo_conflict',
                   'original-title' => _("The definition consists of component content views that "\
                                         "share the same repository; therefore, it cannot be "\
                                         "published.  Please visit the Content pane to "\
                                         "resolve this issue."))
-
+    elsif definition.has_puppet_repo_conflicts?
+      content_tag(:td,
+                  tag(:input, {:type => 'button', :class => 'fr button',
+                               :value => _('Publish'), :disabled => true}),
+                  :class => 'repo_conflict',
+                  'original-title' => _(<<-eos))
+          The definition consists of more than one component content view that
+          has a puppet repo and therefore cannot be published. Please visit the
+          Content pane to resolve this issue.
+        eos
     else
       content_tag(:td,
                   tag(:input, {:type => 'button', :class => 'fr button subpanel_element publish',
-                                :value => _('Publish'),
-                                'data-url' => publish_setup_content_view_definition_path(definition.id)}))
+                               :value => _('Publish'),
+                               'data-url' => publish_setup_content_view_definition_path(definition.id)}))
     end
   end
 
@@ -79,9 +88,18 @@ module ContentViewDefinitionsHelper
     end
   end
 
-  def view_checked?(view_id, views_hash=nil)
+  def view_checked?(view_id, views_hash = nil)
     return false if views_hash.nil?
-    return views_hash.has_key?(view_id)
+    return views_hash.key?(view_id)
+  end
+
+  # Does the definition provided have one or more of it's views
+  # defined as a component view in the views hash provided?
+  def has_a_component_view?(definition, views_hash = nil)
+    definition.content_views.each do |view|
+      return true if view_checked?(view.id, views_hash)
+    end
+    return false
   end
 
   def view_repos(definitions)
@@ -92,6 +110,22 @@ module ContentViewDefinitionsHelper
             :name => view.name,
             :repos => view.repos(current_organization.library).collect{|repo| repo.library_instance_id}
         }
+      end
+    end
+    view_repos
+  end
+
+  # Find the repos for various definitions and return a hash with repository id as key
+  #
+  # @param [Array] array of content view definitions
+  # @return [Hash] hash of repos with id as key
+  def view_full_repos(definitions)
+    view_repos = {}
+    definitions.each do |definition|
+      definition.content_views.each do |view|
+        view.repos(current_organization.library).map { |repo| repo.library_instance }.each do |repo|
+          view_repos[repo.id] = repo
+        end
       end
     end
     view_repos

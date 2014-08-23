@@ -16,16 +16,17 @@ module FiltersHelper
   # Objectify the record provided. This will generate a hash containing
   # the record id, list of products and list of repos. It assumes that the
   # record has 'products' and 'repositories' relationships.
-  def objectify(record)
-    repos = Hash.new { |h,k| h[k] = [] }
+  def objectify(record, content_types = nil)
+    repos = Hash.new { |h, k| h[k] = [] }
     record.repositories.each do |repo|
+      next if content_types && !content_types.include?(repo.content_type)
       repos[repo.product.id.to_s] <<  repo.id.to_s
     end
 
     {
         :id => record.id,
-        :products=>record.product_ids,  # :id
-        :repos=>repos
+        :products => record.product_ids,  # :id
+        :repos => repos
     }
   end
 
@@ -38,8 +39,10 @@ module FiltersHelper
         @product_hash[prod.id] = {:id => prod.id, :name => prod.name, :editable => true, :repos => []}
       end
       options[:record].content_view_definition.repos.sort_by(&:name).each do |repo|
+        next if options[:content_types] && !options[:content_types].include?(repo.content_type)
         @product_hash[repo.product_id][:repos].push({:id => repo.id, :name => repo.name})
       end
+      @product_hash.keep_if { |id, prod| prod[:repos].length > 0 }
     end
     @product_hash
   end
@@ -51,11 +54,7 @@ module FiltersHelper
   end
 
   def rule_summary(rule)
-    if rule.content_type == FilterRule::PACKAGE || rule.content_type == FilterRule::PACKAGE_GROUP
-      # Create a package or package group list summary
-      summary = parameter_list_summary(rule, :name)
-
-    elsif rule.content_type == FilterRule::ERRATA
+    if rule.content_type == FilterRule::ERRATA
       # If this rule has either errata type or date range parameters,
       # create a date summary; otherwise, create an errata list summary
       if !rule.parameters[:errata_type].blank? || (!rule.parameters[:date_range].blank? &&
@@ -64,6 +63,8 @@ module FiltersHelper
       else
         summary = parameter_list_summary(rule, :id)
       end
+    else
+      summary = parameter_list_summary(rule, :name)
     end
     summary
   end
@@ -100,7 +101,7 @@ module FiltersHelper
           date_summary = _("After %{start_date}") % {:start_date => start_date}
         else
           date_summary = _("%{start_date} - %{end_date}") % {:start_date => start_date,
-                                                            :end_date => end_date}
+                                                             :end_date => end_date}
         end
       end
       date_summary = _("Any date") if date_summary.blank?
@@ -111,5 +112,11 @@ module FiltersHelper
          :rule_type => FilterRule::CONTENT_OPTIONS.key(rule.content_type),
          :errata_types => errata_types,
          :date_summary => date_summary}
+  end
+
+  # determine which tab should be active when editing the filter
+  def active_tab(filter)
+    # if there aren't any products/repos defined for the filter
+    filter.products.empty? && filter.repositories.empty? ? 1 : 0
   end
 end

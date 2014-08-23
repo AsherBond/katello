@@ -43,22 +43,28 @@ Src::Application.routes.draw do
   end
 
   resources :content_search do
-      collection do
-        post :errata
-        post :products
-        post :packages
-        post :packages_items
-        post :errata_items
-        get :view_packages
-        post :repos
-        post :views
-        get :repo_packages
-        get :repo_errata
-        get :repo_compare_packages
-        get :repo_compare_errata
-        get :view_compare_packages
-        get :view_compare_errata
-      end
+    collection do
+      post :errata
+      post :products
+      post :packages
+      post :puppet_modules
+      post :packages_items
+      post :errata_items
+      post :puppet_modules_items
+      get :view_packages
+      get :view_puppet_modules
+      post :repos
+      post :views
+      get :repo_packages
+      get :repo_errata
+      get :repo_puppet_modules
+      get :repo_compare_packages
+      get :repo_compare_errata
+      get :repo_compare_puppet_modules
+      get :view_compare_packages
+      get :view_compare_errata
+      get :view_compare_puppet_modules
+    end
   end
 
   resources :content_view_definitions do
@@ -108,7 +114,7 @@ Src::Application.routes.draw do
 
   resources :content_views do
     collection do
-       get :auto_complete
+      get :auto_complete
     end
   end
 
@@ -243,6 +249,7 @@ Src::Application.routes.draw do
       get :items
       get :env_items
       get :environments
+      get :all
       delete :bulk_destroy
       post :bulk_add_system_group
       post :bulk_remove_system_group
@@ -280,6 +287,13 @@ Src::Application.routes.draw do
     end
   end
 
+  resources :puppet_modules, :only => [:show] do
+    collection do
+      get :auto_complete
+      get :author_auto_complete
+    end
+  end
+
   resources :distributors do
     resources :events, :only => [:index, :show], :controller => "distributor_events" do
       collection do
@@ -307,9 +321,10 @@ Src::Application.routes.draw do
     end
   end
 
-  resources :products, :only => [:new, :create, :edit,:update, :destroy] do
+  resources :products, :only => [:index, :new, :create, :edit, :update, :destroy] do
     collection do
       get :auto_complete
+      get :all
     end
     member do
       put :refresh_content
@@ -354,6 +369,7 @@ Src::Application.routes.draw do
     collection do
       get :items
       get :redhat_provider
+      get :redhat_provider_tab
       post :redhat_provider, :action => :update_redhat_provider
     end
     member do
@@ -379,9 +395,9 @@ Src::Application.routes.draw do
     end
   end
 
-  resources :promotions, :only =>[] do
+  resources :promotions, :only => [] do
     collection do
-      get :index, :action =>:show
+      get :index, :action => :show
     end
     member do
       get :show
@@ -410,6 +426,9 @@ Src::Application.routes.draw do
       member do
         get :products
         get :content_views
+      end
+      collection do
+        get :registerable_paths
       end
       resources :content_view_versions, :only => [:show] do
         member do
@@ -442,7 +461,7 @@ Src::Application.routes.draw do
     end
   end
 
-  match '/roles/show_permission' => 'roles#show_permission', :via=>:get
+  match '/roles/show_permission' => 'roles#show_permission', :via => :get
   resources :roles do
     put "create_permission" => "roles#create_permission"
 
@@ -463,7 +482,7 @@ Src::Application.routes.draw do
       end
     end
   end
-  match '/roles/:organization_id/resource_type/verbs_and_scopes' => 'roles#verbs_and_scopes', :via=>:get, :as=>'verbs_and_scopes'
+  match '/roles/:organization_id/resource_type/verbs_and_scopes' => 'roles#verbs_and_scopes', :via => :get, :as => 'verbs_and_scopes'
 
   resources :search, :only => {} do
     get 'show', :on => :collection
@@ -481,7 +500,6 @@ Src::Application.routes.draw do
     get 'allowed_orgs'
   end
 
-
   root :to => "user_sessions#new"
 
   match '/login' => 'user_sessions#new', :as => 'login'
@@ -498,5 +516,5 @@ Src::Application.routes.draw do
 
   match 'about', :to => "application_info#about", :as => "about"
 
-  match '/i18n/dictionary' => 'i18n#show', :via=>:get
+  match '/i18n/dictionary' => 'i18n#show', :via => :get
 end

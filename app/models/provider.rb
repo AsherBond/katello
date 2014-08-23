@@ -24,38 +24,36 @@ class Provider < ActiveRecord::Base
   CUSTOM = 'Custom'
   TYPES = [REDHAT, CUSTOM]
 
+  attr_accessible :name, :description, :organization, :provider_type, :repository_url
+
   serialize :discovered_repos, Array
 
-  belongs_to :organization
-  belongs_to :task_status
-  belongs_to :discovery_task, :class_name=>'TaskStatus'
-  has_many :products, :inverse_of => :provider
+  belongs_to :organization, :inverse_of => :providers
+  belongs_to :task_status, :dependent => :destroy, :inverse_of => :provider
+  belongs_to :discovery_task, :class_name => 'TaskStatus', :dependent => :destroy, :inverse_of => :provider
+  has_many :products, :inverse_of => :provider, :dependent => :destroy
   has_many :repositories, through: :products
 
-  validates :name, :presence => true
+  validates :name, :uniqueness => {:scope => :organization_id}
+  validates :provider_type, :inclusion => {:in => TYPES,
+                                           :allow_blank => false, :message => "Please select provider type from one of the following: #{TYPES.join(', ')}."}
+  validates :repository_url, :length => {:maximum => 255}, :if => :redhat_provider?
+  validate :constraint_redhat_update
+  validate :only_one_rhn_provider
   validates_with Validators::KatelloNameFormatValidator, :attributes => :name
   validates_with Validators::KatelloDescriptionFormatValidator, :attributes => :description
+  validates_with Validators::KatelloUrlFormatValidator, :if => :redhat_provider?,
+                                                        :attributes => :repository_url
 
-  validates_uniqueness_of :name, :scope => :organization_id
-  validates_inclusion_of :provider_type,
-    :in => TYPES,
-    :allow_blank => false,
-    :message => "Please select provider type from one of the following: #{TYPES.join(', ')}."
-  validate :constraint_redhat_update
   before_destroy :prevent_redhat_deletion
   before_validation :sanitize_repository_url
 
-  validate :only_one_rhn_provider
-  validates :repository_url, :length => {:maximum => 255}, :if => :redhat_provider?
-  validates_with Validators::KatelloUrlFormatValidator, :if => :redhat_provider?,
-                 :attributes => :repository_url
-
-
   scope :redhat, where(:provider_type => REDHAT)
   scope :custom, where(:provider_type => CUSTOM)
+
   def only_one_rhn_provider
     # validate only when new record is added (skip explicit valid? calls)
-    if new_record? and provider_type == REDHAT and count_providers(REDHAT) != 0
+    if new_record? && provider_type == REDHAT && count_providers(REDHAT) != 0
       errors.add(:base, _("Only one Red Hat provider permitted for an Organization"))
     end
   end
@@ -80,7 +78,7 @@ class Provider < ActiveRecord::Base
     end
   end
 
-  def count_providers type
+  def count_providers(type)
     ::Provider.where(:organization_id => self.organization_id, :provider_type => type).count(:id)
   end
 
@@ -89,7 +87,7 @@ class Provider < ActiveRecord::Base
   end
 
   def redhat_provider=(is_rh)
-    provider_type = is_rh ? REDHAT : CUSTOM
+    is_rh ? REDHAT : CUSTOM
   end
 
   def redhat_provider?
@@ -107,8 +105,8 @@ class Provider < ActiveRecord::Base
     organization.being_deleted?
   end
 
-  def serializable_hash(options={})
-    options = {} if options == nil
+  def serializable_hash(options = {})
+    options = {} if options.nil?
     hash = super(options)
     if Katello.config.katello?
       hash = hash.merge(:sync_state => self.sync_state,
@@ -165,7 +163,7 @@ class Provider < ActiveRecord::Base
     raise _("Repository Discovery already in progress") if self.discovery_task && !self.discovery_task.finished?
     raise _("Discovery URL not set.") if self.discovery_url.blank?
     self.discovered_repos = []
-    self.discovery_task = self.async(:organization=>self.organization).start_discovery_task(notify)
+    self.discovery_task = self.async(:organization => self.organization).start_discovery_task(notify)
     self.save!
   end
 
@@ -182,7 +180,7 @@ class Provider < ActiveRecord::Base
 
    def sanitize_repository_url
      if redhat_provider? && self.repository_url.blank?
-      self.repository_url = Katello.config.redhat_repository_url
+       self.repository_url = Katello.config.redhat_repository_url
      end
      if self.repository_url
        self.repository_url.strip!
@@ -218,8 +216,5 @@ class Provider < ActiveRecord::Base
   rescue => e
     Notify.exception _('Repos discovery failed.'), e if notify
     raise e
-  ensure
-    ##in case of error
   end
 end
-

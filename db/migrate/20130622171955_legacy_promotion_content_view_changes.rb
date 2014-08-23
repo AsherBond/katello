@@ -25,14 +25,14 @@ class LegacyPromotionContentViewChanges < ActiveRecord::Migration
 
       # Publish a "Legacy View"
       name = "Legacy View"
-      label = Util::Model::labelize(name)
+      label = Util::Model.labelize(name)
       if ContentView.where(:label => label, :organization_id => org).count > 0
         name =  name + "-#{SecureRandom.hex(4)}"
-        label = Util::Model::labelize(name)
+        label = Util::Model.labelize(name)
       end
 
-      default_cvd.publish( name, "View containing the Library Environment's content for #{org.name}",
-                             label, :async => false, :notify => false)
+      default_cvd.publish(name, "View containing the Library Environment's content for #{org.name}",
+                          label, :async => false, :notify => false)
 
       # For each Non Library env -> change the env's default CVV to point to the Legacy View"
       legacy_view = ContentView.where(:name => name, :content_view_definition_id => default_cvd).first
@@ -50,16 +50,16 @@ class LegacyPromotionContentViewChanges < ActiveRecord::Migration
         }
 
         params =  [org.id,
-                    "now",
-                     ::TaskStatus::Status::FINISHED,
-                    TaskStatus::TYPES[:content_view_publish][:type],
-                     "now",
-                    User.current.id,
-                    ::UUIDTools::UUID.random_create.to_s,
-                    default_cvv.id,
-                  default_cvv.class.name]
+                   "now",
+                   ::TaskStatus::Status::FINISHED,
+                   TaskStatus::TYPES[:content_view_publish][:type],
+                   "now",
+                   User.current.id,
+                   ::UUIDTools::UUID.random_create.to_s,
+                   default_cvv.id,
+                   default_cvv.class.name]
 
-        task_status_id = insert(clause, nil, nil, nil, nil, params.collect{|item| [nil, item]})
+        insert(clause, nil, nil, nil, nil, params.collect{|item| [nil, item]})
         execute("update content_view_versions set content_view_id = #{legacy_view.id} where id = #{default_cvv.id}")
         version = env_ids.index(env.id.to_s)
         if version
@@ -73,12 +73,10 @@ class LegacyPromotionContentViewChanges < ActiveRecord::Migration
         execute("update content_view_versions set version = #{version + 1} where id = #{legacy_cvv.id}")
       end
 
-
-
       # Update every system whose cv is null and make em point to "Legacy View"
       clause = %{
         update systems set content_view_id = #{legacy_view.id} where
-               (content_view_id is null) and id in ( select s.id from systems as s
+               (content_view_id is null) and id in (select s.id from systems as s
                     inner join environments as env  on env.id = s.environment_id
                     where env.organization_id = #{org.id})
       }
@@ -110,7 +108,7 @@ class LegacyPromotionContentViewChanges < ActiveRecord::Migration
         pulp_id = repo_data["pulp_id"]
         relative_path = repo_data["relative_path"]
         unprotected = repo_data["unprotected"] == "t"
-        pulp_repo = Runcible::Extensions::Repository.retrieve_with_details(pulp_id)
+        pulp_repo = Katello.pulp_server.extensions.repository.retrieve_with_details(pulp_id)
         distro_items = pulp_repo[:distributors].select do |dis|
           dis["distributor_type_id"] == "yum_distributor"
         end
@@ -120,14 +118,14 @@ class LegacyPromotionContentViewChanges < ActiveRecord::Migration
         end
 
         distro_ids.each do |distro_id|
-          Runcible::Extensions::Repository.delete_distributor(pulp_id, distro_id)
+          Katello.pulp_server.extensions.repository.delete_distributor(pulp_id, distro_id)
 
-          yum_distro =  Runcible::Extensions::YumDistributor.new(relative_path, (unprotected || false), true,
-                                                         {:protected=>true})
-          Runcible::Extensions::Repository.associate_distributor(pulp_id,
-                               "yum_distributor", yum_distro.config,
-                                "auto_publish" => true,
-                                "distributor_id" => distro_id)
+          yum_distro =  Runcible::Models::YumDistributor.new(relative_path, (unprotected || false), true,
+                                                                 {:protected => true})
+          Katello.pulp_server.extensions.repository.associate_distributor(pulp_id,
+                                                                 "yum_distributor", yum_distro.config,
+                                                                 "auto_publish" => true,
+                                                                 "distributor_id" => distro_id)
         end
       end
 

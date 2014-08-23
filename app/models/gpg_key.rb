@@ -10,25 +10,25 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-
 class GpgKey < ActiveRecord::Base
 
   include Glue::ElasticSearch::GpgKey if Katello.config.use_elasticsearch
   include Authorization::GpgKey
-  MAX_CONTENT_LENGTH = 100000
+  MAX_CONTENT_LENGTH = 100_000
+  MAX_CONTENT_LINE_LENGTH = 65
 
-  has_many :repositories, :inverse_of => :gpg_key
-  has_many :products, :inverse_of => :gpg_key
+  has_many :repositories, :inverse_of => :gpg_key, :dependent => :nullify
+  has_many :products, :inverse_of => :gpg_key, :dependent => :nullify
 
   belongs_to :organization, :inverse_of => :gpg_keys
 
-  validates :name, :presence => true
+  validates :name, :presence => true, :uniqueness => {:scope => :organization_id,
+                                                      :message => N_("Label has already been taken")}
+  validates :content, :presence => true, :length => {:maximum => MAX_CONTENT_LENGTH}
+  validates :organization, :presence => true
   validates_with Validators::KatelloNameFormatValidator, :attributes => :name
-  validates :content, :presence => true
   validates_with Validators::ContentValidator, :attributes => :content
-  validates_length_of :content, :maximum => MAX_CONTENT_LENGTH
-  validates_presence_of :organization
-  validates_uniqueness_of :name, :scope => :organization_id, :message => N_("Label has already been taken")
+  validates_with Validators::GpgKeyContentValidator, :attributes => :content, :if => proc { Katello.config.gpg_strict_validation }
 
   def as_json(options = {})
     options ||= {}

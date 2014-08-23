@@ -10,8 +10,6 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-
-
 module Authorization::Product
   extend ActiveSupport::Concern
 
@@ -20,7 +18,7 @@ module Authorization::Product
   included do
     scope :all_readable, lambda {|org| ::Provider.readable(org).joins(:provider)}
     scope :readable, lambda{|org| all_readable(org).with_enabled_repos_only(org.library)}
-    scope :all_editable, lambda {|org| ::Provider.editable(org).joins(:provider)}
+    scope :all_editable, lambda {|org| ::Provider.editable(org).where(:provider_type => ::Provider::CUSTOM).joins(:provider) }
     scope :editable, lambda {|org| all_editable(org).with_enabled_repos_only(org.library)}
     scope :syncable, lambda {|org| sync_items(org).with_enabled_repos_only(org.library)}
 
@@ -35,26 +33,24 @@ module Authorization::Product
     def editable?
       Product.all_editable(self.organization).where(:id => id).count > 0
     end
+
+    def deletable?
+      promoted_repos = repositories.select { |repo| repo.promoted? }
+      editable? && promoted_repos.empty?
+    end
+
   end
 
   module ClassMethods
-    def readable(org)
-      all_readable(org).with_enabled_repos_only(org.library)
-    end
-
-    def editable(org)
-      all_editable(org).with_enabled_repos_only(org.library)
-    end
-
-    def syncable(org)
-      sync_items(org).with_enabled_repos_only(org.library)
+    def creatable?(provider)
+      provider.editable?
     end
 
     def any_readable?(org)
       ::Provider.any_readable?(org)
     end
 
-    def sync_items org
+    def sync_items(org)
       org.syncable? ? (joins(:provider).where('providers.organization_id' => org)) : where("0=1")
     end
   end

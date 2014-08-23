@@ -23,19 +23,16 @@ class SyncPlan < ActiveRecord::Base
   DURATION = { NONE => '', HOURLY => 'T1H', DAILY => 'T24H', WEEKLY => '7D' }
   WEEK_DAYS = (%W(Sunday Monday Tuesday Wednesday Thursday Friday)).collect{|d| N_(d)}
 
-  belongs_to :organization
-  has_many :products
+  belongs_to :organization, :inverse_of => :sync_plans
+  has_many :products, :dependent => :nullify
 
-  validates :name, :presence => true
-  validates_with Validators::KatelloNameFormatValidator, :attributes => :name
-  validates_uniqueness_of :name, :scope => :organization_id
+  validates :name, :presence => true, :uniqueness => {:scope => :organization_id}
+  validates :interval, :inclusion => {:in => TYPES}, :allow_blank => false
   validate :validate_sync_date
-  validates_inclusion_of :interval,
-    :in => TYPES,
-    :allow_blank => false
+  validates_with Validators::KatelloNameFormatValidator, :attributes => :name
   validates_with Validators::KatelloDescriptionFormatValidator, :attributes => :description
 
-  scope :readable, lambda { |org| ::Provider.any_readable?(org)? where(:organization_id => org.id ) : where("0 = 1") }
+  scope :readable, lambda { |org| ::Provider.any_readable?(org) ? where(:organization_id => org.id) : where("0 = 1") }
 
   before_save :reassign_sync_plan_to_products
 
@@ -52,20 +49,20 @@ class SyncPlan < ActiveRecord::Base
   end
 
   def zone_converted
-     #convert time to local timezone
-     self.sync_date.localtime.to_datetime
+    #convert time to local timezone
+    self.sync_date.localtime.to_datetime
   end
 
   def plan_day
     WEEK_DAYS[self.sync_date.strftime('%e').to_i]
   end
 
-  def plan_date localtime=true
+  def plan_date(localtime = true)
     date_obj = localtime ? self.zone_converted : self.sync_date
     date_obj.strftime('%m/%d/%Y')
   end
 
-  def plan_time localtime=true
+  def plan_time(localtime = true)
     date_obj = localtime ? self.zone_converted : self.sync_date
     date_obj.strftime('%I:%M %p')
   end

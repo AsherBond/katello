@@ -11,7 +11,8 @@
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
 class PackageRule < FilterRule
-  validates_with Validators::PackageRuleParamsValidator, :attributes => :parameters
+  validates_with Validators::RuleParamsValidator, :attributes => :parameters
+  validates_with Validators::RuleVersionValidator, :attributes => :parameters
 
   def params_format
     {:units => [[:name, :version, :min_version, :max_version]]}
@@ -23,39 +24,28 @@ class PackageRule < FilterRule
   # @param repo [Repository] a repository containing packages to filter
   # @return [Array] an array of hashes with MongoDB conditions
   def generate_clauses(repo)
-    parameters[:units].each_with_object([]) do |unit, rule_clauses|
+    pkg_filenames = parameters[:units].map do |unit|
       next if unit[:name].blank?
-      clauses = []
 
-      results = Package.search(unit[:name], 0, repo.package_count, [repo.pulp_id],
-                      [:nvrea_sort, "ASC"], :all, 'name' ).collect(&:filename).compact
-      next if results.empty?
-
-      clauses << {'filename' => {"$in" => results}}
-
-      if (version_clause = generate_version_clause(repo, unit))
-        clauses << version_clause
-      end
-
-      rule_clauses << (clauses.length == 1 ? clauses.first : {'$and' => clauses})
+      filter = version_filter(unit)
+      Package.search(unit[:name], 0, repo.package_count, [repo.pulp_id],
+                      [:nvrea_sort, "ASC"], :all, 'name', filter).collect(&:filename).compact
     end
+    pkg_filenames.flatten!
+    pkg_filenames.compact!
+
+    {'filename' => {"$in" => pkg_filenames}} unless pkg_filenames.empty?
   end
 
   protected
 
-  def generate_version_clause(repo, unit)
-    return unless unit.keys.any? { |key| [:version, :min_version, :max_version].include?(key.to_sym) }
-
-    if unit.has_key?(:version)
-      filter = Util::Package.version_eq_filter(unit[:version])
+  def version_filter(unit)
+    if unit.key?(:version)
+      Util::Package.version_eq_filter(unit[:version])
+    elsif unit.key?(:min_version) || unit.key?(:max_version)
+      Util::Package.version_filter(unit[:min_version], unit[:max_version])
     else
-      filter = Util::Package.version_filter(unit[:min_version], unit[:max_version])
+      nil
     end
-
-    results = Package.search(unit[:name], 0, repo.package_count, [repo.pulp_id],
-        [:nvrea_sort, "ASC"], :all, 'name', filter).map(&:filename).compact
-
-    {'filename' => {"$in" => results}}
   end
-
 end

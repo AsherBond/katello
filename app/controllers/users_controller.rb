@@ -27,6 +27,8 @@ class UsersController < ApplicationController
   before_filter :authorize
   skip_before_filter :require_org
 
+  # TODO: break up method
+  # rubocop:disable MethodLength
   def rules
     index_test  = lambda { true }
     create_test = lambda { User.creatable? }
@@ -47,7 +49,6 @@ class UsersController < ApplicationController
         @user.editable?
       end
     end
-
 
     user_helptip = lambda { true } #everyone can enable disable a helptip
 
@@ -74,11 +75,10 @@ class UsersController < ApplicationController
 
   def param_rules
     { :create       => { :user => [:password, :username, :env_id, :email] },
-      :update       => { :user => [:password, :env_id, :email, :helptips_enabled, :experimental_ui] },
+      :update       => { :user => [:password, :env_id, :email, :helptips_enabled, :legacy_mode] },
       :update_roles => { :user => [:role_ids] }
     }
   end
-
 
   # Render list of users. Note that if the current user does not have permission
   # to view all users, the results are restricted to just themselves.
@@ -116,6 +116,8 @@ class UsersController < ApplicationController
     render :partial => "new", :locals => { :user => @user, :accessible_envs => nil }
   end
 
+  # TODO: break up method
+  # rubocop:disable MethodLength
   def create
     if Katello.config.katello?
       # Pulp quietly ignored unkonwn attributes; Headpin needs to remove
@@ -136,7 +138,7 @@ class UsersController < ApplicationController
       @user.save!
     else
       # user selected an org that has no environments defined
-      raise no_env_available_msg unless params['org_id']['org_id'].blank?
+      fail no_env_available_msg unless params['org_id']['org_id'].blank?
 
       # user selected 'No Default Organization'
       @environment  = nil
@@ -168,7 +170,7 @@ class UsersController < ApplicationController
     attr = params[:user].first.last if params[:user].first
     attr ||= ""
 
-    if not search_validate(User, user.id, params[:search], :username)
+    if !search_validate(User, user.id, params[:search], :username)
       notify.message _("'%s' no longer matches the current search criteria.") % @user.username
     end
 
@@ -191,7 +193,7 @@ class UsersController < ApplicationController
   def update_preference
     preference = params[:preference]
     if preference
-      @user.preferences[:user] = { } unless @user.preferences.has_key? :user
+      @user.preferences[:user] = { } unless @user.preferences.key? :user
       if params[:value] == "true"
         value = true
       elsif  params[:value] == "false"
@@ -234,42 +236,23 @@ class UsersController < ApplicationController
   end
 
   def update_environment
-    if Katello.config.katello?
-      default_environment_id = params['env_id'].try(:[], 'env_id').try(:to_i)
+    if params['org_id'].present?
+      @organization = Organization.find_by_id(params['org_id'].try(:to_i))
+
+      @user.default_environment = @organization.library
+      @user.default_org         = @organization.id
+      @user.save!
+
+      notify.success _("User organization default updated successfully.")
+
+      render :json => { :org => @organization.name }
     else
-      default_environment_id = nil
-      if !params['org_id'].blank?
-        @organization = Organization.find_by_id(params['org_id'].try(:to_i))
-        default_environment_id = @organization.library.id
-      end
-    end
-
-
-    if @user.default_environment.try(:id) == default_environment_id
-      err_msg = N_("The system registration default you supplied was the same as the old system registration default.")
-      notify.error err_msg
-      render(:text => err_msg, :status => 400) and return
-    end
-
-    raise no_env_available_msg if default_environment_id.nil? && params['org_id'].present?
-
-    @environment              = default_environment_id.nil? ? nil : KTEnvironment.find(default_environment_id)
-    @user.default_environment = @environment
-    @user.save!
-
-    @organization             = @environment.try :organization
-
-    notify.success _("User System Registration Environment updated successfully.")
-
-    if @organization && @environment
-      render :json => { :org => @organization.name, :env => @environment.name, :env_id => @environment.id }
-    else
-      render :json => { :org => _("No system registration default set for this user."), :env => _("No system registration default set for this user.") }
+      render :json => { :org => _("No organization default set for this user.") }
     end
   end
 
   def update_roles
-    params[:user] = { "role_ids" => [] } unless params.has_key? :user
+    params[:user] = { "role_ids" => [] } unless params.key? :user
 
     #Add in the own role if updating roles, cause the user shouldn't see his own role
     params[:user][:role_ids] << @user.own_role.id
@@ -277,11 +260,12 @@ class UsersController < ApplicationController
     if  @user.update_attributes(params[:user])
       notify.success _("User updated successfully.")
 
-      if not search_validate(User, @user.id, params[:search], :username)
+      if !search_validate(User, @user.id, params[:search], :username)
         notify.message _("'%s' no longer matches the current search criteria.") % @user.username
       end
 
-      render :nothing => true and return
+      render :nothing => true
+      return
     end
     notify.invalid_record @user
     render :text => @user.errors, :status => :ok
@@ -337,7 +321,7 @@ class UsersController < ApplicationController
       current_user.save!
       notify.success _("Default Organization no longer selected.")
     end
-    render :text => :ok and return
+    render :text => :ok
   end
 
   private
@@ -350,7 +334,6 @@ class UsersController < ApplicationController
     end
   end
 
-
   def setup_options
     @panel_options = { :title         => _('Users'),
                        :col           => ['username'],
@@ -359,7 +342,7 @@ class UsersController < ApplicationController
                        :create_label => _('+ New User'),
                        :name          => controller_display_name,
                        :ajax_load     => true,
-                       :ajax_scroll   => items_users_path(),
+                       :ajax_scroll   => items_users_path,
                        :enable_create => User.creatable?,
                        :search_class  => User }
   end
@@ -371,6 +354,5 @@ class UsersController < ApplicationController
   def default_notify_options
     super.merge :organization => nil
   end
-
 
 end

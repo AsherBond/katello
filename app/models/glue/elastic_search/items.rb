@@ -10,14 +10,14 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-
 module Glue
   module ElasticSearch
     class Items
 
       attr_accessor :obj_class, :query_string, :results, :total, :filters
+      alias_method :model=, :obj_class=
 
-      def initialize(obj_class)
+      def initialize(obj_class = nil)
         @obj_class    = obj_class
         @query_string = query_string
         @results      = []
@@ -40,20 +40,24 @@ module Glue
       #   The model field on which to sort
       # @option       search_options :sort_order
       #   The order to sort on, one of DESC or ASC
-      # @option       search_options :filter
+      # @option       search_options :filters
       #   Filter to apply to search. Array of hashes.  Each key/value within the hash
       #   is OR'd, whereas each HASH itself is AND'd together
       # @option search_options [true, false] :load_records?
       #   whether or not to load the active record object (defaults to false)
-      def retrieve(query_string, start=0, search_options={})
+      # TODO: break up method
+      # rubocop:disable MethodLength
+      def retrieve(query_string, start = 0, search_options = {})
 
         @query_string = query_string
-        @filters      = search_options[:filter] || []
+        @filters      = search_options[:filters] || []
         start         = start || 0
         all_rows      = false
-        sort_by       = search_options[:sort_by] || 'name'
+        sort_by       = search_options.fetch(:sort_by, 'name_sort')
         sort_order    = search_options[:sort_order] || 'ASC'
         total_count   = 0
+
+        sort_by = format_sort(sort_by)
 
         # set the query default field, if one was provided.
         query_options = {}
@@ -69,7 +73,7 @@ module Glue
         filters = @filters
         filters = [filters] if !filters.is_a? Array
 
-        @results = @obj_class.search :load=>false do
+        @results = @obj_class.search :load => false do
           query do
             if all_rows
               all
@@ -80,7 +84,7 @@ module Glue
 
           sort {by sort_by, sort_order.to_s.downcase } if sort_by && sort_order
 
-          filters.each{ |i| filter  :terms, i } if !filters.empty?
+          filter :and, filters if filters.any?
 
           size page_size
           from start
@@ -90,13 +94,15 @@ module Glue
 
         if search_options[:load_records?]
           @results = load_records
+        else
+          @results = @results.results
         end
 
+        return @results, total_count
       rescue Tire::Search::SearchRequestFailed => e
         Rails.logger.error(e.class)
 
         @results = []
-      ensure
         return @results, total_count
       end
 
@@ -132,7 +138,7 @@ module Glue
             all
           end
 
-          filters.each{ |i| filter  :terms, i } if !filters.empty?
+          filter :and, filters if filters.any?
 
           size 1
           from 0
@@ -140,12 +146,22 @@ module Glue
 
         @total = results.total
 
+        return @total
       rescue Tire::Search::SearchRequestFailed => e
         Rails.logger.error(e.class)
+        return @total
       rescue => e
         puts e
-      ensure
         return @total
+      end
+
+      private
+
+      def format_sort(sort_by)
+        mapping = @obj_class.mapping || {}
+        unless mapping[sort_by.to_sym] && mapping[sort_by.to_sym][:type] == 'date'
+          sort_by + '_sort' if !sort_by.include?('_sort')
+        end
       end
 
     end

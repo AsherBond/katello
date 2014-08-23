@@ -45,11 +45,17 @@ class Api::V1::EnvironmentsController < Api::V1::ApiController
   respond_to :json
   before_filter :find_organization, :only => [:index, :rhsm_index, :create]
   before_filter :find_environment, :only => [:show, :update, :destroy, :repositories, :releases]
+  before_filter :find_content_view, :only => [:repositories]
   before_filter :authorize
 
   def rules
     manage_rule = lambda { @organization.environments_manageable? }
     view_rule   = lambda { @organization.readable? }
+
+    repositories_rule = lambda do
+      view_readable = @content_view ? @content_view.readable? : true
+      @organization.readable? && view_readable
+    end
 
     index_rule = lambda { true }
     # Note: index_rule is always true.
@@ -64,16 +70,15 @@ class Api::V1::EnvironmentsController < Api::V1::ApiController
         :create       => manage_rule,
         :update       => manage_rule,
         :destroy      => manage_rule,
-        :repositories => view_rule,
+        :repositories => repositories_rule,
         :releases     => view_rule
     }
   end
 
-
   def param_rules
     {
-        :create     => { :environment => ["name", "label", "description", "prior"] },
-        :update     => { :environment => ["name", "description", "prior"] },
+        :create     => { :environment => %w(name label description prior) },
+        :update     => { :environment => %w(name description prior) },
         :index      => [:name, :library, :id, :organization_id],
         :rhsm_index => [:name, :library, :id, :organization_id]
     }
@@ -101,7 +106,7 @@ class Api::V1::EnvironmentsController < Api::V1::ApiController
     # The following is a workaround to handle the fact that rhsm currently requests the
     # environment using the 'name' parameter; however, the value is actually the environment label.
     if request_from_rhsm? && @environments.empty?
-      if query_params.has_key?(:name)
+      if query_params.key?(:name)
         query_params[:label] = query_params[:name]
         query_params.delete(:name)
       end
@@ -119,11 +124,12 @@ class Api::V1::EnvironmentsController < Api::V1::ApiController
   api :GET, "/owners/:organization_id/environments", "List environments for RHSM"
   param_group :search_params
   def rhsm_index
-    @all_environments = get_content_view_environments(query_params[:name]).
-        collect { |env| { :id  => env.cp_id,
-                          :name => env.label,
-                          :display_name => env.name,
-                          :description => env.content_view.description } }
+    @all_environments = get_content_view_environments(query_params[:name]).collect do |env|
+      { :id  => env.cp_id,
+        :name => env.label,
+        :display_name => env.name,
+        :description => env.content_view.description }
+    end
 
     respond_for_index :collection => @all_environments
   end
@@ -182,8 +188,16 @@ class Api::V1::EnvironmentsController < Api::V1::ApiController
   param :id, :identifier, :desc => "environment identifier"
   param :organization_id, :identifier, :desc => "organization identifier"
   param :include_disabled, :bool, :desc => "set to true if you want to see also disabled repositories"
+  param :content_view_id, :identifier, :desc => "content view identifier", :required => false
   def repositories
-    @repositories = @environment.products.all_readable(@organization).collect { |p| p.repos(@environment, query_params[:include_disabled]) }.flatten
+    if !@environment.library? && @content_view.nil?
+      raise HttpErrors::BadRequest,
+            _("Cannot retrieve repos from non-library environment '%s' without a content view.") % @environment.name
+    end
+
+    @repositories = @environment.products.all_readable(@organization).flat_map do |p|
+      p.repos(@environment, query_params[:include_disabled], @content_view)
+    end
     respond_for_index :collection => @repositories
   end
 
@@ -192,7 +206,6 @@ class Api::V1::EnvironmentsController < Api::V1::ApiController
   def releases
     respond_for_index :collection => { :releases => @environment.available_releases }
   end
-
 
   protected
 
@@ -203,7 +216,7 @@ class Api::V1::EnvironmentsController < Api::V1::ApiController
     @environment
   end
 
-  def get_content_view_environments(name=nil)
+  def get_content_view_environments(name = nil)
     environments = ContentViewEnvironment.joins(:content_view => :organization).
         where("organizations.id = ?", @organization.id)
     environments = environments.where("content_view_environments.name = ?", name) if name
@@ -221,6 +234,10 @@ class Api::V1::EnvironmentsController < Api::V1::ApiController
       end
     end
     environments
+  end
+
+  def find_content_view
+    @content_view = ContentView.find_by_id(params[:content_view_id])
   end
 
 end

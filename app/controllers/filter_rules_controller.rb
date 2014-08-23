@@ -30,16 +30,17 @@ class FilterRulesController < ApplicationController
   end
 
   def rules
+    show_rule    = lambda { @view_definition.readable? }
     manage_rule  = lambda { @view_definition.editable? }
 
     {
       :new => manage_rule,
       :create => manage_rule,
 
-      :edit => manage_rule,
-      :edit_inclusion => manage_rule,
-      :edit_parameter_list => manage_rule,
-      :edit_date_type_parameters => manage_rule,
+      :edit => show_rule,
+      :edit_inclusion => show_rule,
+      :edit_parameter_list => show_rule,
+      :edit_date_type_parameters => show_rule,
       :update => manage_rule,
 
       :add_parameter => manage_rule,
@@ -103,7 +104,7 @@ class FilterRulesController < ApplicationController
   def update
     @rule.update_attributes!(params[:filter_rule])
 
-    result = params[:filter_rule].has_key?(:inclusion) ? included_text(@rule) : params[:filter_rule].values.first
+    result = params[:filter_rule].key?(:inclusion) ? included_text(@rule) : params[:filter_rule].values.first
 
     notify.success(_("Rule '%{type}' was successfully updated.") %
                    {:type => FilterRule::CONTENT_OPTIONS.key(@rule.content_type)})
@@ -111,6 +112,8 @@ class FilterRulesController < ApplicationController
     render :text => escape_html(result)
   end
 
+  # TODO: break up this method
+  # rubocop:disable MethodLength
   def add_parameter
     if params[:parameter]
       if params[:parameter][:unit]
@@ -134,11 +137,11 @@ class FilterRulesController < ApplicationController
         if params[:parameter][:date_range]
           @rule.parameters[:date_range] ||= {}
           if params[:parameter][:date_range][:start]
-            (@rule.start_date = parse_calendar_date params[:parameter][:date_range][:start]) or
-                return render_bad_parameters(_('Invalid date or time format'))
+            @rule.start_date = parse_calendar_date params[:parameter][:date_range][:start]
+            return render_bad_parameters(_('Invalid date or time format')) unless @rule.start_date
           elsif params[:parameter][:date_range][:end]
-            (@rule.end_date = parse_calendar_date params[:parameter][:date_range][:end]) or
-                return render_bad_parameters(_('Invalid date or time format'))
+            @rule.end_date = parse_calendar_date params[:parameter][:date_range][:end]
+            return render_bad_parameters(_('Invalid date or time format')) unless @rule.end_date
           end
         elsif params[:parameter][:errata_type]
           @rule.parameters[:errata_type] ||= []
@@ -156,7 +159,8 @@ class FilterRulesController < ApplicationController
                            {:type => FilterRule::CONTENT_OPTIONS.key(@rule.content_type),
                             :filter => @filter.name})
 
-        render :text => escape_html(result.to_s) and return
+        render :text => escape_html(result.to_s)
+        return
       end
     end
     render :nothing => true
@@ -222,13 +226,15 @@ class FilterRulesController < ApplicationController
 
   def item_partial(rule)
     case @rule.content_type
-       when FilterRule::PACKAGE
-         'content_view_definitions/filters/rules/package_item'
-       when FilterRule::PACKAGE_GROUP
-         'content_view_definitions/filters/rules/package_group_item'
-       when FilterRule::ERRATA
-         'content_view_definitions/filters/rules/errata_item'
-     end
+    when FilterRule::PACKAGE
+      'content_view_definitions/filters/rules/package_item'
+    when FilterRule::PACKAGE_GROUP
+      'content_view_definitions/filters/rules/package_group_item'
+    when FilterRule::ERRATA
+      'content_view_definitions/filters/rules/errata_item'
+    when FilterRule::PUPPET_MODULE
+      'content_view_definitions/filters/rules/puppet_module_item'
+    end
   end
 
   private

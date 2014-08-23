@@ -81,7 +81,6 @@ rKH9OkgKEvwkf8zQjO/XSvuoac83uBEFgKXJwYLHPA3U20JrchKU7klLwzSsmrXA
 -----END RSA PRIVATE KEY-----
 EOKEY
 
-
   def disable_product_orchestration
     Resources::Candlepin::Product.stub!(:get).and_return do
       [{ :productContent => [] }] #return a fresh hash, as add_repo modified it
@@ -99,6 +98,7 @@ EOKEY
     # pulp orchestration
     Resources::Candlepin::Product.stub!(:certificate).and_return("")
     Resources::Candlepin::Product.stub!(:key).and_return("")
+    Resources::Candlepin::Product.stub!(:destroy).and_return(true)
 
     if Katello.config.katello?
       Katello.pulp_server.extensions.repository.stub!(:create_or_update_schedule).and_return(true)
@@ -139,7 +139,6 @@ EOKEY
     end
 
   end
-
 
   def disable_consumer_group_orchestration
     if Katello.config.katello?

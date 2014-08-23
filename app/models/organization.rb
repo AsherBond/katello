@@ -10,18 +10,19 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-
 class Organization < ActiveRecord::Base
 
-  ALLOWED_DEFAULT_INFO_TYPES = %w( system distributor )
+  ALLOWED_DEFAULT_INFO_TYPES = %w(system distributor)
 
   include Glue::Candlepin::Owner if Katello.config.use_cp
   include Glue if Katello.config.use_cp
 
   include Glue::Event
+
   def create_event
     Headpin::Actions::OrgCreate
   end
+
   def destroy_event
     Headpin::Actions::OrgDestroy
   end
@@ -34,27 +35,31 @@ class Organization < ActiveRecord::Base
 
   include Ext::LabelFromName
 
-  belongs_to :task_status
-
   has_many :activation_keys, :dependent => :destroy
   has_many :providers, :dependent => :destroy
   has_many :products, :through => :providers
   has_many :environments, :class_name => "KTEnvironment", :dependent => :destroy, :inverse_of => :organization
-  has_one :library, :class_name =>"KTEnvironment", :conditions => {:library => true}, :dependent => :destroy
+  has_one :library, :class_name => "KTEnvironment", :conditions => {:library => true}
   has_many :gpg_keys, :dependent => :destroy, :inverse_of => :organization
   has_many :permissions, :dependent => :destroy, :inverse_of => :organization
   has_many :sync_plans, :dependent => :destroy, :inverse_of => :organization
   has_many :system_groups, :dependent => :destroy, :inverse_of => :organization
-  has_many :content_view_definitions, :class_name => "ContentViewDefinitionBase", :dependent=> :destroy
-  has_many :content_views, :dependent=> :destroy
-  has_many :task_statuses, :dependent => :destroy, :inverse_of => :organization
+  has_many :content_view_definitions, :class_name => "ContentViewDefinitionBase", :dependent => :destroy
+  has_many :content_views, :dependent => :destroy
+  has_many :task_statuses, :dependent => :destroy, :as => :task_owner
+
+  #older association
+  has_many :org_tasks, :dependent => :destroy, :class_name => "TaskStatus", :inverse_of => :organization
+
+  has_many :notices, :dependent => :destroy
+
   serialize :default_info, Hash
 
   attr_accessor :statistics
 
   # Organizations which are being deleted (or deletion failed) can be filtered out with this scope.
   scope :without_deleting, where(:deletion_task_id => nil)
-  scope :having_name_or_label, lambda { |name_or_label| { :conditions => ["name = :id or label = :id", {:id=>name_or_label}] } }
+  scope :having_name_or_label, lambda { |name_or_label| { :conditions => ["name = :id or label = :id", {:id => name_or_label}] } }
 
   before_create :create_library
   before_create :create_redhat_provider
@@ -63,12 +68,11 @@ class Organization < ActiveRecord::Base
   validates :name, :uniqueness => true, :presence => true
   validates_with Validators::KatelloNameFormatValidator, :attributes => :name
   validates :label, :uniqueness => { :message => _("already exists (including organizations being deleted)") },
-            :presence => true
+                    :presence => true
   validates_with Validators::KatelloLabelFormatValidator, :attributes => :label
   validates_with Validators::KatelloDescriptionFormatValidator, :attributes => :description
   validate :unique_name_and_label
   validates_with Validators::DefaultInfoValidator, :attributes => :default_info
-
 
   # Ensure that the name and label namespaces do not overlap
   def unique_name_and_label
@@ -84,7 +88,7 @@ class Organization < ActiveRecord::Base
   end
 
   def default_content_view
-    ContentView.default.where(:organization_id=>self.id).first
+    ContentView.default.where(:organization_id => self.id).first
   end
 
   def systems
@@ -106,6 +110,10 @@ class Organization < ActiveRecord::Base
     self.providers.redhat.first
   end
 
+  def repo_discovery_task
+    self.task_statuses.where(:task_type => :repo_discovery).order('created_at DESC').first
+  end
+
   def create_library
     self.library = KTEnvironment.new(:name => "Library", :label => "Library", :library => true, :organization => self)
   end
@@ -114,13 +122,23 @@ class Organization < ActiveRecord::Base
     self.providers << ::Provider.new(:name => "Red Hat", :provider_type => ::Provider::REDHAT, :organization => self)
   end
 
-  def validate_destroy current_org
+  def validate_destroy(current_org)
     def_error = _("Could not delete organization '%s'.")  % [self.name]
     if (current_org == self)
       [def_error, _("The current organization cannot be deleted. Please switch to a different organization before deleting.")]
     elsif (Organization.count == 1)
       [def_error, _("At least one organization must exist.")]
     end
+  end
+
+  def discover_repos(url, notify = false)
+    raise _("Repository Discovery already in progress") if self.repo_discovery_task && !self.repo_discovery_task.finished?
+    raise _("Discovery URL not set.") if url.blank?
+    task = self.async(:organization => self, :task_type => :repo_discovery).start_discovery_task(url, notify)
+    task.parameters = {:url => url}
+    self.task_statuses << task
+    self.save!
+    task
   end
 
   def being_deleted?
@@ -133,7 +151,7 @@ class Organization < ActiveRecord::Base
   end
 
   def initialize_default_info
-    self.default_info ||= Hash.new
+    self.default_info ||= {}
     ALLOWED_DEFAULT_INFO_TYPES.each do |key|
       if self.default_info[key].class != Array
         self.default_info[key] = []
@@ -182,31 +200,55 @@ class Organization < ActiveRecord::Base
   end
 
   def auto_attach_all_systems
-    jobs = self.owner_auto_attach
-    task = self.async(:organization => self, :task_type => "monitor owner all_systems auto_attach").monitor_owner_auto_attach(jobs)
+    job = self.owner_auto_attach
+    task = self.async(:organization => self, :task_type => "monitor owner all_systems auto_attach").monitor_owner_auto_attach(job)
     self.owner_auto_attach_all_systems_task_id = task.id
     self.save!
     return task
   end
 
-  def monitor_owner_auto_attach(jobs, options = {})
+  def monitor_owner_auto_attach(job, options = {})
     options = { :pause => 5 }.merge(options)
-    complete = false
-    consumer_ids = []
-    while !complete
-      complete = true
-      jobs.each do |job|
-        if Resources::Candlepin::Job.not_finished?(Resources::Candlepin::Job.get(job["id"]))
-          complete = false
-          consumer_ids = []
-          sleep options[:pause]
-          break
-        else
-          consumer_ids << job["targetId"]
-        end
-      end
+    loop do
+      break unless Resources::Candlepin::Job.not_finished?(Resources::Candlepin::Job.get(job["id"]))
+      sleep options[:pause]
     end
-    return consumer_ids
+    return job["id"]
+  end
+
+  def syncable_content?
+    products.any?(&:syncable_content?)
+  end
+
+  private
+
+  def start_discovery_task(url, notify = false)
+    task_id = AsyncOperation.current_task_id
+    task = TaskStatus.find(task_id)
+    task.parameters = {:url => url}
+    task.result ||= []
+    task.save!
+
+    #Lambda to continually update the task
+    found_func = lambda do |found_url|
+      task = ::TaskStatus.find(task_id)
+      task.result << found_url
+      task.save!
+    end
+
+    #Lambda to decide to continue or not
+    #  Using the saved task_id to compare current providers
+    #  task id
+    continue_func = lambda do
+      task = ::TaskStatus.find(task_id)
+      !task.canceled?
+    end
+
+    discover = RepoDiscovery.new(url)
+    discover.run(found_func, continue_func)
+  rescue => e
+    Notify.exception _('Repos discovery failed.'), e if notify
+    raise e
   end
 
 end

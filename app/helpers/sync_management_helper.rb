@@ -34,21 +34,25 @@ module SyncManagementHelper
   end
 
   def syncable?(product)
-    current_organization.syncable? && !product.orphaned?
+    current_organization.syncable? && !product.orphaned? && product.syncable_content?
   end
 
   def any_syncable?
-    current_organization.syncable?
+    current_organization.syncable? && current_organization.syncable_content?
+  end
+
+  def error_state?(status)
+    status[:raw_state] == PulpSyncStatus::ERROR && !status[:error_details].blank?
   end
 
   module RepoMethods
     # returns all repos in hash representation with minors and arch children included
-    def collect_repos(products, env, include_disabled = false)
-      Glue::Pulp::Repos.prepopulate! products, env,[]
+    def collect_repos(products, env, include_disabled = false, include_feedless = true)
+      Glue::Pulp::Repos.prepopulate! products, env, []
 
       products.map do |prod|
-        minor_repos, repos_without_minor = collect_minor(prod.repos(env, include_disabled))
-        { :name     => prod.name, :object=> prod, :id => prod.id, :type => "product", :repos => repos_without_minor,
+        minor_repos, repos_without_minor = collect_minor(prod.repos(env, include_disabled, nil, include_feedless))
+        { :name     => prod.name, :object => prod, :id => prod.id, :type => "product", :repos => repos_without_minor,
           :children => minors(minor_repos), :organization => prod.organization.name }
       end
     end
@@ -89,19 +93,29 @@ module SyncManagementHelper
     end
 
     #Used for debugging collect_repos output
-    def pprint_collection coll
-      coll.each{|prod|
+    def pprint_collection(coll)
+      coll.each do |prod|
         Rails.logger.error prod[:name]
-        prod[:children].each{|major|
+        prod[:children].each do |major|
           Rails.logger.error major[:name]
-          major[:children].each{|minor|
+          major[:children].each do |minor|
             Rails.logger.error minor[:name]
-            minor[:children].each{|arch|
+            minor[:children].each do |arch|
               Rails.logger.error arch[:repos].length
-            }
-          }
-        }
-      }
+            end
+          end
+        end
+      end
+    end
+  end
+
+  def has_repos?(product)
+    if product[:children].present?
+      product[:children].collect do |child|
+        has_repos?(child)
+      end
+    else
+      product[:repos].length > 0
     end
   end
 

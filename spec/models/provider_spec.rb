@@ -87,6 +87,7 @@ describe Provider do
       let(:eng_product_attrs) { ProductTestData::PRODUCT_WITH_CONTENT.merge("id" => "20", "name" => "Red Hat Enterprise Linux 6 Server SVC") }
       let(:marketing_product_attrs) { ProductTestData::PRODUCT_WITH_CONTENT.merge("id" => "rhel6-server", "name" => "Red Hat Enterprise Linux 6") }
       let(:eng_product_after_import) do
+          @provider.stub!(:index_subscriptions).and_return([])
           product = Product.new(eng_product_attrs) do |p|
             p.provider = @provider
           end
@@ -120,6 +121,7 @@ describe Provider do
         before do
           Glue::Candlepin::Product.stub(:import_from_cp => [], :import_marketing_from_cp => true)
           Resources::Candlepin::Product.stub!(:destroy).and_return(true)
+          @provider.stub!(:index_subscriptions).and_return([])
           @rh_product = Product.create!({:label=>"prod",:name=> "rh_product", :productContent => [], :provider => @provider})
           @custom_provider = Provider.create!({
             :name => 'test_provider',
@@ -245,7 +247,6 @@ describe Provider do
     end
 
   end
-
 
   context "sync provider" do
     before(:each) do
@@ -468,5 +469,12 @@ describe Provider do
     it "should ask products for repositories_cdn_import_failed" do
       @provider.failed_products
     end
+  end
+
+  it 'should be destroyable' do
+    disable_product_orchestration
+    provider = create(:provider, organization: @organization)
+    create(:product, :fedora, provider: provider)
+    assert provider.destroy
   end
 end

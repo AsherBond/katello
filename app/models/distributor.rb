@@ -29,16 +29,15 @@ class Distributor < ActiveRecord::Base
 
   has_many :task_statuses, :as => :task_owner, :dependent => :destroy
   has_many :custom_info, :as => :informable, :dependent => :destroy
-  belongs_to :content_view # TODO may be dead relation
+  belongs_to :content_view, :inverse_of => :distributors
 
   validates :environment, :presence => true
   # multiple distributors with a single name are supported
-  validates :name, :presence => true
-  validates_length_of :name, :maximum => 250
+  validates :name, :presence => true, :length => {:maximum => 250}
+  validates :location, :length => {:maximum => 255}
   validates_with Validators::UniqueFieldInOrg, :attributes => :name
   validates_with Validators::NoTrailingSpaceValidator, :attributes => :name
   validates_with Validators::KatelloDescriptionFormatValidator, :attributes => :description
-  validates_length_of :location, :maximum => 255
   validates_with Validators::ContentViewEnvironmentValidator
   validates_with Validators::KatelloNameFormatValidator, :attributes => :name
 
@@ -61,7 +60,7 @@ class Distributor < ActiveRecord::Base
     self.environment.available_releases
   end
 
-  def consumed_pool_ids=attributes
+  def consumed_pool_ids=(attributes)
     attribs_to_unsub = consumed_pool_ids - attributes
     attribs_to_unsub.each do |id|
       self.unsubscribe id
@@ -92,7 +91,8 @@ class Distributor < ActiveRecord::Base
   end
 
   def tasks
-    TaskStatus.refresh_for_distributor(self)
+    import_candlepin_tasks
+    self.task_statuses
   end
 
   # A rollback occurred while attempting to create the distributor; therefore, perform necessary cleanup.
@@ -104,7 +104,8 @@ class Distributor < ActiveRecord::Base
   end
 
   private
-    def save_task_status pulp_task, task_type, parameters_type, parameters
+
+    def save_task_status(pulp_task, task_type, parameters_type, parameters)
       # TODO: remove entirely from distributor model, or need to keep as stub?
     end
 

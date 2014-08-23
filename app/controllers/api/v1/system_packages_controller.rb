@@ -26,7 +26,7 @@ class Api::V1::SystemPackagesController < Api::V1::ApiController
   before_filter :require_packages_only, :only => [:update]
 
   def rules
-    edit_system = lambda { @system.editable? or User.consumer? }
+    edit_system = lambda { @system.editable? || User.consumer? }
 
     {
         :create  => edit_system,
@@ -62,6 +62,7 @@ class Api::V1::SystemPackagesController < Api::V1::ApiController
   param :packages, Array, :desc => "list of packages names"
   def update
     if params[:packages]
+      params[:packages] = [] if params[:packages] == 'all'
       packages = validate_package_list_format(params[:packages])
       task     = @system.update_packages(packages)
       respond_for_async :resource => task
@@ -98,9 +99,9 @@ class Api::V1::SystemPackagesController < Api::V1::ApiController
   end
 
   def validate_package_list_format(packages)
-    packages.each do |package_name|
-      if not valid_package_name?(package_name)
-        raise HttpErrors::BadRequest.new(_("%s is not a valid package name") % package_name)
+    packages.each do |package|
+      if !valid_package_name?(package) && !package.is_a?(Hash)
+        raise HttpErrors::BadRequest.new(_("%s is not a valid package name") % package)
       end
     end
 

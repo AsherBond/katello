@@ -14,7 +14,7 @@
 class ProvidersController < ApplicationController
   include AutoCompleteSearch
 
-  before_filter :find_rh_provider, :only => [:redhat_provider]
+  before_filter :find_rh_provider, :only => [:redhat_provider, :redhat_provider_tab]
 
   before_filter :find_provider, :only => [:products_repos, :show, :edit, :update, :destroy, :manifest_progress,
                                           :repo_discovery, :discovered_repos, :discover, :cancel_discovery,
@@ -42,15 +42,16 @@ class ProvidersController < ApplicationController
       :auto_complete_search => index_test,
       :new => create_test,
       :create => create_test,
-      :edit =>read_test,
+      :edit => read_test,
       :update => edit_test,
       :destroy => delete_test,
       :products_repos => read_test,
       :manifest_progress => edit_test,
       :redhat_provider => read_test,
+      :redhat_provider_tab => read_test,
       :repo_discovery => edit_test,
       :new_discovered_repos => edit_test,
-      :cancel_discovery=>edit_test,
+      :cancel_discovery => edit_test,
       :discovered_repos => edit_test,
       :discover => edit_test
     }
@@ -65,8 +66,8 @@ class ProvidersController < ApplicationController
   def products_repos
     @products = @provider.products
     render :partial => "products_repos", :locals => {:provider => @provider,
-                                         :providers => @providers, :products => @products, :editable=>@provider.editable?,
-                                         :repositories_cloned_in_envrs=>repositories_cloned_in_envrs}
+                                                     :providers => @providers, :products => @products, :editable => @provider.editable?,
+                                                     :repositories_cloned_in_envrs => repositories_cloned_in_envrs}
   end
 
   def manifest_progress
@@ -85,28 +86,51 @@ class ProvidersController < ApplicationController
     response.headers["Pragma"] = "no-cache"
     response.headers["Cache-Control"] = 'no-store, no-cache, must-revalidate, max-age=0, pre-check=0, post-check=0'
 
-    render :json=>to_ret
+    render :json => to_ret
   end
 
   def redhat_provider
-    render :template =>"providers/redhat/show"
+
+    render :template => "providers/redhat/show"
+  end
+
+  def redhat_provider_tab
+    #preload orphaned product information, as it is very slow per product
+    subscription_product_ids = []
+
+    subscriptions = Resources::Candlepin::Subscription.get_for_owner(current_organization.label)
+    subscriptions.each do |sub|
+      subscription_product_ids << sub["product"]["id"] if sub["product"]["id"]
+      subscription_product_ids += sub["providedProducts"].map{|p| p["id"]}
+    end
+
+    orphaned_product_ids = current_organization.redhat_provider.products.engineering.
+        where("cp_id not in (?)", subscription_product_ids).pluck(:id)
+
+    render :partial => "providers/redhat/tab", :locals => {:tab_id => params[:tab], :orphaned_product_ids => orphaned_product_ids}
   end
 
   def items
     ids = Provider.readable(current_organization).collect{|p| p.id}
-    render_panel_direct(Provider, @panel_options, params[:search], params[:offset], [:name_sort, 'asc'],
-                  {:default_field => :name, :filter=>[{"id"=>ids}, {:provider_type=>[Provider::CUSTOM.downcase]}]})
+    render_panel_direct(
+      Provider,
+      @panel_options,
+      params[:search],
+      params[:offset],
+      [:name_sort, 'asc'],
+      {:default_field => :name, :filter => [{ "id" => ids }, { :provider_type => [Provider::CUSTOM] }]}
+    )
   end
 
   def show
     provider = Provider.find(params[:id])
-    render :partial=>"common/list_update", :locals=>{:item=>provider, :accessor=>"id", :columns=>['name']}
+    render :partial => "common/list_update", :locals => {:item => provider, :accessor => "id", :columns => ['name']}
   end
 
   def edit
-    render :partial => "edit", :locals => {:provider => @provider, :editable=>@provider.editable?,
-                                                                       :repositories_cloned_in_envrs=>repositories_cloned_in_envrs,
-                                                                       :name=>controller_display_name}
+    render :partial => "edit", :locals => {:provider => @provider, :editable => @provider.editable?,
+                                           :repositories_cloned_in_envrs => repositories_cloned_in_envrs,
+                                           :name => controller_display_name}
   end
 
   def new
@@ -116,11 +140,11 @@ class ProvidersController < ApplicationController
 
   def create
     @provider = Provider.create! params[:provider].merge({:provider_type => Provider::CUSTOM,
-                                                                  :organization => current_organization})
+                                                          :organization => current_organization})
     notify.success _("Provider '%s' was created.") % @provider['name']
 
     if search_validate(Provider, @provider.id, params[:search])
-      render :partial=>"common/list_item", :locals=>{:item=>@provider, :initial_action=>:products_repos, :accessor=>"id", :columns=>['name'], :name=>controller_display_name}
+      render :partial => "common/list_item", :locals => {:item => @provider, :initial_action => :products_repos, :accessor => "id", :columns => ['name'], :name => controller_display_name}
     else
       notify.message _("'%s' did not meet the current search criteria and is not being shown.") % @provider["name"]
       render :json => { :no_match => true }
@@ -131,7 +155,7 @@ class ProvidersController < ApplicationController
     if @provider.destroy
       notify.success _("Provider '%s' was deleted.") % @provider[:name]
       #render and do the removal in one swoop!
-      render :partial => "common/list_remove", :locals => {:id=>params[:id], :name=>controller_display_name}
+      render :partial => "common/list_remove", :locals => {:id => params[:id], :name => controller_display_name}
     end
   end
 
@@ -142,7 +166,7 @@ class ProvidersController < ApplicationController
     updated_provider.name = params[:provider][:name] unless params[:provider][:name].nil?
 
     unless params[:provider][:description].nil?
-      result = updated_provider.description = params[:provider][:description].gsub("\n",'')
+      result = updated_provider.description = params[:provider][:description].gsub("\n", '')
     end
 
     updated_provider.repository_url = params[:provider][:repository_url] unless params[:provider][:repository_url].nil?
@@ -151,7 +175,7 @@ class ProvidersController < ApplicationController
     updated_provider.save!
     notify.success _("Provider '%s' was updated.") % updated_provider.name
 
-    if not search_validate(Provider, updated_provider.id, params[:search])
+    if !search_validate(Provider, updated_provider.id, params[:search])
       notify.message _("'%s' no longer matches the current search criteria.") % updated_provider["name"]
     end
 
@@ -160,33 +184,33 @@ class ProvidersController < ApplicationController
 
   def repo_discovery
     running = @provider.discovery_task.nil? ? false : !@provider.discovery_task.finished?
-    render :partial=>'repo_discovery',
-           :locals => {:provider => @provider, :discovered=>get_discovered_urls,
-              :running=>running,
-              :repositories_cloned_in_envrs=>repositories_cloned_in_envrs}
+    render :partial => 'repo_discovery',
+           :locals => {:provider => @provider, :discovered => get_discovered_urls,
+                       :running => running,
+                       :repositories_cloned_in_envrs => repositories_cloned_in_envrs}
   end
 
   def discovered_repos
     running = @provider.discovery_task.nil? ? false : !@provider.discovery_task.finished?
-    render :json =>{:urls=>get_discovered_urls, :running=>running}
+    render :json => {:urls => get_discovered_urls, :running => running}
   end
 
   def new_discovered_repos
     urls = params[:urls] || []
-    render :partial=>'new_discovered_repos', :locals=>{:urls=>urls}
+    render :partial => 'new_discovered_repos', :locals => {:urls => urls}
   end
 
   def cancel_discovery
     @provider.discovery_task = nil
     @provider.save!
-    render :nothing=>true
+    render :nothing => true
   end
 
   def discover
     @provider.discovery_url = params[:url]
     @provider.save!
     @provider.discover_repos(true)
-    render :nothing=>true
+    render :nothing => true
   end
 
   protected
@@ -197,7 +221,7 @@ class ProvidersController < ApplicationController
       path = url.sub(@provider.discovery_url, '')
       path = "/#{path}" if path[0] != '/'
 
-      all_repos = Repository.where(:feed=>url).in_environments_products([current_organization.library.id],
+      all_repos = Repository.where(:feed => url).in_environments_products([current_organization.library.id],
                                                             @provider.products.pluck(:id))
       existing = {}
       all_repos.each do |repo|
@@ -205,7 +229,7 @@ class ProvidersController < ApplicationController
         existing[repo.product.name] << repo.name
       end
 
-      {:url=>url, :path=>path, :existing=>existing}
+      {:url => url, :path => path, :existing => existing}
     end
   end
 
@@ -217,19 +241,18 @@ class ProvidersController < ApplicationController
     @provider = current_organization.redhat_provider
   end
 
-
   def panel_options
     @panel_options = { :title => _('Providers'),
-             :col => ['name'],
-             :titles => [_('Name')],
-             :create => _('Provider'),
-             :create_label => _('+ New Provider'),
-             :name => controller_display_name,
-             :ajax_load => true,
-             :ajax_scroll=>items_providers_path(),
-             :initial_action => :products_repos,
-             :search_class => Provider,
-             :enable_create => Provider.creatable?(current_organization)}
+                       :col => ['name'],
+                       :titles => [_('Name')],
+                       :create => _('Provider'),
+                       :create_label => _('+ New Provider'),
+                       :name => controller_display_name,
+                       :ajax_load => true,
+                       :ajax_scroll => items_providers_path,
+                       :initial_action => :products_repos,
+                       :search_class => Provider,
+                       :enable_create => Provider.creatable?(current_organization)}
   end
 
   def controller_display_name

@@ -10,6 +10,7 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
+# rubocop:disable HashMethods
 module Katello
   module Configuration
 
@@ -31,74 +32,75 @@ module Katello
       include Enumerable
 
       def each(&block)
-        @data.each &block
+        @data.each(&block)
       end
 
       # get configuration for `key`
-      # @param [Symbol] key
+      # @param [Symbol, String] key
       # @raise [NoKye] when key is missing
       def [](key)
-        raise ArgumentError, "#{key.inspect} should be a Symbol" unless Symbol === key
-        if has_key? key
+        key = key.to_s
+
+        if key? key
           @data[key].is_a?(Proc) ? @data[key].call : @data[key]
         else
-          raise NoKey, key.to_s
+          raise NoKey, key
         end
       end
 
       # converts `value` to Config
       # @see #convert
       def []=(key, value)
-        @data[key.to_sym] = convert value
+        @data[key.to_s] = convert value
       end
 
-      def has_key?(key)
-        @data.has_key? key
+      def key?(key)
+        @data.key? key.to_s
       end
+      alias_method :has_key?, :key?
 
       # @example does node contain value at `node[:key1][:key2]`
       #    node.present? :key1, :key2
       def present?(*keys)
         key, rest = keys.first, keys[1..-1]
         raise ArgumentError, 'supply at least one key' unless key
-        has_key? key and self[key] and if rest.empty?
-                                         true
-                                       elsif Node === self[key]
-                                         self[key].present?(*rest)
-                                       else
-                                         false
-                                       end
+        key?(key) && self[key] && if rest.empty?
+                                    true
+                                  elsif self[key].is_a?(Node)
+                                    self[key].present?(*rest)
+                                  else
+                                    false
+                                  end
       end
 
       # allows access keys by method call
       # @raise [NoKye] when `key` is missing
       def method_missing(method, *args, &block)
-        if has_key?(method)
+        if key?(method)
           self[method]
         else
           begin
             super
-          rescue NoMethodError => e
+          rescue NoMethodError
             raise NoKey, method.to_s
           end
         end
       end
 
       # respond to implementation according to method missing
-      def respond_to?(symbol, include_private=false)
-        has_key?(symbol) || super
+      def respond_to?(method, include_private = false)
+        key?(method) || super
       end
-
 
       # does not supports Hashes in Arrays
       def deep_merge!(hash_or_config)
         return self if hash_or_config.nil?
         other_config = convert hash_or_config
         other_config.each do |key, other_value|
-          value     = has_key?(key) && self[key]
-          self[key] = if Node === value && Node === other_value
+          value     = key?(key) && self[key]
+          self[key] = if value.is_a?(Node) && other_value.is_a?(Node)
                         value.deep_merge!(other_value)
-                      elsif Node === value && other_value.nil?
+                      elsif value.is_a?(Node) && other_value.nil?
                         self[key]
                       else
                         other_value
@@ -109,7 +111,7 @@ module Katello
 
       def to_hash
         @data.inject({}) do |hash, (k, v)|
-          hash.update k => (Node === v ? v.to_hash : v)
+          hash.update k => (v.is_a?(Node) ? v.to_hash : v)
         end
       end
 
@@ -131,15 +133,12 @@ module Katello
 
       # converts Hash by symbolizing keys and allowing only symbols as keys
       def convert_hash(hash)
-        raise ArgumentError, "#{hash.inspect} is not a Hash" unless Hash === hash
+        raise ArgumentError, "#{hash.inspect} is not a Hash" unless hash.is_a?(Hash)
 
         hash.keys.each do |key|
-          hash[(key.to_sym rescue key) || key] = convert hash.delete(key)
+          hash[key.to_s] = convert hash.delete(key)
         end
 
-        hash.keys.all? do |k|
-          Symbol === k or raise ArgumentError, "keys must be Symbols, #{k.inspect} is not"
-        end
         hash
       end
     end

@@ -65,7 +65,8 @@ class Api::V1::ProductsController < Api::V1::ApiController
   end
   def update
     raise HttpErrors::BadRequest, _("Red Hat products cannot be updated.") if @product.redhat?
-    @product.update_attributes!(params[:product].slice(:description, :gpg_key_name))
+    @product.gpg_key_name = params[:product][:gpg_key_name] unless params[:product][:gpg_key_name].nil? # not .blank?
+    @product.update_attributes!(params[:product].slice(:description))
     if params[:product][:recursive]
       @product.reset_repo_gpgs!
     end
@@ -75,18 +76,14 @@ class Api::V1::ProductsController < Api::V1::ApiController
   api :GET, "/environments/:environment_id/products", "List products in an environment"
   api :GET, "/organizations/:organization_id/products", "List all products in an organization"
   param :organization_id, :identifier, :desc => "organization identifier"
-  param :environment_id, :identifier, :desc => "environment identifier"
   param :name, :identifier, :desc => "product identifier"
+  param :include_marketing, :bool, :desc => "include marketing products in results"
   def index
     query_params.delete(:organization_id)
     query_params.delete(:environment_id)
+    query_params[:type] = "Product" unless query_params.delete(:include_marketing)
 
-    if @environment.nil? || @environment.library?
-      products = Product.all_readable(@organization)
-    else
-      products = @environment.products.all_readable(@organization)
-    end
-
+    products = Product.all_readable(@organization)
     respond :collection => products.select("products.*, providers.name AS provider_name").joins(:provider).where(query_params).all
   end
 
@@ -108,6 +105,11 @@ class Api::V1::ProductsController < Api::V1::ApiController
   param :name, :identifier, :desc => "repository identifier"
   param :content_view_id, :identifier, :desc => "find repos in content view instead of default content view"
   def repositories
+    if !@environment.library? && @content_view.nil?
+      raise HttpErrors::BadRequest,
+            _("Cannot retrieve repos from non-library environment '%s' without a content view.") % @environment.name
+    end
+
     respond_for_index :collection => @product.repos(@environment, query_params[:include_disabled], @content_view).
         where(query_params.slice(:name))
   end

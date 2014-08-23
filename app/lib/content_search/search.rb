@@ -18,6 +18,7 @@ module ContentSearch
   class Search
     include Element
     display_attributes :rows, :name, :cols
+    attr_accessor :mode
 
     def current_organization
       SearchUtils.current_organization
@@ -28,13 +29,8 @@ module ContentSearch
       av.render(*args)
     end
 
-
     def mode
       @mode || :all
-    end
-
-    def mode=(mode)
-      @mode = mode
     end
 
     def offset

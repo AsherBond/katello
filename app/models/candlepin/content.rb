@@ -10,9 +10,9 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-
-
 class Candlepin::Content
+
+  # rubocop:disable SymbolName
   attr_accessor :name, :id, :type, :label, :vendor, :contentUrl, :gpgUrl
 
   def initialize(params = {})
@@ -45,7 +45,6 @@ class Candlepin::Content
   end
 
   def load_attributes(params)
-    params.each_pair {|k,v| instance_variable_set("@#{k}", v) unless v.nil? }
+    params.each_pair {|k, v| instance_variable_set("@#{k}", v) unless v.nil? }
   end
 end
-

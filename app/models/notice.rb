@@ -13,18 +13,17 @@
 class Notice < ActiveRecord::Base
   include Glue::ElasticSearch::Notice if Katello.config.use_elasticsearch
 
-  has_many :user_notices
+  has_many :user_notices, :dependent => :destroy
   has_many :users, :through => :user_notices
-  belongs_to :organization
+  belongs_to :organization, :inverse_of => :notices
 
   TYPES = [:message, :warning, :success, :error]
 
-  validates_inclusion_of :level, :in => TYPES + TYPES.collect{|type| type.to_s}
-  validates_presence_of :text
-  validates_length_of :text, :maximum => 1024
-  validates_length_of :user_notices, :minimum => 1
-  validates_length_of :level, :maximum => 255
-  validates_length_of :request_type, :maximum => 255
+  validates :level, :inclusion => {:in => TYPES + TYPES.collect{|type| type.to_s}}
+  validates :text, :presence => true, :length => {:maximum => 1024}
+  validates :user_notices, :length => {:minimum => 1}
+  validates :level, :length => {:maximum => 255}
+  validates :request_type, :length => {:maximum => 255}
 
   before_validation :set_default_notice_level
   before_validation :trim_text

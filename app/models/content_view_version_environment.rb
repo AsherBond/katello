@@ -10,17 +10,15 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-
-
 class ContentViewVersionEnvironment < ActiveRecord::Base
-  belongs_to :environment, :class_name=>'KTEnvironment'
-  belongs_to :content_view_version
+  belongs_to :environment, :class_name => 'KTEnvironment', :inverse_of => :content_view_version_environments
+  belongs_to :content_view_version, :inverse_of => :content_view_version_environments
 
   before_create :verify_not_exists
 
   def verify_not_exists
     if self.content_view_version.environments.include?(self.environment)
-      raise _("Content View %{view} is already in environment %{env}") % {:view=>self.content_view_version.content_view.name, :env=>self.environment.name}
+      raise _("Content View %{view} is already in environment %{env}") % {:view => self.content_view_version.content_view.name, :env => self.environment.name}
     end
   end
 

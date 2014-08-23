@@ -36,19 +36,18 @@ end
 
 class Warden::SessionSerializer
   def serialize(user)
-    raise ArgumentError, "Cannot serialize invalid user object: #{user}" if not user.is_a? User and user.id.is_a? Integer
+    raise ArgumentError, "Cannot serialize invalid user object: #{user}" if !(user.is_a?(User) && user.id.is_a?(Integer))
     user.id
   end
 
   def deserialize(id)
-    raise ArgumentError, "Cannot deserialize non-integer id: #{id}" unless id.is_a? Integer
+    raise ArgumentError, "Cannot deserialize non-integer id: #{id}" unless id.is_a?(Integer)
     User.find(id) rescue nil
   end
 end
 
-Warden::Manager.after_authentication do |user,auth,opts|
+Warden::Manager.after_authentication do |user, auth, opts|
   user = user.username if user.respond_to? :username
-  message = auth.winning_strategy.message
   Rails.logger.debug "User #{user} authenticated: #{auth.winning_strategy.message}"
 end
 
@@ -59,29 +58,31 @@ Warden::Strategies.add(:openid) do
     Katello.config.sso.enable && params[:password].blank?
   end
 
+  # TODO: clean up this method
+  # rubocop:disable MethodLength
   def authenticate!
     if (response = env[Rack::OpenID::RESPONSE])
       # we have response from OpenID provider so we try to login user
       case response.status
-        when :success
-          if (user = User.find_by_username(response.identity_url.split('/').last))
-            success!(user)
-          else
-            message = 'User not found'
-            Rails.logger.warn(message) && fail(message)
-            throw(:warden, :openid => { :response => response }) unless params[:sso_tried].present?
-          end
+      when :success
+        if (user = User.find_by_username(CGI.unescape(response.identity_url.split('/').last)))
+          success!(user)
         else
-          # :missing status means that request was not made, probably wrong certificate on Signo side
-          message = response.respond_to?(:message) ? response.message : "OpenID authentication failed: #{response.status}"
-          Rails.logger.error(message) && fail(message)
-          throw(:warden, :openid => { :response => response }) unless params[:sso_tried].present?
+          message = 'User not found'
+          Rails.logger.warn(message) && fail(message)
+          throw(:warden, :openid => {:response => response}) unless params[:sso_tried].present?
+        end
+      else
+        # :missing status means that request was not made, probably wrong certificate on Signo side
+        message = response.respond_to?(:message) ? response.message : "OpenID authentication failed: #{response.status}"
+        Rails.logger.error(message) && fail(message)
+        throw(:warden, :openid => {:response => response}) unless params[:sso_tried].present?
       end
     elsif (username = cookies[:username] || params[:username])
       # we already have cookie
-      identifier = "#{Katello.config.sso.provider_url}/user/#{username}"
+      identifier = "#{Katello.config.sso.provider_url}/user/#{CGI.escape(username)}"
       custom!([401,
-               { 'WWW-Authenticate' => Rack::OpenID.build_header({:identifier => identifier}) },
+               {'WWW-Authenticate' => Rack::OpenID.build_header({:identifier => identifier})},
                ''])
     else
       # we have no cookie yet so we plain redirect to OpenID provider to login
@@ -95,7 +96,7 @@ Warden::Strategies.add(:database) do
 
   # relevant only when username and password params are set
   def valid?
-    (params[:username] && params[:password]) or (params[:auth_username] && params[:auth_password])
+    (params[:username] && params[:password]) || (params[:auth_username] && params[:auth_password])
   end
 
   def authenticate!
@@ -117,7 +118,7 @@ Warden::Strategies.add(:ldap) do
 
   # relevant only when username and password params are set
   def valid?
-    (params[:username] && params[:password]) or (params[:auth_username] && params[:auth_password])
+    (params[:username] && params[:password]) || (params[:auth_username] && params[:auth_password])
   end
 
   def authenticate!
@@ -145,7 +146,7 @@ Warden::Strategies.add(:certificate) do
     return fail('No ssl client certificate, skipping ssl-certificate authentication') if ssl_client_cert.blank?
     consumer_cert = OpenSSL::X509::Certificate.new(ssl_client_cert)
     uuid = uuid(consumer_cert)
-    u = CpConsumerUser.new(:uuid =>uuid, :username =>uuid, :remote_id=> uuid)
+    u = CpConsumerUser.new(:uuid => uuid, :username => uuid, :remote_id => uuid)
     success!(u, "certificate")
   end
 
@@ -154,8 +155,8 @@ Warden::Strategies.add(:certificate) do
     return nil if cert.blank? || cert == "(null)"
     # apache does not preserve new lines in cert file - work-around:
     if cert.include?("-----BEGIN CERTIFICATE----- ")
-      cert = cert.to_s.gsub("-----BEGIN CERTIFICATE----- ","").gsub(" -----END CERTIFICATE-----","")
-      cert.gsub!(" ","\n")
+      cert = cert.to_s.gsub("-----BEGIN CERTIFICATE----- ", "").gsub(" -----END CERTIFICATE-----", "")
+      cert.gsub!(" ", "\n")
       cert = "-----BEGIN CERTIFICATE-----\n#{cert}-----END CERTIFICATE-----\n"
     end
     return cert
@@ -180,7 +181,7 @@ Warden::Strategies.add(:oauth) do
 
     rack_request = Rack::Request.new(request.env)
     consumer_key = OAuth::RequestProxy.proxy(rack_request).oauth_consumer_key
-    signature=OAuth::Signature.build(rack_request) do
+    signature = OAuth::Signature.build(rack_request) do
       [nil, consumer(consumer_key).secret]
     end
 
@@ -189,16 +190,16 @@ Warden::Strategies.add(:oauth) do
     u = User.where(:username => request.headers['HTTP_KATELLO_USER']).first
     u ? success!(u, "OAuth") : fail!("Username is not correct - could not log in")
   rescue OAuth::Signature::UnknownSignatureMethod => e
-    Rails.logger.error "Unknown oauth signature method"+ e.to_s
-    fail!("Unknown oauth signature method"+ e.to_s)
+    Rails.logger.error "Unknown oauth signature method" + e.to_s
+    fail!("Unknown oauth signature method" + e.to_s)
   rescue => e
-    Rails.logger.error "exception occurred while authenticating via oauth "+ e.to_s
-    fail!("exception occurred while authenticating via oauth "+ e.to_s)
+    Rails.logger.error "exception occurred while authenticating via oauth " + e.to_s
+    fail!("exception occurred while authenticating via oauth " + e.to_s)
   end
 
   def consumer(consumer_key)
-    OAuth::Consumer.new Katello.config[consumer_key.to_sym].oauth_key,
-                        Katello.config[consumer_key.to_sym].oauth_secret
+    OAuth::Consumer.new Katello.config[consumer_key].oauth_key,
+                        Katello.config[consumer_key].oauth_secret
   end
 end
 

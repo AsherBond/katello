@@ -11,14 +11,20 @@
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
 class Filter < ActiveRecord::Base
-  belongs_to :content_view_definition, :class_name => "ContentViewDefinitionBase"
-  has_many  :rules, :class_name => "FilterRule", :dependent => :destroy
+  belongs_to :content_view_definition,
+             :class_name => "ContentViewDefinitionBase",
+             :inverse_of => :filters
+  has_many :rules, :class_name => "FilterRule", :dependent => :destroy
+
+  # rubocop:disable HasAndBelongsToMany
+  # TODO: change these into has_many :through associations
   has_and_belongs_to_many :repositories, :class_name => "Repository", :uniq => true
   has_and_belongs_to_many :products, :uniq => true
 
+  validate :validate_content_definition
   validate :validate_products_and_repos
   validates :name, :presence => true, :allow_blank => false,
-              :uniqueness => {:scope => :content_view_definition_id}
+                   :uniqueness => {:scope => :content_view_definition_id}
   validates_with Validators::KatelloNameFormatValidator, :attributes => :name
 
   def self.applicable(repo)
@@ -28,11 +34,17 @@ class Filter < ActiveRecord::Base
   end
 
   def as_json(options = {})
-     super(options).update("content_view_definition_label" => content_view_definition.label,
+    super(options).update("content_view_definition_label" => content_view_definition.label,
                           "organization" => content_view_definition.organization.label,
                           "products" =>  products.collect(&:name),
                           "repos" => repositories.collect(&:name),
                           "rules" => rules)
+  end
+
+  def validate_content_definition
+    if self.content_view_definition.composite?
+      errors.add(:base, _("cannot contain filters if composite definition"))
+    end
   end
 
   def validate_filter_products_and_repos(errors, cvd)
@@ -58,6 +70,23 @@ class Filter < ActiveRecord::Base
     end
 
     filter
+  end
+
+  def resulting_products
+    (self.products + self.repositories.collect{|r| r.product}).uniq
+  end
+
+  def repos(env)
+    repos = self.products.map { |prod| prod.repos(env) }.flatten.reject(&:puppet?)
+    repos + repositories
+  end
+
+  def puppet_repository
+    repositories.puppet_type.first
+  end
+
+  def puppet_repository_id
+    puppet_repository.try(:id)
   end
 
   protected

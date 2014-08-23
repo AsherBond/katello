@@ -39,26 +39,26 @@ class SyncPlansController < ApplicationController
 
   def items
     render_panel_direct(SyncPlan, @panel_options, params[:search], params[:offset], [:name_sort, :asc],
-                        {:default_field => :name, :filter=>{:organization_id=>[current_organization.id]}})
+                        {:default_field => :name, :filter => {:organization_id => [current_organization.id]}})
 
   end
 
   def setup_options
     @panel_options = { :title => _('Sync Plans'),
-                 :col =>  ['name', 'interval'],
-                  :titles => [_('Name'), _("Interval") ],
-                 :create => _('Plan'),
-                 :create_label => _('+ New Plan'),
-                 :name => controller_display_name,
-                 :ajax_load => true,
-                 :ajax_scroll => items_sync_plans_path(),
-                 :enable_create => current_organization.syncable?,
-                 :search_class=>SyncPlan}
+                       :col =>  %w(name interval),
+                       :titles => [_('Name'), _("Interval")],
+                       :create => _('Plan'),
+                       :create_label => _('+ New Plan'),
+                       :name => controller_display_name,
+                       :ajax_load => true,
+                       :ajax_scroll => items_sync_plans_path,
+                       :enable_create => current_organization.syncable?,
+                       :search_class => SyncPlan}
   end
 
   def edit
     render :partial => "edit",
-           :locals => {:plan=>@plan, :editable=> current_organization.syncable?, :name=>controller_display_name }
+           :locals => {:plan => @plan, :editable => current_organization.syncable?, :name => controller_display_name }
   end
 
   def update
@@ -69,23 +69,23 @@ class SyncPlansController < ApplicationController
     updated_plan.interval = params[:sync_plan][:interval] unless params[:sync_plan][:interval].nil?
 
     unless params[:sync_plan][:description].nil?
-      result = updated_plan.description = params[:sync_plan][:description].gsub("\n",'')
+      result = updated_plan.description = params[:sync_plan][:description].gsub("\n", '')
     end
 
     if params[:sync_plan][:time]
-      (updated_plan.sync_date = convert_date_time(updated_plan.plan_date, params[:sync_plan][:time].strip)) or
-          return render_bad_parameters(_('Invalid date or time format'))
+      updated_plan.sync_date = convert_date_time(updated_plan.plan_date, params[:sync_plan][:time].strip)
+      return render_bad_parameters(_('Invalid date or time format')) unless updated_plan.sync_date
     end
 
     if params[:sync_plan][:date]
-      (updated_plan.sync_date = convert_date_time(params[:sync_plan][:date].strip, updated_plan.plan_time)) or
-          return render_bad_parameters(_('Invalid date or time format'))
+      updated_plan.sync_date = convert_date_time(params[:sync_plan][:date].strip, updated_plan.plan_time)
+      return render_bad_parameters(_('Invalid date or time format')) unless updated_plan.sync_date
     end
 
     updated_plan.save!
     notify.success N_("Sync Plan '%s' was updated.") % updated_plan.name
 
-    if not search_validate(SyncPlan, updated_plan.id, params[:search])
+    if !search_validate(SyncPlan, updated_plan.id, params[:search])
       notify.message _("'%s' no longer matches the current search criteria.") % updated_plan["name"]
     end
 
@@ -103,11 +103,11 @@ class SyncPlansController < ApplicationController
       notify.success N_("Sync plan '%s' was deleted.") % @plan[:name]
     end
 
-    render :partial => "common/list_remove", :locals => {:id=>params[:id], :name=>controller_display_name}
+    render :partial => "common/list_remove", :locals => {:id => params[:id], :name => controller_display_name}
   end
 
   def show
-    render :partial => "common/list_update", :locals=>{:item=>@plan, :accessor=>"id", :columns=>['name', 'interval']}
+    render :partial => "common/list_update", :locals => {:item => @plan, :accessor => "id", :columns => %w(name interval)}
   end
 
   def new
@@ -126,14 +126,14 @@ class SyncPlansController < ApplicationController
   def create
     sdate = params[:sync_plan].delete :plan_date
     stime = params[:sync_plan].delete :plan_time
-    (params[:sync_plan][:sync_date] = convert_date_time(sdate, stime)) or
-        return render_bad_parameters(_('Invalid date or time format'))
+    params[:sync_plan][:sync_date] = convert_date_time(sdate, stime)
+    return render_bad_parameters(_('Invalid date or time format')) unless params[:sync_plan][:sync_date]
 
     @plan = SyncPlan.create! params[:sync_plan].merge({:organization => current_organization})
     notify.success N_("Sync Plan '%s' was created.") % @plan['name']
 
     if search_validate(SyncPlan, @plan.id, params[:search])
-      render :partial=>"common/list_item", :locals=>{:item=>@plan, :accessor=>"id", :columns=>['name', 'interval'], :name=>controller_display_name}
+      render :partial => "common/list_item", :locals => {:item => @plan, :accessor => "id", :columns => %w(name interval), :name => controller_display_name}
     else
       notify.message _("'%s' did not meet the current search criteria and is not being shown.") % @plan["name"]
       render :json => { :no_match => true }

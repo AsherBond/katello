@@ -10,14 +10,13 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-
 module Navigation
   module Items
     class Providers < Navigation::Item
 
       def initialize(organization)
         @key           = :providers
-        @display       = _("Custom Content Repositories")
+        @display       = _("Custom Repositories")
         @authorization = lambda{ organization && Provider.any_readable?(organization) }
         @url           = providers_path
       end

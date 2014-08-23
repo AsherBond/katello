@@ -18,10 +18,10 @@ class PackagesController < ApplicationController
 
   def rules
 
-    view = lambda{
+    view = lambda do
       !Repository.readable_in_org(current_organization).where(
-          :pulp_id=>@package.repoids).empty?
-    }
+          :pulp_id => @package.repoids).empty?
+    end
 
     auto_complete = lambda do
       if @def_filter
@@ -43,32 +43,31 @@ class PackagesController < ApplicationController
 
   def auto_complete
     if @def_filter
-      repos = @def_filter.products.map { |prod| prod.repos(current_organization.library) }.flatten
-      repos += @def_filter.repositories
-      results = Package.autocomplete_name("#{params[:term]}*", repos.map(&:pulp_id))
+      repoids = @def_filter.repos(current_organization.library).map(&:pulp_id)
+      results = Package.autocomplete_name("#{params[:term]}*", repoids)
     end
 
     render :json => results
   end
 
   def show
-    render :partial=>"show"
+    render :partial => "show"
   end
 
   def filelist
-    render :partial=>"filelist"
+    render :partial => "filelist"
   end
 
   def changelog
-    render :partial=>"changelog"
+    render :partial => "changelog"
   end
 
   def dependencies
-    render :partial=>"dependencies"
+    render :partial => "dependencies"
   end
 
   def details
-    render :partial=>"details"
+    render :partial => "details"
   end
 
   private
@@ -76,7 +75,7 @@ class PackagesController < ApplicationController
   def lookup_package
     @package_id = params[:id]
     @package = Package.find @package_id
-    raise _("Unable to find package %s")% @package_id if @package.nil?
+    raise _("Unable to find package %s") % @package_id if @package.nil?
   end
 
   def find_filter

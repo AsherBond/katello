@@ -15,12 +15,12 @@ class ActivationKey < ActiveRecord::Base
   include Glue::ElasticSearch::ActivationKey if Katello.config.use_elasticsearch
   include Authorization::ActivationKey
 
-  belongs_to :organization
-  belongs_to :environment, :class_name => "KTEnvironment"
-  belongs_to :user
+  belongs_to :organization, :inverse_of => :activation_keys
+  belongs_to :environment, :class_name => "KTEnvironment", :inverse_of => :activation_keys
+  belongs_to :user, :inverse_of => :activation_keys
   belongs_to :content_view, :inverse_of => :activation_keys
 
-  has_many :key_pools
+  has_many :key_pools, :dependent => :destroy
   has_many :pools, :class_name => "::Pool", :through => :key_pools
 
   has_many :key_system_groups, :dependent => :destroy
@@ -34,14 +34,14 @@ class ActivationKey < ActiveRecord::Base
   before_validation :set_default_content_view, :unless => :persisted?
   validates_with Validators::KatelloNameFormatValidator, :attributes => :name
   validates :name, :presence => true
-  validates_uniqueness_of :name, :scope => :organization_id
+  validates :name, :uniqueness => {:scope => :organization_id}
   validates_with Validators::KatelloDescriptionFormatValidator, :attributes => :description
   validates :environment, :presence => true
   validate :environment_exists
   validate :environment_key_conflict
   validates :content_view, :presence => true, :allow_blank => false
   validates_each :usage_limit do |record, attr, value|
-    if not value.nil? and (value < -1 or value == 0 or (value != -1 and value < record.usage_count))
+    if !value.nil? && (value < -1 || value == 0 || (value != -1 && value < record.usage_count))
       # we don't let users to set usage limit lower than current usage
       record.errors[attr] << _("must be higher than current usage (%s) or unlimited" % record.usage_count)
     end
@@ -70,7 +70,7 @@ class ActivationKey < ActiveRecord::Base
 
   # sets up system when registering with this activation key - must be executed in a transaction
   def apply_to_system(system)
-    if not usage_limit.nil? and usage_limit != -1 and usage_count >= usage_limit
+    if !usage_limit.nil? && usage_limit != -1 && usage_count >= usage_limit
       raise Errors::UsageLimitExhaustedException, _("Usage limit (%{limit}) exhausted for activation key '%{name}'") % {:limit => usage_limit, :name => name}
     end
     system.environment_id = self.environment_id if self.environment_id
@@ -94,18 +94,20 @@ class ActivationKey < ActiveRecord::Base
   end
 
   # subscribe to each product according the entitlements remaining
+  # TODO: break up method
+  # rubocop:disable MethodLength
   def subscribe_system(system)
     already_subscribed = []
     begin
       # sanity check before we start subscribing
       self.pools.each do |pool|
-        raise _("Pool %s has no product associated") % pool.cp_id unless pool.product_id
-        raise _("Unable to determine quantity for pool %s") % pool.cp_id unless pool.quantity
+        fail _("Pool %s has no product associated") % pool.cp_id unless pool.product_id
+        fail _("Unable to determine quantity for pool %s") % pool.cp_id unless pool.quantity
       end
 
       allocate = system.sockets.to_i
       Rails.logger.debug "Number of sockets for registration: #{allocate}"
-      raise _("Number of sockets must be higher than 0 for system %s") % system.name if allocate <= 0
+      fail _("Number of sockets must be higher than 0 for system %s") % system.name if allocate <= 0
 
       # we sort just to make the order deterministig.
       self.pools.group_by(&:product_id).sort_by(&:first).each do |product_id, pools|
@@ -128,7 +130,7 @@ class ActivationKey < ActiveRecord::Base
       already_subscribed.each do |entitlement_id|
         begin
           Rails.logger.debug "Rolling back: #{entitlement_id}"
-          entitlements_array = system.unsubscribe entitlement_id
+          system.unsubscribe(entitlement_id)
         rescue => re
           Rails.logger.fatal "Rollback failed, skipping: #{re.message}"
         end
@@ -160,7 +162,7 @@ class ActivationKey < ActiveRecord::Base
     self.pools.each do |pool|
       begin
         Resources::Candlepin::Pool.find(pool.cp_id)
-      rescue RestClient::ResourceNotFound => e
+      rescue RestClient::ResourceNotFound
         obsolete_pools << pool
       end
     end

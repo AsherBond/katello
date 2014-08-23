@@ -14,23 +14,31 @@
 describe('Factory: Nutupane', function() {
     var $timeout,
         $location,
-        CurrentOrganization,
         Resource,
+        expectedResult,
         Nutupane;
 
     beforeEach(module('Bastion.widgets'));
 
-    beforeEach(module(function($provide) {
+    beforeEach(module(function() {
+        expectedResult = [{id: 2, value: "value2"}, {id:3, value: "value3"}];
         Resource = {
             query: function(params, callback) {
-                callback();
+                var result = {results: expectedResult};
+                if (callback) {
+                    callback(result);
+                }
+                return result;
             },
+            customAction: function() {},
             total: 10,
             subtotal: 8,
-            offset: 5
+            offset: 5,
+            sort: {
+                by: "description",
+                order: "ASC"
+            }
         };
-
-        $provide.value('CurrentOrganization', 'ACME');
     }));
 
     beforeEach(inject(function(_$location_, _$timeout_, _Nutupane_) {
@@ -39,19 +47,34 @@ describe('Factory: Nutupane', function() {
         Nutupane = _Nutupane_;
     }));
 
-    describe("adds addiontional functionality to the Nutupane table by", function() {
+    describe("adds additional functionality to the Nutupane table by", function() {
         var nutupane;
 
         beforeEach(function() {
             nutupane = new Nutupane(Resource);
             nutupane.table.working = false;
+            nutupane.table.rows = [{id: 0, value: "value0"}, {id:1, value: "value1"}];
         });
 
         it("providing a method to fetch records for the table", function() {
-            spyOn(Resource, 'query');
+            var expected = nutupane.table.rows.concat(expectedResult);
+
+            spyOn(Resource, 'query').andCallThrough();
             nutupane.query();
 
             expect(Resource.query).toHaveBeenCalled();
+            expect(nutupane.table.rows.length).toBe(4);
+            angular.forEach(nutupane.table.rows, function(value, index) {
+                expect(value).toBe(expected[index]);
+            });
+        });
+
+        it("providing a method to refresh the table", function() {
+            spyOn(Resource, 'query').andCallThrough();
+            nutupane.refresh();
+
+            expect(Resource.query).toHaveBeenCalled();
+            expect(nutupane.table.rows).toBe(expectedResult);
         });
 
         it("providing a method to perform a search", function() {
@@ -87,8 +110,24 @@ describe('Factory: Nutupane', function() {
             expect(nutupane.table.closeItem).toThrow();
         });
 
+        it("updates a single occurrence of a row within the list of rows.", function() {
+            var newRow = {id:0, value:"new value", anotherValue: "value"};
+            nutupane.query();
+            nutupane.table.replaceRow(newRow);
+            expect(nutupane.table.rows[0]).toBe(newRow);
+        });
+
+        it("removes a single occurrence of a row within the list of rows.", function() {
+            var row = {id:0, value: "value2"};
+            nutupane.removeRow(row.id);
+            expect(nutupane.table.rows.length).toBe(1);
+            expect(nutupane.table.rows).not.toContain(row);
+        });
+
         it("providing a method that fetches more data", function() {
+            nutupane.table.rows = [];
             spyOn(Resource, 'query');
+
             nutupane.table.nextPage();
 
             expect(Resource.query).toHaveBeenCalled();
@@ -102,37 +141,50 @@ describe('Factory: Nutupane', function() {
             expect(Resource.query).not.toHaveBeenCalled();
         });
 
-        it("refusing to fetch more data if the subtotal of records equals the offset", function() {
+        it("refusing to fetch more data if the subtotal of records equals the number of rows", function() {
             spyOn(Resource, 'query');
-            nutupane.table.resource.offset = 8;
+            nutupane.table.rows = new Array(8);
             nutupane.table.nextPage();
 
             expect(Resource.query).not.toHaveBeenCalled();
         });
 
-        describe("provides a way to sort the table", function(){
+        it("provides a way to add an individual row", function() {
+            nutupane.table.rows = new Array(8);
+            nutupane.table.addRow('');
+
+            expect(nutupane.table.rows.length).toBe(9);
+        });
+
+        describe("provides a way to sort the table", function() {
             it ("defaults the sort to ascending if the previous sort does not match the new sort.", function() {
-                nutupane.table.sort = {};
+                var expectedParams = {sort_by: 'name', sort_order: 'ASC', offset: 0, search: ''};
+                nutupane.table.resource.sort = {};
+
+                spyOn(Resource, 'query');
                 nutupane.table.sortBy({id: "name"});
-                expect(nutupane.table.sort.by).toBe("name");
-                expect(nutupane.table.sort.order).toBe("ASC");
+
+                expect(Resource.query).toHaveBeenCalledWith(expectedParams, jasmine.any(Function));
             });
 
             it("toggles the sort order if already sorting by that column", function() {
-                nutupane.table.sort = {
+                var expectedParams = {sort_by: 'name', sort_order: 'DESC', offset: 0, search: ''};
+                nutupane.table.resource.sort = {
                     by: 'name',
                     order: 'ASC'
                 };
+
+                spyOn(Resource, 'query');
                 nutupane.table.sortBy({id: "name"});
-                expect(nutupane.table.sort.by).toBe("name");
-                expect(nutupane.table.sort.order).toBe("DESC");
+
+                expect(Resource.query).toHaveBeenCalledWith(expectedParams, jasmine.any(Function));
             });
 
             it("sets the column sort order and marks it as active.", function() {
                 var column = {id: "name"}
-                nutupane.table.sort = {};
+                nutupane.table.resource.sort = {};
                 nutupane.table.sortBy(column);
-                expect(column.sortOrder).toBe(nutupane.table.sort.order);
+                expect(column.sortOrder).toBe("ASC");
                 expect(column.active).toBe(true);
             });
 
@@ -141,6 +193,20 @@ describe('Factory: Nutupane', function() {
                 nutupane.table.sortBy({id: "name"});
                 expect(nutupane.query).toHaveBeenCalled();
             });
+        });
+    });
+
+    describe("recognizes custom actions by", function() {
+        beforeEach(function() {
+            nutupane = new Nutupane(Resource, {}, 'customAction');
+            nutupane.table.working = false;
+        });
+
+        it("providing a method to fetch records for the table", function() {
+            spyOn(Resource, 'customAction');
+            nutupane.query();
+
+            expect(Resource.customAction).toHaveBeenCalled();
         });
     });
 

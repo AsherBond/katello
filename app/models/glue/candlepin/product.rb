@@ -32,18 +32,20 @@ module Glue::Candlepin::Product
       # we must store custom logger object during product importing so we can log status
       # from various places like callbacks
       attr_accessor :import_logger
+
+      attr_accessible :multiplier, :attrs, :productContent
     end
   end
 
   def self.validate_name(name)
-    name.gsub(/[^a-z0-9\-_ ]/i,"")
+    name.gsub(/[^a-z0-9\-_ ]/i, "")
   end
 
-  def self.import_from_cp(attrs=nil, &block)
+  def self.import_from_cp(attrs = nil, &block)
     product_content_attrs = attrs.delete(:productContent) || []
     import_logger        = attrs[:import_logger]
 
-    attrs = attrs.merge('name' => validate_name(attrs['name']), 'label' => Util::Model::labelize(attrs['name']))
+    attrs = attrs.merge('name' => validate_name(attrs['name']), 'label' => Util::Model.labelize(attrs['name']))
 
     product = Product.new(attrs, &block)
     product.orchestration_for = :import_from_cp_ar_setup
@@ -61,7 +63,7 @@ module Glue::Candlepin::Product
   end
 
   def self.import_marketing_from_cp(attrs, engineering_product_ids, &block)
-    attrs = attrs.merge('name' => validate_name(attrs['name']), 'label' => Util::Model::labelize(attrs['name']))
+    attrs = attrs.merge('name' => validate_name(attrs['name']), 'label' => Util::Model.labelize(attrs['name']))
 
     product = MarketingProduct.new(attrs, &block)
     product.orchestration_for = :import_from_cp_ar_setup
@@ -77,15 +79,15 @@ module Glue::Candlepin::Product
 
   module InstanceMethods
 
-    def initialize(attribs=nil, options={})
+    def initialize(attribs = nil, options = {})
       unless attribs.nil?
-        attributes_key = attribs.has_key?(:attributes) ? :attributes : 'attributes'
-        if attribs.has_key?(attributes_key)
+        attributes_key = attribs.key?(:attributes) ? :attributes : 'attributes'
+        if attribs.key?(attributes_key)
           attribs[:attrs] = attribs[attributes_key]
           attribs.delete(attributes_key)
         end
 
-        @productContent = [] unless attribs.has_key?(:productContent)
+        @productContent = [] unless attribs.key?(:productContent)
 
         # ugh. hack-ish. otherwise we have to modify code every time things change on cp side
         attribs = attribs.reject do |k, v|
@@ -134,9 +136,9 @@ module Glue::Candlepin::Product
     end
 
     def convert_from_cp_fields(cp_json)
-      ar_safe_json = cp_json.has_key?(:attributes) ? cp_json.merge(:attrs => cp_json.delete(:attributes)) : cp_json
+      ar_safe_json = cp_json.key?(:attributes) ? cp_json.merge(:attrs => cp_json.delete(:attributes)) : cp_json
       ar_safe_json[:productContent] = ar_safe_json[:productContent].collect { |pc| ::Candlepin::ProductContent.new(pc, self.id) }
-      ar_safe_json[:attrs] = remove_hibernate_fields(cp_json[:attrs]) if ar_safe_json.has_key?(:attrs)
+      ar_safe_json[:attrs] = remove_hibernate_fields(cp_json[:attrs]) if ar_safe_json.key?(:attrs)
       ar_safe_json[:attrs] ||= []
       ar_safe_json.except('id')
     end
@@ -148,18 +150,18 @@ module Glue::Candlepin::Product
       elements.collect{ |e| e.except(:id, :created, :updated)}
     end
 
-    def add_content content
+    def add_content(content)
       Resources::Candlepin::Product.add_content self.cp_id, content.content.id, true
       self.productContent << content
     end
 
-    def remove_content_by_id content_id
+    def remove_content_by_id(content_id)
       Resources::Candlepin::Product.remove_content cp_id, content_id
     end
 
     def set_product
       Rails.logger.debug "Creating a product in candlepin: #{name}"
-      self.attrs ||=  [{:name=>"arch", :value=>"ALL"}]
+      self.attrs ||=  [{:name => "arch", :value => "ALL"}]
       json = Resources::Candlepin::Product.create({
         :name => self.name,
         :multiplier => self.multiplier || 1,
@@ -264,7 +266,7 @@ module Glue::Candlepin::Product
 
     def set_unlimited_subscription
       # we create unlimited subscriptions only for generic yum providers
-      if self.provider and self.provider.yum_repo?
+      if self.provider && self.provider.yum_repo?
         Rails.logger.debug "Creating unlimited subscription for product #{name} in candlepin"
         Resources::Candlepin::Product.create_unlimited_subscription self.organization.label, self.cp_id
       end
@@ -276,7 +278,7 @@ module Glue::Candlepin::Product
 
     def del_unlimited_subscription
       # we create unlimited subscriptions only for generic yum providers
-      if self.provider and self.provider.yum_repo?
+      if self.provider && self.provider.yum_repo?
         self.del_subscriptions
       end
     end
@@ -313,18 +315,18 @@ module Glue::Candlepin::Product
 
     def save_product_orchestration
       case self.orchestration_for
-        when :create
-          pre_queue.create(:name => "candlepin product: #{self.name}",                          :priority => 1, :action => [self, :set_product])
-          pre_queue.create(:name => "create unlimited subscription in candlepin: #{self.name}", :priority => 2, :action => [self, :set_unlimited_subscription])
-        when :import_from_cp
-          # we leave it as it is - to not break re-import logic
-        when :import_from_cp_ar_setup
-          # skip creating product in candlepin as its already there
-        when :update
-          #called when sync schedule changed, repo added, repo deleted
-          pre_queue.create(:name => "update content in candlein: #{self.name}", :priority => 1, :action => [self, :update_content])
-        when :promote
-          #queue.create(:name => "update candlepin product: #{self.name}", :priority =>3, :action => [self, :update_content])
+      when :create
+        pre_queue.create(:name => "candlepin product: #{self.name}",                          :priority => 1, :action => [self, :set_product])
+        pre_queue.create(:name => "create unlimited subscription in candlepin: #{self.name}", :priority => 2, :action => [self, :set_unlimited_subscription])
+      when :import_from_cp
+        # we leave it as it is - to not break re-import logic
+      when :import_from_cp_ar_setup
+        # skip creating product in candlepin as its already there
+      when :update
+        #called when sync schedule changed, repo added, repo deleted
+        pre_queue.create(:name => "update content in candlein: #{self.name}", :priority => 1, :action => [self, :update_content])
+      when :promote
+        #queue.create(:name => "update candlepin product: #{self.name}", :priority => 3, :action => [self, :update_content])
       end
     end
 
@@ -336,6 +338,7 @@ module Glue::Candlepin::Product
     end
 
     protected
+
     def added_content
       old_content_ids = productContent_change[0].nil? ? [] : productContent_change[0].map {|pc| pc.content.label}
       new_content_ids = productContent_change[1].map {|pc| pc.content.label}

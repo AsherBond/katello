@@ -10,6 +10,7 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
+# rubocop:disable SymbolName
 class Api::V1::DistributorsController < Api::V1::ApiController
   respond_to :json
 
@@ -31,9 +32,9 @@ class Api::V1::DistributorsController < Api::V1::ApiController
   def rules
     index_distributors   = lambda { Distributor.any_readable?(@organization) }
     register_distributor = lambda { Distributor.registerable?(@environment, @organization) }
-    edit_distributor     = lambda { @distributor.editable? or User.consumer? }
-    read_distributor     = lambda { @distributor.readable? or User.consumer? }
-    delete_distributor   = lambda { @distributor.deletable? or User.consumer? }
+    edit_distributor     = lambda { @distributor.editable? || User.consumer? }
+    read_distributor     = lambda { @distributor.readable? || User.consumer? }
+    delete_distributor   = lambda { @distributor.deletable? || User.consumer? }
 
     {
         :new           => register_distributor,
@@ -138,18 +139,19 @@ class Api::V1::DistributorsController < Api::V1::ApiController
   api :GET, "/distributors/:id/pools", "List pools a distributor is subscribed to"
   param :id, String, :desc => "UUID of the distributor", :required => true
   def pools
-    match_distributor = params.has_key?(:match_distributor) ? params[:match_distributor].to_bool : false
-    match_installed   = params.has_key?(:match_installed) ? params[:match_installed].to_bool : false
-    no_overlap        = params.has_key?(:no_overlap) ? params[:no_overlap].to_bool : false
+    match_distributor = params.key?(:match_distributor) ? params[:match_distributor].to_bool : false
+    match_installed   = params.key?(:match_installed) ? params[:match_installed].to_bool : false
+    no_overlap        = params.key?(:no_overlap) ? params[:no_overlap].to_bool : false
 
     cp_pools = @distributor.filtered_pools(match_distributor, match_installed, no_overlap)
 
     respond_for_index :collection => { :pools => cp_pools }
   end
 
+  # TODO: break up this method
   api :GET, "/environments/:environment_id/distributors/report", "Get distributor reports for the environment"
   api :GET, "/organizations/:organization_id/distributors/report", "Get distributor reports for the organization"
-  def report
+  def report # rubocop:disable MethodLength
     data = @environment.nil? ? @organization.distributors.readable(@organization) : @environment.distributors.readable(@organization)
 
     data = data.flatten.map do |r|
@@ -159,28 +161,21 @@ class Api::V1::DistributorsController < Api::V1::ApiController
       )
     end.flatten!
 
+    transforms = lambda do |r|
+      r.organization    = r.organization.name
+      r.environment     = r.environment.name
+      r.created_at      = r.created_at.to_s
+      r.updated_at      = r.updated_at.to_s
+      r.compliant_until = r.compliant_until.to_s
+      r.custom_info     = r.custom_info.collect { |info| info.to_s }.join(", ")
+    end
+
     distributor_report = Ruport::Data::Table.new(
         :data         => data,
-        :column_names => ["name",
-                          "uuid",
-                          "location",
-                          "organization",
-                          "environment",
-                          "created_at",
-                          "updated_at",
-                          "compliance_color",
-                          "compliant_until",
-                          "custom_info"
-        ],
+        :column_names => %w(name uuid location organization environment
+                            created_at updated_at compliance_color compliant_until custom_info),
         :record_class => Ruport::Data::Record,
-        :transforms   => lambda { |r|
-          r.organization    = r.organization.name
-          r.environment     = r.environment.name
-          r.created_at      = r.created_at.to_s
-          r.updated_at      = r.updated_at.to_s
-          r.compliant_until = r.compliant_until.to_s
-          r.custom_info     = r.custom_info.collect { |info| info.to_s }.join(", ")
-        }
+        :transforms   => transforms
     )
 
     pdf_options = { :pdf_format   => {
@@ -191,7 +186,7 @@ class Api::V1::DistributorsController < Api::V1::ApiController
                     :table_format => {
                         :width         => 585,
                         :cell_style    => { :size => 8 },
-                        :row_colors    => ["FFFFFF", "F0F0F0"],
+                        :row_colors    => %w(FFFFFF F0F0F0),
                         :column_widths => {
                             0 => 100,
                             1 => 100,
@@ -210,7 +205,7 @@ class Api::V1::DistributorsController < Api::V1::ApiController
     distributor_report.rename_column("custom_info", "custom info")
 
     respond_to do |format|
-      format.html { render :text => distributor_report.as(:html), :type => :html and return }
+      format.html { render :text => distributor_report.as(:html), :type => :html }
       format.text { render :text => distributor_report.as(:text, :ignore_table_width => true) }
       format.csv { render :text => distributor_report.as(:csv) }
       format.pdf do
@@ -254,8 +249,11 @@ class Api::V1::DistributorsController < Api::V1::ApiController
   protected
 
   def find_only_environment
-    if !@environment && @organization && !params.has_key?(:environment_id)
-      raise HttpErrors::BadRequest, _("Organization %{org} has the '%{env}' environment only. Please create an environment for distributor registration.") % { :org => @organization.name, :env => "Library" } if @organization.environments.empty?
+    if !@environment && @organization && !params.key?(:environment_id)
+      if @organization.environments.empty?
+        raise HttpErrors::BadRequest, _("Organization %{org} has the '%{env}' environment only. Please create an environment for distributor registration.") %
+          { :org => @organization.name, :env => "Library" }
+      end
 
       # Some subscription-managers will call /users/$user/owners to retrieve the orgs that a user belongs to.
       # Then, If there is just one org, that will be passed to the POST /api/consumers as the owner. To handle
@@ -269,7 +267,9 @@ class Api::V1::DistributorsController < Api::V1::ApiController
           raise HttpErrors::BadRequest, _("Organization %s has more than one environment. Please specify target environment for distributor registration.") % @organization.name
         end
       else
-        @environment = @organization.environments.first and return
+        if @environment = @organization.environments.first
+          return
+        end
       end
     end
   end
@@ -279,7 +279,7 @@ class Api::V1::DistributorsController < Api::V1::ApiController
   end
 
   def find_environment
-    return unless params.has_key?(:environment_id)
+    return unless params.key?(:environment_id)
 
     @environment = KTEnvironment.find(params[:environment_id])
     raise HttpErrors::NotFound, _("Couldn't find environment '%s'") % params[:environment_id] if @environment.nil?
@@ -290,7 +290,7 @@ class Api::V1::DistributorsController < Api::V1::ApiController
   def verify_presence_of_organization_or_environment
     # This has to grab the first default org associated with this user AND
     # the environment that goes with him.
-    return if params.has_key?(:organization_id) or params.has_key?(:owner) or params.has_key?(:environment_id)
+    return if params.key?(:organization_id) || params.key?(:owner) || params.key?(:environment_id)
 
     #At this point we know that they didn't supply an org or environment, so we can look up the default
     @environment = current_user.default_environment

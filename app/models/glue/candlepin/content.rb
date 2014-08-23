@@ -10,7 +10,6 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-
 module Glue::Candlepin::Content
   def self.included(base)
     base.send :include, InstanceMethods
@@ -41,7 +40,7 @@ module Glue::Candlepin::Content
 
       if self.new_record? && !self.product.provider.redhat_provider? && self.environment.library?
         pre_queue.create(:name => "create content : #{self.name}", :priority => 2, :action => [self, :create_content],
-            :action_rollback => [self, :del_content]
+                         :action_rollback => [self, :del_content]
         )
       elsif !self.new_record? && should_update_content?
         pre_queue.create(:name => "update content : #{self.name}", :priority => 2, :action => [self, :update_content])
@@ -96,7 +95,7 @@ module Glue::Candlepin::Content
         :contentUrl => Glue::Pulp::Repos.custom_content_path(self.product, label),
         :gpgUrl => yum_gpg_key_url,
         :label => custom_content_label,
-        :type => "yum",
+        :type => self.content_type,
         :vendor => Provider::CUSTOM
       })
     end
@@ -108,7 +107,7 @@ module Glue::Candlepin::Content
         :content => {
           :name => self.name,
           :contentUrl => Glue::Pulp::Repos.custom_content_path(self.product, self.label),
-          :type => "yum",
+          :type => self.content_type,
           :label => self.custom_content_label,
           :vendor => Provider::CUSTOM
         },
@@ -122,8 +121,8 @@ module Glue::Candlepin::Content
     end
 
     def should_update_content?
-      (self.gpg_key_id_was == nil && self.gpg_key_id != nil && self.content.gpgUrl == '') ||
-          (self.gpg_key_id_was != nil && self.gpg_key_id == nil && self.content.gpgUrl != '')
+      (self.gpg_key_id_was.nil? && !self.gpg_key_id.nil? && self.content.gpgUrl == '') ||
+          (!self.gpg_key_id_was.nil? && self.gpg_key_id.nil? && self.content.gpgUrl != '')
     end
 
     def yum_gpg_key_url
@@ -136,7 +135,7 @@ module Glue::Candlepin::Content
     end
 
     def custom_content_label
-      "#{organization.label} #{product.label} #{label}".gsub(/\s/,"_")
+      "#{organization.label} #{product.label} #{label}".gsub(/\s/, "_")
     end
   end
 

@@ -53,7 +53,6 @@ describe ProductsController, :katello => true do
       it_should_behave_like "protected action"
     end
 
-
     describe "post create" do
       let(:action) {:create}
       let(:req) { post :create, :provider_id => @provider.id}
@@ -81,7 +80,6 @@ describe ProductsController, :katello => true do
     end
   end
 
-
   describe "gpg" do
     before do
       disable_product_orchestration
@@ -92,7 +90,8 @@ describe ProductsController, :katello => true do
       @organization = new_test_org
       @provider = Provider.create!(:provider_type=>Provider::CUSTOM, :name=>"foo1", :organization=>@organization)
       Provider.stub!(:find).and_return(@provider)
-      @gpg = GpgKey.create!(:name =>"GPG", :organization=>@organization, :content=>"bar")
+      test_gpg_content = File.open("#{Rails.root}/spec/assets/gpg_test_key").read
+      @gpg = GpgKey.create!(:name =>"GPG", :organization=>@organization, :content=>test_gpg_content)
     end
     context "when creating a product" do
       before do
@@ -105,8 +104,6 @@ describe ProductsController, :katello => true do
       its(:name){should == @prod_name}
       its(:gpg_key){should == @gpg}
     end
-
-
 
     context "when updating a product" do
       before do

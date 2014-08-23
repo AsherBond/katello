@@ -10,7 +10,6 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-
 module Glue::ElasticSearch::ContentView
   extend ActiveSupport::Concern
 
@@ -29,13 +28,13 @@ module Glue::ElasticSearch::ContentView
       indexes :name_sort, :type => 'string', :index => :not_analyzed
       indexes :label, :type => 'string', :index => :not_analyzed
       indexes :description, :type => 'string', :analyzer => :kt_name_analyzer
-      indexes :name_autocomplete, :type=>'string', :analyzer=>'autcomplete_name_analyzer'
+      indexes :name_autocomplete, :type => 'string', :analyzer => 'autcomplete_name_analyzer'
     end
 
     def extended_index_attrs
       {
-        :name_sort=>name.downcase,
-        :name_autocomplete=>self.name,
+        :name_sort => name.downcase,
+        :name_autocomplete => self.name,
         :organization_id => organization.id
       }
     end
@@ -48,8 +47,15 @@ module Glue::ElasticSearch::ContentView
 
     def total_errata_count(env)
       repo_ids = self.repos(env).collect{|r| r.pulp_id}
-      results = ::Errata.search('', 0, 1, :repoids => repo_ids)
+      results = ::Errata.search('', :page_size => 1, :filters => {:repoids => repo_ids})
       results.empty? ? 0 : results.total
     end
+
+    def total_puppet_module_count(env)
+      repoids = self.repos(env).collect{|r| r.pulp_id}
+      result = ::PuppetModule.search('*', :page_size => 1, :repoids => repoids)
+      result.length > 0 ? result.total : 0
+    end
+
   end
 end

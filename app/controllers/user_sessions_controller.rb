@@ -52,13 +52,13 @@ class UserSessionsController < ApplicationController
   end
 
   def allowed_orgs
-    render :partial=>"/layouts/allowed_orgs", :locals =>{:user=>current_user}
+    render :partial => "/layouts/allowed_orgs", :locals => {:user => current_user}
   end
 
   def set_org
     orgs = current_user.allowed_organizations
     org = Organization.find(params[:org_id])
-    if org.nil? or !orgs.include?(org)
+    if org.nil? || !orgs.include?(org)
       notify.error _("Invalid organization")
       render :nothing => true
       return
@@ -86,7 +86,7 @@ class UserSessionsController < ApplicationController
     if logged_in?
 
       #save the hash anchor if it exsts
-      if params[:hash_anchor] and  session[:original_uri] and !session[:original_uri].index("#")
+      if params[:hash_anchor] && session[:original_uri] && !session[:original_uri].index("#")
         session[:original_uri] +=  params[:hash_anchor]
       end
 
@@ -129,7 +129,9 @@ class UserSessionsController < ApplicationController
 
   # return simple 401 page (for API authentication errors)
   def return_401
-    head :status => 401 and return false
+    if head :status => 401
+      return false
+    end
   end
 
   def default_notify_options
@@ -143,6 +145,5 @@ class UserSessionsController < ApplicationController
       root_path
     end
   end
-
 
 end

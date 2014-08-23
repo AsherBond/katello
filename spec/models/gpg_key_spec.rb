@@ -17,13 +17,14 @@ describe GpgKey, :katello => true do
   include OrganizationHelperMethods
   include AuthorizationHelperMethods
 
-  describe "permission checks" do
-    let(:organization) do
-        disable_org_orchestration
-        Organization.create!(:name=>"Duh", :label => "ahaha")
-    end
+  let(:organization) do
+    disable_org_orchestration
+    Organization.create!(:name => "Duh", :label => "ahaha")
+  end
 
-    let(:gpg) {GpgKey.create!(:name => "hazard", :organization => organization, :content => "Barn")}
+  describe "permission checks" do
+
+    let(:gpg) {GpgKey.create!(:name => "Gpg key", :organization => organization, :content => File.open("#{Rails.root}/spec/assets/gpg_test_key").read )}
 
     describe "check on read operations" do
       [[:gpg, :organizations],[:read, :organizations],[:read, :providers]].each do |(perm, resource)|
@@ -60,11 +61,22 @@ describe GpgKey, :katello => true do
   describe "create gpg key" do
     before(:each) do
       new_test_org_model
+      @test_gpg_content = File.open("#{Rails.root}/spec/assets/gpg_test_key").read
     end
 
     it "should be successful with valid parameters" do
-      gpg_key = GpgKey.new(:name => "Gpg Key 1", :content => "This is the fake GPG Key content text that is valid", :organization => @organization)
+      gpg_key = GpgKey.new(:name => "Gpg Key 1", :content => @test_gpg_content, :organization => @organization)
       gpg_key.should be_valid
+    end
+
+    it 'should be destroyable' do
+      gpg_key = GpgKey.create!(:name => "Gpg Key 1", :content => @test_gpg_content, :organization => @organization)
+      disable_product_orchestration
+      create(:product, :fedora, provider: create(:provider, organization: organization)).tap do |product|
+        product.gpg_key = gpg_key
+        product.save!
+      end
+      gpg_key.destroy.should be_true
     end
 
     it "should be unsuccessful without content" do
@@ -73,8 +85,18 @@ describe GpgKey, :katello => true do
     end
 
     it "should be unsuccessful without a name" do
-      gpg_key = GpgKey.new(:content => "This is the fake GPG Key content text that is valid", :organization => @organization)
+      gpg_key = GpgKey.new(:content => @test_gpg_content, :organization => @organization)
       gpg_key.should_not be_valid
+    end
+
+    it "should be unsuccessful without proper gpg key" do
+
+      gpg_key = GpgKey.new(:name => "Gpg Key 1", :content => "foo-bar-baz", :organization => @organization)
+      if Katello.config.gpg_strict_validation
+        gpg_key.should_not be_valid
+      else
+        gpg_key.should be_valid
+      end
     end
 
     it "should be unsuccessful with binary content" do

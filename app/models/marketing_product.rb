@@ -11,6 +11,9 @@
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
 class MarketingProduct < Product
+
+  include Glue::ElasticSearch::MarketingProduct if Katello.config.use_elasticsearch
+
   has_many :marketing_engineering_products, :dependent => :destroy
   has_many :engineering_products, :through => :marketing_engineering_products
 end

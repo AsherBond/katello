@@ -10,7 +10,6 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-
 class Api::V2::FilterRulesController < Api::V1::FilterRulesController
 
   skip_before_filter :find_organization
@@ -41,7 +40,7 @@ class Api::V2::FilterRulesController < Api::V1::FilterRulesController
       "Delete a filter rule"
   param :content_view_definition_id, String, :desc => "id of the content view definition", :required => true
   param :filter_id, String, :desc => "name of the filter", :required => true
-  param :id, :String, :desc => "Id of the filter rule", :required => true
+  param :id, String, :desc => "Id of the filter rule", :required => true
   def destroy
     super
   end

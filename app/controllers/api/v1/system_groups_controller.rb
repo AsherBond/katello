@@ -10,7 +10,6 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-
 class Api::V1::SystemGroupsController < Api::V1::ApiController
 
   before_filter :find_group, :only => [:copy, :show, :update, :destroy, :destroy_systems,
@@ -69,11 +68,14 @@ class Api::V1::SystemGroupsController < Api::V1::ApiController
   param :organization_id, :identifier, :desc => "organization identifier", :required => true
   param :name, String, :desc => "System group name to filter by"
   def index
-    query_string = params[:name] ? "name:#{params[:name]}" : params[:search]
+    query_string = params[:search]
 
-    filters = [{ :id => SystemGroup.readable(@organization).pluck(:id)}]
+    filters = [:terms => {:id => SystemGroup.readable(@organization).pluck(:id)}]
+    #downcase filtered analyzed field
+    filters << {:term => {:name => params[:name].downcase}} if params[:name]
+
     options = {
-        :filter => filters
+        :filters => filters
     }
     options.merge!(params.slice(:sort_by, :sort_order))
 
@@ -271,7 +273,7 @@ class Api::V1::SystemGroupsController < Api::V1::ApiController
     raise HttpErrors::NotFound, _("Couldn't find system group '%s'") % params[:id] if @system_group.nil?
   end
 
-  def system_uuids_to_ids ids
+  def system_uuids_to_ids(ids)
     system_ids = System.where(:uuid => ids).collect { |s| s.id }
     raise Errors::NotFound.new(_("Systems [%s] not found.") % ids.join(',')) if system_ids.blank?
     system_ids

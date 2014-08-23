@@ -17,6 +17,7 @@ module Navigation
     @additions = []
     class << self
 
+      # rubocop:disable TrivialAccessors
       def list
         @additions
       end
@@ -40,7 +41,7 @@ module Navigation
       private
 
       def new_addition(type, key, node)
-        @additions << {:type=>type, :key=>key, :node=>node}
+        @additions << {:type => type, :key => key, :node => node}
       end
 
     end

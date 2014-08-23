@@ -17,10 +17,14 @@ module Util
                        :version => :sortable_version,
                        :release => :sortable_release
                      }
+    LESS_THAN = "lt"
+    GREATER_THAN = "gt"
+    EQUAL = "eq"
+    OPERATORS = [LESS_THAN, GREATER_THAN, EQUAL]
 
     attr_accessor :operator, :version, :epoch, :release
 
-    def initialize(evr, operator=nil)
+    def initialize(evr, operator = nil)
       extract_epoch_version_release(evr)
       self.operator = operator
     end
@@ -48,9 +52,11 @@ module Util
     private
 
     def equality_clauses
-      [:version, :epoch, :release].each_with_object([]) do |field, clauses|
-        clauses << {:term => {field => self.send(field)}} unless self.send(field).blank?
-      end
+      clauses = []
+      clauses << {:term => {:sortable_version => self.version}} unless self.version.blank?
+      clauses << {:term => {:sortable_release => self.release}} unless self.release.blank?
+      clauses << {:term => {:epoch => self.epoch}} unless self.epoch.blank?
+      {:and => clauses}
     end
 
     def range_clauses

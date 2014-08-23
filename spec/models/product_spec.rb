@@ -71,7 +71,7 @@ describe Product, :katello => true do
         it "should create product in katello" do
 
           expected_product = {
-              :attributes => ProductTestData::PRODUCT_WITH_ATTRS[:attributes],
+              :attributes => ProductTestData::PRODUCT_WITH_ATTRS[:attrs],
               :multiplier => ProductTestData::PRODUCT_WITH_ATTRS[:multiplier],
               :name => ProductTestData::PRODUCT_WITH_ATTRS[:name]
           }
@@ -143,14 +143,14 @@ describe Product, :katello => true do
     specify { Product.new(:label=>"boo", :name => 'contains #', :provider => @provider).should be_valid }
     specify { Product.new(:label=> "shoo", :name => 'contains space', :provider => @provider).should be_valid }
     specify { Product.new(:label => "bar foo", :name=> "foo", :provider => @provider).should_not be_valid}
-    it "should be successful when creating a product with a duplicate name in one organization" do
+    it "should not be successful when creating a product with a duplicate name in one organization" do
       @p = Product.create!(ProductTestData::SIMPLE_PRODUCT)
 
       Product.new({:name=>@p.name, :label=> @p.name,
         :id => @p.cp_id,
         :productContent => @p.productContent,
         :provider => @p.provider
-      }).should be_valid
+      }).should_not be_valid
     end
   end
 
@@ -158,6 +158,7 @@ describe Product, :katello => true do
     before(:each) do
       disable_product_orchestration
       Katello.pulp_server.extensions.repository.stub(:publish_all).and_return([])
+      Repository.any_instance.stubs(:publish_distributor)
     end
 
     context "repo id" do
@@ -181,7 +182,7 @@ describe Product, :katello => true do
         Resources::Candlepin::Content.stub!(:create).and_return({:id => "123", :type=>'yum'})
         Resources::Candlepin::Content.stub!(:update).and_return({:id => "123", :type=>'yum'})
         Resources::Candlepin::Content.stub!(:get).and_return({:id => "123", :type=>'yum'})
-
+        Repository.any_instance.stub(:generate_metadata)
         @p = Product.create!(ProductTestData::SIMPLE_PRODUCT)
       end
 
@@ -190,7 +191,7 @@ describe Product, :katello => true do
           @repo_name = "repo"
           @repo_label = "repo"
           disable_repo_orchestration
-          @p.add_repo(@repo_label, @repo_name, "http://test/repo","yum" )
+          @p.add_repo(@repo_label, @repo_name, "http://test/repo","yum")
         end
 
         it "should raise conflict error" do
@@ -310,21 +311,19 @@ describe Product, :katello => true do
       @repo.stub(:promoted?).and_return(false)
       @repo.stub(:update_content).and_return(Candlepin::Content.new)
     end
+
     context "Test list enabled repos should show redhat repos" do
       before do
         @repo.enabled = false
         @repo.save!
       end
+
       specify {Product.readable(@organization).should be_empty}
       subject {Product.all_readable(@organization)}
       it {should_not be_empty}
       it {should == [@product]}
       specify {Product.editable(@organization).should be_empty}
       specify {Product.syncable(@organization).should be_empty}
-
-      subject {Product.all_editable(@organization)}
-      it {should_not be_empty}
-      it {should == [@product]}
     end
 
     context "Test list enabled repos should show redhat repos" do
@@ -332,9 +331,9 @@ describe Product, :katello => true do
         @repo.enabled = true
         @repo.save!
       end
+
       specify {Product.readable(@organization).should == [@product]}
       specify {Product.syncable(@organization).should == [@product]}
-      specify {Product.editable(@organization).should == [@product]}
     end
   end
 
@@ -344,7 +343,8 @@ describe Product, :katello => true do
       disable_repo_orchestration
 
       suffix = (rand 10 **6).to_s
-      @gpg = GpgKey.create!(:name =>"GPG", :organization=>@organization, :content=>"bar")
+      test_gpg_content = File.open("#{Rails.root}/spec/assets/gpg_test_key").read
+      @gpg = GpgKey.create!(:name =>"GPG", :organization=>@organization, :content=>test_gpg_content)
       @provider = Provider.create!({:organization =>@organization, :name => 'provider' + suffix,
                               :repository_url => "https://something.url", :provider_type => Provider::CUSTOM})
       @product = Product.new({:name=>"prod#{suffix}", :label=> "prod#{suffix}"})
@@ -429,5 +429,16 @@ describe Product, :katello => true do
       product.repositories.map(&:environment).uniq.length.should eql(product.environments.length)
       product.environments.map(&:id).should eql([@organization.library.id])
     end
+  end
+
+  it 'should be destroyable' do
+    disable_repo_orchestration
+    product = create(:product, :fedora, provider: create(:provider, organization: @organization))
+    2.times do
+      create(:repository, product: product, environment: @organization.library,
+             content_view_version: @organization.library.default_content_view_version,
+             feed: "http://something")
+    end
+    assert product.destroy
   end
 end

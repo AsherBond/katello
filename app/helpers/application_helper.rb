@@ -10,15 +10,13 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-
-
 module ApplicationHelper
 
   include LayoutHelper
   include BrandingHelper
   include NavigationHelper
 
-  def current_url(extra_params={})
+  def current_url(extra_params = {})
     url_for params.merge(extra_params)
   end
 
@@ -33,12 +31,11 @@ module ApplicationHelper
       options      = args[1] || {}
       html_options = args[2]
 
-
       if options.key? :controller
         ctrl   = options[:controller]
         action = options[:action] || 'index'
 
-        if current_user and current_user.allowed_to?({:controller => ctrl, :action => action})
+        if current_user && current_user.allowed_to?({:controller => ctrl, :action => action})
           link_to(name, options, html_options)
         end
       end
@@ -46,20 +43,20 @@ module ApplicationHelper
 
   end
 
-  def help_tip(text, key=nil)
+  def help_tip(text, key = nil)
     key ||= params[:controller] + "-" + params[:action]
-    render :partial => "common/helptip", :locals=>{:key=>key, :text=>text}
+    render :partial => "common/helptip", :locals => {:key => key, :text => text}
   end
 
-  def help_tip_button(key=nil)
+  def help_tip_button(key = nil)
     key ||= params[:controller] + "-" + params[:action]
-    render :partial => "common/helptip_button", :locals=>{:key=>key}
+    render :partial => "common/helptip_button", :locals => {:key => key}
   end
 
   # Headpin inclusion
-  def stats_line(stats, options ={})
+  def stats_line(stats, options = {})
     render :partial => "common/stats_line",
-      :locals => {:stats => stats}
+           :locals => {:stats => stats}
   end
 
   # Headpin inclusion
@@ -96,17 +93,17 @@ module ApplicationHelper
              :titles => options[:titles],
              :custom_rows => options[:custom_rows],
              :collection => collection,
-             :accessor=>options[:accessor],
-             :url=>options[:url],
-             :left_panel_width=>options[:left_panel_width],
+             :accessor => options[:accessor],
+             :url => options[:url],
+             :left_panel_width => options[:left_panel_width],
              :ajax_load => options[:ajax_load],
-             :ajax_scroll =>options[:ajax_scroll],
-             :search_env =>options[:search_env],
-             :initial_action=>options[:initial_action] || :edit,
-             :initial_state=>options[:initial_state] || false,
-             :actions=>options[:actions],
-             :search_class=>options[:search_class],
-             :disable_create=>options[:disable_create] || false}
+             :ajax_scroll => options[:ajax_scroll],
+             :search_env => options[:search_env],
+             :initial_action => options[:initial_action] || :edit,
+             :initial_state => options[:initial_state] || false,
+             :actions => options[:actions],
+             :search_class => options[:search_class],
+             :disable_create => options[:disable_create] || false}
   end
 
   def one_panel(panel_id, collection, options)
@@ -124,16 +121,16 @@ module ApplicationHelper
              :column_titles => options[:col_titles],
              :custom_rows => options[:custom_rows],
              :collection => collection,
-             :accessor=>options[:accessor] }
+             :accessor => options[:accessor] }
   end
 
   def notification_polling_time
     time  = Katello.config.notification && Katello.config.notification.polling_seconds
-    return time.to_i  * 1000 if time
-    return 120000
+    return time.to_i  * 1_000 if time
+    return 120_000
   end
 
-  def environment_selector options = {}
+  def environment_selector(options = {})
     options[:library_clickable] = true if options[:library_clickable].nil? # ||= doesn't work if false
     options[:url_proc] = nil if options[:url_proc].nil? #explicitly set url_method to nil if not provided
 
@@ -147,7 +144,7 @@ module ApplicationHelper
     options[:url_products_proc] = nil if options[:url_products_proc].nil?
     options[:url_content_views_proc] = nil if options[:url_content_views_proc].nil?
 
-    render :partial=>"/common/env_select", :locals => options
+    render :partial => "/common/env_select", :locals => options
   end
 
   def gravatar_image_tag(email)
@@ -159,9 +156,9 @@ module ApplicationHelper
     "https:///secure.gravatar.com/avatar/#{Digest::MD5.hexdigest(email)}?d=mm&s=25"
   end
 
-  def env_select_class curr_env, selected_env, curr_path, selected_path, accessible_envs, library_clickable
+  def env_select_class(curr_env, selected_env, curr_path, selected_path, accessible_envs, library_clickable)
     classes = []
-    if (library_clickable or !curr_env.library?) and accessible_envs.member?(curr_env)
+    if (library_clickable || !curr_env.library?) && accessible_envs.member?(curr_env)
       classes << "path_link"
     else
       # if library isn't clickable, disable the hover effect
@@ -179,9 +176,9 @@ module ApplicationHelper
     classes.join(' ')
   end
 
-  def env_select_url proc, env, next_env, org
+  def env_select_url(proc, env, next_env, org)
     return nil if proc.nil?
-    proc.call(:environment=> env, :next_environment=>next_env, :organization=>org)
+    proc.call(:environment => env, :next_environment => next_env, :organization => org)
   end
 
   # auto_tab_index: this method may be used to simplify adding a tabindex to UI forms.
@@ -191,13 +188,13 @@ module ApplicationHelper
   end
 
   #formats the date time if the dat is not nil
-  def format_time  date, options = {}
+  def format_time(date, options = {})
     return I18n.l(date, options) if date
     ""
   end
 
   def generate_url(path, options, entity)
-    panel_page = options.has_key?(:panel_page) ? ("&panelpage=" + options[:panel_page]) : ""
+    panel_page = options.key?(:panel_page) ? ("&panelpage=" + options[:panel_page]) : ""
     path + "?list_search=id%3D#{options[:id]}#panel=#{entity}_#{options[:id]}" + panel_page
   end
 
@@ -209,9 +206,9 @@ module ApplicationHelper
 
   #returns a proc to generate a url for the env_selector
   def url_products_proc
-    lambda{|args|
+    lambda do |args|
       products_organization_environment_path(args[:organization].label, args[:environment].id)
-    }
+    end
   end
 
   def url_content_views_proc
@@ -262,7 +259,7 @@ module ApplicationHelper
 
     options[:as] = raw(options[:as]) if defined?(RailsXss)
 
-    a_link(options[:as], html_escape(url_for(url_options)),html_options)
+    a_link(options[:as], html_escape(url_for(url_options)), html_options)
   end
 
   def a_link(name, href, html_options)
@@ -274,23 +271,51 @@ module ApplicationHelper
   # If no provider_id is specified, it is assumed to be a Red Hat subscription and the link returned
   # goes to the subscriptions page. Alternatively, if the distinction between the Red Hat provider and
   # a custom provider is important, pass in the provider_id and the current org.
-  def subscriptions_pool_link_helper pool_name, pool_id, provider_id, org
+  def subscriptions_pool_link_helper(pool_name, pool_id, provider_id, org)
     if provider_id == org.redhat_provider.id
-      link_to pool_name, subscriptions_path(:anchor => "/!=&panel=subscription_#{pool_id}")
+      link_to(pool_name, subscriptions_path(pool_id, :anchor => "/&list_search=id:#{pool_id}&panel=subscription_#{pool_id}"))
     elsif !provider_id.nil?
-      link_to pool_name, providers_path(:anchor => "/!=&panel=provider_#{provider_id}")
+      link_to(pool_name, providers_path(provider_id, :anchor => "/&list_search=id:#{provider_id}&panel=provider_#{provider_id}"))
     else
       pool_name
     end
   end
 
-  def kt_form_for(object, options = {}, &block)
-    if current_user.experimental_ui
-      options[:builder] = Experimental::KatelloFormBuilder
-      options[:html] = { :class => "form" }
+  def system_link_helper(uuid)
+    system = System.find_by_uuid!(uuid)
+    if system.readable?
+      #link_to(system.name, root_path + "systems#list_search=id:#{system.id}&panel=system_#{system.id}")
+      link_to(system.name, systems_path(system.id, :anchor => "/&list_search=id:#{system.id}&panel=system_#{system.id}"))
     else
-      options[:builder] = KatelloFormBuilder
+      system.name
     end
+  rescue ActiveRecord::RecordNotFound
+    _('System with uuid %s not found') % host_id
+  end
+
+  def distributor_link_helper(distributor_id)
+    distributor = Distributor.find(distributor_id)
+    if distributor.readable?
+      link_to(distributor.name, distributors_path(distributor.id, :anchor => "/&list_search=id:#{distributor.id}&panel=distributor_#{distributor.id}"))
+    else
+      distributor.name
+    end
+  rescue ActiveRecord::RecordNotFound
+    _('Distributor with uuid %s not found') % distributor_id
+  end
+
+  def activation_key_link_helper(key)
+    if ActivationKey.readable? key.organization
+      link_to(key.name, activation_keys_path(key.id, :anchor => "/&list_search=id:#{key.id}&panel=activation_key_#{key.id}"))
+    else
+      key.name
+    end
+  rescue
+    _('Activation key with uuid %s not found') % key.try(:id)
+  end
+
+  def kt_form_for(object, options = {}, &block)
+    options[:builder] = KatelloFormBuilder
     form_for(object, options, &block)
   end
 
@@ -331,6 +356,59 @@ module ApplicationHelper
   def default_description_limit
     return Validators::KatelloDescriptionFormatValidator::MAX_LENGTH
   end
+
+  def repo_selector(repositories, url, field = :repository_id, record = nil)
+    products = repositories.map(&:product).uniq.sort_by{ |product| product[:name] }
+    repo_ids = repositories.map(&:id)
+
+    content_tag "select", :id => "repo_select", :name => field, "data-url" => url do
+      html = ""
+      html << content_tag("option", :value => "") { "None" }
+
+      groups = products.map do |prod|
+        content_tag("optgroup", :label => "#{h(prod.name)}") do
+          options = prod.repositories.select { |repo| repo_ids.include?(repo.id)}.map do |repo|
+            selected = record && record.send(field) == repo.id
+
+            content_tag("option", :value => repo.id, :selected => selected) do
+              h(repo.name)
+            end
+          end
+          options.join.html_safe
+        end
+      end
+
+      (html + groups.join).html_safe
+    end
+  end
+
+  # Using the record provided, return a hash where the
+  # keys are the products associated with the record and the
+  # values are arrays listing the repositories associated
+  # with the given product.
+  # For example: {product1 => [repo1, repo2]}
+  def get_product_and_repos(record, content_types)
+
+    products_hash = record.resulting_products.inject({}) do |hash, product|
+      if record.repositories.empty?
+        hash[product] = []
+      else
+        repos = product.repos(current_organization.library).where(:content_type => content_types)
+        repos.each do |repo|
+          hash[product] ||= []
+          hash[product] << repo
+        end
+      end
+      hash
+    end
+
+    products_hash
+  end
+
+  def content_search_errata_link(erratum_id)
+    path = content_search_index_path
+    anchor = {:search => {:errata => {:search => "errata_id:\"#{erratum_id}\""}, :content_type => "errata"}}
+    path + "#/!=&" +  anchor.to_param
+  end
+
 end
-
-

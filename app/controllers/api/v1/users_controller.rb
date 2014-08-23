@@ -24,7 +24,6 @@ class Api::V1::UsersController < Api::V1::ApiController
     read_test        = lambda { @user.readable? }
     edit_test        = lambda { @user.editable? }
     delete_test      = lambda { @user.deletable? }
-    user_helptip     = lambda { true }                        #everyone can enable disable a helptip
     list_owners_test = lambda { @user.id == User.current.id } #user can see only his/her owners
 
     { :index           => index_test,
@@ -42,8 +41,8 @@ class Api::V1::UsersController < Api::V1::ApiController
   end
 
   def param_rules
-    { :create => [:username, :password, :email, :disabled, :default_environment_id, :default_locale],
-      :update => { :user => [:password, :email, :disabled, :default_environment_id, :default_locale] }
+    { :create => [:username, :password, :email, :disabled, :default_organization_id, :default_locale],
+      :update => { :user => [:password, :email, :disabled, :default_organization_id, :default_locale] }
     }
   end
 
@@ -75,33 +74,36 @@ class Api::V1::UsersController < Api::V1::ApiController
     @user = User.create!(:username => params[:username],
                          :password => params[:password],
                          :email    => params[:email],
-                         :disabled => params[:disabled])
+                         :disabled => params[:disabled]) do |user|
+                           user.default_locale = params[:default_locale] if params[:default_locale]
+                         end
 
-    if params[:default_environment_id]
-      @user.default_environment = KTEnvironment.find(params[:default_environment_id])
+    if params[:default_organization_id]
+      @organization = Organization.where(:label => params[:default_organization_id]).first
+      @user.default_environment = @organization.library
+      @user.default_org = @organization.id
       @user.save!
     end
 
-    if !params[:default_locale].blank?
-      if Katello.config.available_locales.include? params[:default_locale]
-        @user.default_locale = params[:default_locale]
-        @user.save!
-      end
-    end
     respond
   end
 
   api :PUT, "/users/:id", "Update an user"
   param_group :user
   def update
-    user_params = params[:user].reject { |k, _| k == 'default_environment_id' }
+    user_params = params[:user].reject { |k, _| k == 'default_organization_id' }
 
     @user.update_attributes!(user_params)
-    @user.default_environment = if params[:user][:default_environment_id]
-                                  KTEnvironment.find(params[:user][:default_environment_id])
-                                else
-                                  nil
-                                end
+
+    if params[:user].key?(:default_organization_id)
+      if params[:user][:default_organization_id].present?
+        @organization = Organization.where(:label => params[:user][:default_organization_id]).first
+        @user.default_environment = @organization.library
+        @user.default_org = @organization.id
+      else
+        @user.default_environment = nil
+      end
+    end
 
     if !params[:default_locale].blank?
       #TODO: this should be placed in model validations
@@ -157,11 +159,16 @@ class Api::V1::UsersController < Api::V1::ApiController
                                      :include => { :roles => { :only => [:name] } })
 
     respond_to do |format|
-      format.html { render :text => users_report.as(:html), :type => :html and return }
+      format.html do
+        render :text => users_report.as(:html), :type => :html
+        return
+      end
       format.text { render :text => users_report.as(:text, :ignore_table_width => true) }
       format.csv { render :text => users_report.as(:csv) }
-      format.pdf { send_data(users_report.as(:prawn_pdf),
-                             :filename => "katello_users_report.pdf", :type => "application/pdf") }
+      format.pdf do
+        send_data(users_report.as(:prawn_pdf), :filename => "katello_users_report.pdf",
+                                               :type => "application/pdf")
+      end
     end
   end
 
@@ -169,6 +176,7 @@ class Api::V1::UsersController < Api::V1::ApiController
   def list_owners
     orgs = @user.allowed_organizations
     # rhsm expects owner (Candlepin format)
+    # rubocop:disable SymbolName
     respond_for_index :collection => orgs.map { |o| { :key => o.label, :displayName => o.name } }
   end
 

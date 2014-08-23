@@ -10,7 +10,6 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-
 require 'minitest_helper'
 
 class NavigationMenusTest < MiniTest::Rails::ActiveSupport::TestCase
@@ -56,7 +55,7 @@ class NavigationMenusTest < MiniTest::Rails::ActiveSupport::TestCase
     @systems_menu = Navigation::Menus::Systems.new(@acme_corporation)
 
     assert_equal  _('Systems'), @systems_menu.display
-    assert_equal  3, @systems_menu.items.length
+    assert_equal  2, @systems_menu.items.length
     assert_equal  'dropdown', @systems_menu.type
     assert        @systems_menu.accessible?
   end
@@ -98,9 +97,9 @@ class NavigationMenusTest < MiniTest::Rails::ActiveSupport::TestCase
   end
 
   def test_changeset_management_menu
-    menu = Navigation::Menus::ChangesetManagement.new(@acme_corporation)
+    menu = Navigation::Menus::Changesets.new(@acme_corporation)
 
-    assert_equal  _('Changeset Management'), menu.display
+    assert_equal  _('Changesets'), menu.display
     assert_equal  2, menu.items.length
     assert_equal  'flyout', menu.type
     assert        menu.accessible?
@@ -117,10 +116,8 @@ class NavigationMenusTest < MiniTest::Rails::ActiveSupport::TestCase
   def test_gravatar
     menu = Navigation::Menus::User.new(@admin)
 
-    Katello.config[:gravatar] ? assert_equal("<img src=\"https:///secure.gravatar.com/avatar/985b643b38ac0b1589b212197e27a143?d=mm&s=25\" class=\"gravatar\"><span class=\"gravatar-span\">admin", menu.display) : assert_equal(@admin.user, menu.display)
+    Katello.config[:gravatar] ? assert_equal("<img src=\"https:///secure.gravatar.com/avatar/985b643b38ac0b1589b212197e27a143?d=mm&s=25\" class=\"gravatar\"><span class=\"gravatar-span\"> admin", menu.display) : assert_equal(@admin.username, menu.display)
     assert        menu.accessible?
   end
-
-
 
 end

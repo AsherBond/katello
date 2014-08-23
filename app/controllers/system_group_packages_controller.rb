@@ -42,10 +42,12 @@ class SystemGroupPackagesController < ApplicationController
     jobs = @group.refreshed_jobs.joins(:task_statuses).where(
         'task_statuses.task_type' => actions, 'task_statuses.state' => [:waiting, :running])
 
-    render :partial=>"system_groups/packages/index",
-           :locals=>{:jobs => jobs, :editable => @group.systems_editable?}
+    render :partial => "system_groups/packages/index",
+           :locals => {:jobs => jobs, :editable => @group.systems_editable?}
   end
 
+  # TODO: break up this method
+  # rubocop:disable MethodLength
   def add
     if !params[:packages].blank?
       # user entered one or more package names (as comma-separated list) in the content box
@@ -56,18 +58,20 @@ class SystemGroupPackagesController < ApplicationController
         notify.success _("Install of Packages '%{packages}' scheduled for System Group '%{name}'.") % {:packages => params[:packages], :name => @group.name}
       else
         notify.error _("One or more errors found in Package names '%s'.") % params[:packages]
-        render :text => '' and return
+        render :text => ''
+        return
       end
 
     elsif !params[:groups].blank?
       # user entered one or more package group names (as comma-separated list) in the content box
-      groups = params[:groups].split(/ *, */ )
+      groups = params[:groups].split(/ *, */)
       job = @group.install_package_groups groups
       notify.success _("Install of Package Groups '%{groups}' scheduled for System Group '%{name}'.") % {:groups => params[:groups], :name => @group.name}
     else
       notify.error _("Empty request received to install Packages or Package Groups for System Group '%s'.") %
                        @group['name']
-      render :text => '' and return
+      render :text => ''
+      return
     end
 
     render :partial => 'system_groups/packages/items',
@@ -77,13 +81,17 @@ class SystemGroupPackagesController < ApplicationController
                         :include_tr_shading => false }
   rescue Errors::SystemGroupEmptyException => e
     if !params[:packages].blank?
-      notify.error _("Install of Packages '%{packages}' scheduled for System Group '%{name}' failed.  Reason: %{message}") % {:packages => params[:packages], :name => @group.name, :message => e.message}
+      notify.error _("Install of Packages '%{packages}' scheduled for System Group '%{name}' failed.  Reason: %{message}") %
+        {:packages => params[:packages], :name => @group.name, :message => e.message}
     elsif !params[:groups].blank?
-      notify.error _("Install of Package Groups '%{groups}' scheduled for System Group '%{name}' failed.  Reason: %{message}") % {:groups => params[:groups], :name => @group.name, :message => e.message}
+      notify.error _("Install of Package Groups '%{groups}' scheduled for System Group '%{name}' failed.  Reason: %{message}") %
+        {:groups => params[:groups], :name => @group.name, :message => e.message}
     end
-    render :text => '' and return
+    render :text => ''
   end
 
+  # TODO: break up this method
+  # rubocop:disable MethodLength
   def remove
     if !params[:packages].blank?
       # user entered one or more package names (as comma-separated list) in the content box
@@ -94,19 +102,21 @@ class SystemGroupPackagesController < ApplicationController
         notify.success _("Uninstall of Packages '%{packages}' scheduled for System Group '%{name}'.") % {:packages => params[:packages], :name => @group.name}
       else
         notify.error _("One or more errors found in Package names '%s'.") % params[:packages]
-        render :text => '' and return
+        render :text => ''
+        return
       end
 
     elsif !params[:groups].blank?
       # user entered one or more package group names (as comma-separated list) in the content box
-      groups = params[:groups].split(/ *, */ )
+      groups = params[:groups].split(/ *, */)
       job = @group.uninstall_package_groups groups
       notify.success _("Uninstall of Package Groups '%{groups}' scheduled for System Group '%{name}'.") %
         {:group => groups.join(','), :name => @group.name}
     else
       notify.error _("Empty request received to uninstall Packages or Package Groups for System Group '%s'.") %
                        @group['name']
-      render :text => '' and return
+      render :text => ''
+      return
     end
 
     render :partial => 'system_groups/packages/items', :locals => {:editable => @group.systems_editable?,
@@ -114,22 +124,26 @@ class SystemGroupPackagesController < ApplicationController
                                                                    :include_tr_shading => false}
   rescue Errors::SystemGroupEmptyException => e
     if !params[:packages].blank?
-      notify.error _("Uninstall of Packages '%{packages}' scheduled for System Group '%{name}' failed.  Reason: %{message}") % {:packages => params[:packages], :name => @group.name, :message => e.message}
+      notify.error _("Uninstall of Packages '%{packages}' scheduled for System Group '%{name}' failed.  Reason: %{message}") %
+        {:packages => params[:packages], :name => @group.name, :message => e.message}
     elsif !params[:groups].blank?
-      notify.error _("Uninstall of Package Groups '%{groups}' scheduled for System Group '%{name}' failed.  Reason: %{message}") % {:groups => params[:groups], :name => @group.name, :message => e.message}
+      notify.error _("Uninstall of Package Groups '%{groups}' scheduled for System Group '%{name}' failed.  Reason: %{message}") %
+        {:groups => params[:groups], :name => @group.name, :message => e.message}
     end
-    render :text => '' and return
+    render :text => ''
   end
 
+  # TODO: break up this method
+  # rubocop:disable MethodLength
   def update
     if !params[:groups].blank?
       # user entered one or more package group names (as comma-separated list) in the content box
-      groups = params[:groups].split(/ *, */ )
+      groups = params[:groups].split(/ *, */)
       job = @group.update_package_groups groups
       notify.success _("Update of Package Groups '%{groups}' scheduled for System Group '%{name}'.") %
         {:groups => groups.join(','), :name => @group.name}
 
-    elsif params.has_key?(:packages)
+    elsif params.key?(:packages)
       if !params[:packages].empty?
         # user entered one or more package names (as comma-separated list) in the content box
         packages = Util::Package.validate_package_list_format(params[:packages])
@@ -140,7 +154,8 @@ class SystemGroupPackagesController < ApplicationController
                              {:packages => params[:packages], :name => @group.name}
         else
           notify.error _("One or more errors found in Package names '%s'.") % params[:packages]
-          render :text => '' and return
+          render :text => ''
+          return
         end
 
       else
@@ -152,7 +167,8 @@ class SystemGroupPackagesController < ApplicationController
     else
       notify.error _("Invalid request received to update Packages or Package Groups for System Group '%s'.") %
                        @group['name']
-      render :text => '' and return
+      render :text => ''
+      return
     end
 
     render :partial => 'system_groups/packages/items',
@@ -163,11 +179,13 @@ class SystemGroupPackagesController < ApplicationController
 
   rescue Errors::SystemGroupEmptyException => e
     if !params[:packages].blank?
-      notify.error _("Update of Packages '%{packages}' scheduled for System Group '%{group}' failed.  Reason: %{message}") % {:packages => params[:packages], :group => @group.name, :message => e.message}
+      notify.error _("Update of Packages '%{packages}' scheduled for System Group '%{group}' failed.  Reason: %{message}") %
+        {:packages => params[:packages], :group => @group.name, :message => e.message}
     elsif !params[:groups].blank?
-      notify.error _("Update of Package Groups '%{groups}' scheduled for System Group '%{name}' failed.  Reason: %{message}") % {:groups => params[:groups], :name => @group.name, :message => e.message}
+      notify.error _("Update of Package Groups '%{groups}' scheduled for System Group '%{name}' failed.  Reason: %{message}") %
+        {:groups => params[:groups], :name => @group.name, :message => e.message}
     end
-    render :text => '' and return
+    render :text => ''
   end
 
   def package_status

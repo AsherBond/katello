@@ -50,14 +50,13 @@ class Api::V1::SubscriptionsController < Api::V1::ApiController
   #params :search, String, :desc => "Filter subscriptions by advanced search query"
   def organization_index
 
-    order = split_order(params[:order])
     query_string = params[:search]
     offset = params[:offset].to_i || 0
     filters = []
 
     # Limit subscriptions to current org and Red Hat provider
-    filters << {:org=>[@organization.label]}
-    filters << {:provider_id=>[@organization.redhat_provider.id]}
+    filters << {:org => [@organization.label]}
+    filters << {:provider_id => [@organization.redhat_provider.id]}
 
     options = {
         :filter => filters,
@@ -82,13 +81,13 @@ class Api::V1::SubscriptionsController < Api::V1::ApiController
 
     if params[:paged]
       subscriptions = {
-        :subscriptions => subscriptions.results,
+        :subscriptions => subscriptions,
         :subtotal => total_count,
         :total => items.total_items
       }
     end
 
-    respond_for_index :collection => subscriptions
+    respond_for_index(:collection => subscriptions)
   end
 
   api :POST, "/systems/:system_id/subscriptions", "Create a subscription"

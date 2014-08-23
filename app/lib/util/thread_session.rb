@@ -34,12 +34,13 @@ module Katello
   end
 end
 
-
 module Util
   module ThreadSession
 
     # include this in the User model
     module UserModel
+      # TODO: break up method
+      # rubocop:disable MethodLength
       def self.included(base)
         base.class_eval do
           def self.current
@@ -50,11 +51,9 @@ module Util
             unless (o.nil? || o.is_a?(self) || o.class.name == 'RSpec::Mocks::Mock')
               raise(ArgumentError, "Unable to set current User, expected class '#{self}', got #{o.inspect}")
             end
-            remote_id = o.is_a?(User) ? o.remote_id : 'nil'
             username = o.is_a?(User) ? o.username : 'nil'
             Rails.logger.debug "Setting current user thread-local variable to " + username
             Thread.current[:user] = o
-
 
             if Katello.config.use_pulp && o
               uri = URI.parse(Katello.config.pulp.url)

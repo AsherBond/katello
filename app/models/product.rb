@@ -22,7 +22,10 @@ class Product < ActiveRecord::Base
 
   include Ext::LabelFromName
 
-  has_many :marketing_engineering_products, :foreign_key=>:engineering_product_id
+  attr_accessible :name, :label, :description, :provider_id, :provider,
+                  :gpg_key_id, :gpg_key, :cp_id
+
+  has_many :marketing_engineering_products, :foreign_key => :engineering_product_id, :dependent => :destroy
   has_many :marketing_products, :through => :marketing_engineering_products
 
   belongs_to :provider, :inverse_of => :products
@@ -32,22 +35,26 @@ class Product < ActiveRecord::Base
   has_many :content_view_definitions, :through => :content_view_definition_products
   has_many :repositories, :dependent => :destroy
 
-  validates_with Validators::KatelloDescriptionFormatValidator, :attributes => :description
-  validates :name, :presence => true
-  validates :label, :presence => true
+  validates :provider_id, :presence => true
   validates_with Validators::KatelloNameFormatValidator, :attributes => :name
   validates_with Validators::KatelloLabelFormatValidator, :attributes => :label
+  validates_with Validators::KatelloDescriptionFormatValidator, :attributes => :description
+  validate  :validate_unique_name
 
-  scope :with_repos_only, lambda { |env|
+  # scope
+  def self.with_repos_only(env)
     with_repos(env, false)
-  }
+  end
 
-  scope :with_enabled_repos_only, lambda { |env|
-        with_repos(env, true)
-  }
+  # scope
+  def self.with_enabled_repos_only(env)
+    with_repos(env, true)
+  end
 
-  def self.find_by_cp_id(cp_id, organization)
-    self.where(:cp_id=>cp_id).in_org(organization).scoped(:readonly=>false).first
+  def self.find_by_cp_id(cp_id, organization = nil)
+    query = self.where(:cp_id => cp_id).scoped(:readonly => false)
+    query = query.in_org(organization) if organization
+    query.engineering.first || query.marketing.first
   end
 
   def self.in_org(organization)
@@ -55,17 +62,18 @@ class Product < ActiveRecord::Base
   end
 
   scope :engineering, where(:type => "Product")
+  scope :marketing, where(:type => "MarketingProduct")
 
-  before_save :assign_unique_label
+  before_create :assign_unique_label
 
-  def initialize(attrs=nil, options={})
+  def initialize(attrs = nil, options = {})
 
     unless attrs.nil?
       attrs = attrs.with_indifferent_access
 
       #rename "id" to "cp_id" (activerecord and candlepin variable name conflict)
-      if attrs.has_key?(:id)
-        if !attrs.has_key?(:cp_id)
+      if attrs.key?(:id)
+        if !attrs.key?(:cp_id)
           attrs[:cp_id] = attrs[:id]
         end
         attrs.delete(:id)
@@ -80,7 +88,7 @@ class Product < ActiveRecord::Base
     super
   end
 
-  def repos(env, include_disabled = false, content_view = nil)
+  def repos(env, include_disabled = false, content_view = nil, include_feedless = true)
     if content_view.nil?
       if !env.library?
         raise "No content view specified for the repos call in a " +
@@ -94,13 +102,14 @@ class Product < ActiveRecord::Base
     @repo_cache ||= {}
     @repo_cache[env.id] ||= content_view.repos_in_product(env, self)
 
-    if @repo_cache[env.id].blank? || include_disabled
-      @repo_cache[env.id]
-    else
-      # we only want the enabled repos to be visible
-      # This serves as a white list for redhat repos
-      @repo_cache[env.id].where(:enabled => true)
-    end
+    repositories = @repo_cache[env.id]
+    repositories = repositories.enabled if !include_disabled
+    repositories = repositories.has_feed if !include_feedless
+    repositories
+  end
+
+  def enabled?
+    !self.provider.redhat_provider? || self.repositories.enabled.present?
   end
 
   def organization
@@ -116,8 +125,9 @@ class Product < ActiveRecord::Base
     N_('None')
   end
 
-  def serializable_hash(options={})
-    options = {} if options == nil
+  # rubocop:disable SymbolName
+  def serializable_hash(options = {})
+    options = {} if options.nil?
 
     hash = super(options.merge(:except => [:cp_id, :id]))
     hash = hash.merge(:productContent => self.productContent,
@@ -162,11 +172,11 @@ class Product < ActiveRecord::Base
   scope :repositories_cdn_import_failed, where(:cdn_import_success => false)
 
   def assign_unique_label
-    self.label = Util::Model::labelize(self.name) if self.label.blank?
+    self.label = Util::Model.labelize(self.name) if self.label.blank?
 
     # if the object label is already being used in this org, append the id to make it unique
     if Product.all_in_org(self.organization).where('products.label = ?', self.label).count > 0
-      self.label.concat("_" + self.cp_id) unless self.cp_id.blank?
+      self.label = self.label + "_" + self.cp_id unless self.cp_id.blank?
     end
   end
 
@@ -177,11 +187,11 @@ class Product < ActiveRecord::Base
     ret
   end
 
-  def delete_repos repos
+  def delete_repos(repos)
     repos.each{|repo| repo.destroy}
   end
 
-  def delete_from_env from_env
+  def delete_from_env(from_env)
     @orchestration_for = :delete
     delete_repos(repos(from_env))
     if from_env.products.include? self
@@ -190,7 +200,7 @@ class Product < ActiveRecord::Base
     save!
   end
 
-  def environments_for_view view
+  def environments_for_view(view)
     versions = view.versions.select{|version| version.products.include?(self)}
     versions.collect{|v|v.environments}.flatten
   end
@@ -200,13 +210,25 @@ class Product < ActiveRecord::Base
       where("library = ? OR id IN (?)", true, repositories.map(&:environment_id))
   end
 
-  protected
+  def syncable_content?
+    repositories.any?(&:syncable?)
+  end
 
+  protected
 
   def self.with_repos(env, enabled_only)
     query = Repository.in_environment(env.id).select(:product_id)
     query = query.enabled if enabled_only
     joins(:provider).where('providers.organization_id' => env.organization).
-        where("(providers.provider_type ='#{::Provider::CUSTOM}') OR ( providers.provider_type ='#{::Provider::REDHAT}' AND products.id in (#{query.to_sql}))")
+        where("(providers.provider_type ='#{::Provider::CUSTOM}') OR (providers.provider_type ='#{::Provider::REDHAT}' AND products.id in (#{query.to_sql}))")
   end
+
+  def validate_unique_name
+    if self.provider && !self.provider.redhat_provider? && self.name_changed?
+      if Product.in_org(self.provider.organization).where(:name => self.name).exists?
+        self.errors[:name] << _("Product with name %s already exists in this organization.") % self.name
+      end
+    end
+  end
+
 end

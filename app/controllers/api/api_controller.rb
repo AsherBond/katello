@@ -20,11 +20,18 @@ class Api::ApiController < ActionController::Base
   before_filter :verify_ldap
   before_filter :add_candlepin_version_header
 
-
   # override warden current_user (returns nil because there is no user in that scope)
   def current_user
     # get the logged user from the correct scope
     user(:api) || user
+  end
+
+  def load_search_service(service = nil)
+    if service.nil?
+      @search_service ||= Glue::ElasticSearch::Items.new
+    else
+      @search_service ||= service
+    end
   end
 
   protected
@@ -36,7 +43,7 @@ class Api::ApiController < ActionController::Base
   def verify_ldap
     if !request.authorization.blank?
       u = current_user
-      u.verify_ldap_roles if (Katello.config.ldap_roles && u != nil)
+      u.verify_ldap_roles if (Katello.config.ldap_roles && !u.nil?)
     end
   end
 
@@ -53,7 +60,8 @@ class Api::ApiController < ActionController::Base
 
   rescue => e
     logger.error "failed to authenticate API request: " << pp_exception(e)
-    head :status => HttpErrors::INTERNAL_ERROR and return false
+    head :status => HttpErrors::INTERNAL_ERROR
+    return false
   end
 
   def request_from_katello_cli?
@@ -87,11 +95,15 @@ class Api::ApiController < ActionController::Base
   end
 
   def get_resource
-    instance_variable_get :"@#{resource_name}" or raise 'no resource loaded'
+    resource = instance_variable_get(:"@#{resource_name}")
+    raise 'no resource loaded' if resource.nil?
+    resource
   end
 
   def get_resource_collection
-    instance_variable_get :"@#{resource_collection_name}" or raise 'no resource collection loaded'
+    resource = instance_variable_get(:"@#{resource_collection_name}")
+    raise 'no resource collection loaded' if resource.nil?
+    resource
   end
 
   def resource_collection_name
@@ -102,8 +114,8 @@ class Api::ApiController < ActionController::Base
     controller_name.singularize
   end
 
-  def respond(options={})
-    method_name = ('respond_for_'+params[:action].to_s).to_sym
+  def respond(options = {})
+    method_name = ('respond_for_' + params[:action].to_s).to_sym
     raise "automatic response method '%s' not defined" % method_name unless respond_to?(method_name, true)
     return send(method_name, options)
   end

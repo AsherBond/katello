@@ -10,6 +10,7 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
+# rubocop:disable ClassVars
 class SyncManagementController < ApplicationController
   include TranslationHelper
   include ActionView::Helpers::DateHelper
@@ -21,15 +22,14 @@ class SyncManagementController < ApplicationController
   # building RPMs
   if Katello.config.use_pulp
     @@status_values = { PulpSyncStatus::Status::WAITING => _("Queued."),
-                     PulpSyncStatus::Status::FINISHED => _("Sync complete."),
-                     PulpSyncStatus::Status::ERROR => _("Error syncing!"),
-                     PulpSyncStatus::Status::RUNNING => _("Running."),
-                     PulpSyncStatus::Status::CANCELED => _("Canceled."),
-                     PulpSyncStatus::Status::NOT_SYNCED => ""}
+                        PulpSyncStatus::Status::FINISHED => _("Sync complete."),
+                        PulpSyncStatus::Status::ERROR => _("Error syncing!"),
+                        PulpSyncStatus::Status::RUNNING => _("Running."),
+                        PulpSyncStatus::Status::CANCELED => _("Canceled."),
+                        PulpSyncStatus::Status::NOT_SYNCED => ""}
   else
     @@status_values = {}
   end
-
 
   before_filter :find_provider, :except => [:index, :sync, :sync_status, :manage]
   before_filter :find_providers, :only => [:sync, :sync_status]
@@ -46,12 +46,10 @@ class SyncManagementController < ApplicationController
   def rules
 
     list_test = lambda{current_organization && Provider.any_readable?(current_organization) }
-    sync_read_test = lambda{
-      @providers.each{|prov|
-        return false if !prov.readable?
-      }
+    sync_read_test = lambda do
+      @providers.each { |prov| return false if !prov.readable? }
       return true
-    }
+    end
     sync_test = lambda {current_organization && current_organization.syncable?}
 
     { :index => list_test,
@@ -71,19 +69,19 @@ class SyncManagementController < ApplicationController
     custom_products.sort_by { |p| p.name.downcase }
 
     @products = redhat_products + custom_products
-    @product_size = Hash.new
-    @repo_status = Hash.new
-    @product_map = collect_repos(@products, org.library)
+    @product_size = {}
+    @repo_status = {}
+    @product_map = collect_repos(@products, org.library, false, false)
 
     @products.each { |product| get_product_info(product) }
   end
 
   def manage
-    @products     = Array.new
-    @sproducts    = Array.new
-    @product_map  = Array.new
-    @product_size = Hash.new
-    @repo_status  = Hash.new
+    @products     = []
+    @sproducts    = []
+    @product_map  = []
+    @product_size = {}
+    @repo_status  = {}
     @show_org     = true
 
     User.current.allowed_organizations.each do |org|
@@ -100,7 +98,7 @@ class SyncManagementController < ApplicationController
 
   def sync
     ids = sync_repos(params[:repoids]) || {}
-    respond_with (ids) do |format|
+    respond_with(ids) do |format|
       format.js { render :json => ids.to_json, :status => :ok }
     end
   end
@@ -118,14 +116,14 @@ class SyncManagementController < ApplicationController
       end
     end
 
-    respond_with (collected) do |format|
+    respond_with(collected) do |format|
       format.js { render :json => collected.to_json, :status => :ok }
     end
   end
 
   def destroy
-    retval = Repository.find(params[:id]).cancel_sync
-    render :text=>""
+    Repository.find(params[:id]).cancel_sync
+    render :text => ""
   end
 
   private
@@ -138,10 +136,10 @@ class SyncManagementController < ApplicationController
     ids = params[:repoids]
     ids = [params[:repoids]] if !params[:repoids].is_a? Array
     @providers = []
-    ids.each{|id|
+    ids.each do |id|
       repo = Repository.find(id)
       @providers << repo.product.provider
-    }
+    end
   end
 
   def format_sync_progress(sync_status, repo)
@@ -155,7 +153,7 @@ class SyncManagementController < ApplicationController
                           PulpSyncStatus::Status::NOT_SYNCED]
     {   :id             => repo.id,
         :product_id     => repo.product.id,
-        :progress       => calc_progress(sync_status),
+        :progress       => calc_progress(sync_status, repo.content_type),
         :sync_id        => sync_status.uuid,
         :state          => format_state(sync_status.state),
         :raw_state      => sync_status.state,
@@ -176,7 +174,7 @@ class SyncManagementController < ApplicationController
 
   def format_duration(finish, start)
     retval = nil
-    if !finish.nil? and !start.nil?
+    if !finish.nil? && !start.nil?
       retval = distance_of_time_in_words(finish, start)
     end
     retval
@@ -198,8 +196,8 @@ class SyncManagementController < ApplicationController
       repo = Repository.find(id)
       begin
         resp = repo.sync(:notify => true).first
-        collected.push({:id => id, :product_id=>repo.product.id, :state => resp[:state]})
-      rescue RestClient::Conflict => e
+        collected.push({:id => id, :product_id => repo.product.id, :state => resp[:state]})
+      rescue RestClient::Conflict
         notify.error N_("There is already an active sync process for the '%s' repository. Please try again later") %
                         repo.name
       end
@@ -208,16 +206,26 @@ class SyncManagementController < ApplicationController
   end
 
   # calculate the % complete of ongoing sync from pulp
-  def calc_progress(val)
-    completed = val.progress.total_size - val.progress.size_left
-    progress = if val.state =~ /error/i then -1
-               elsif val.progress.total_size == 0 then 0
-               else completed.to_f / val.progress.total_size.to_f * 100
-               end
-    retval = {:count => val.progress.total_count,
-              :left => val.progress.items_left,
-              :progress => progress
-             }
+  def calc_progress(val, content_type)
+
+    if content_type == Repository::PUPPET_TYPE
+      completed = val.progress.total_count - val.progress.items_left
+      progress = if val.state =~ /error/i then -1
+                 elsif val.progress.total_count == 0 then 0
+                 else completed.to_f / val.progress.total_count.to_f * 100
+                 end
+    else
+      completed = val.progress.total_size - val.progress.size_left
+      progress = if val.state =~ /error/i then -1
+                 elsif val.progress.total_size == 0 then 0
+                 else completed.to_f / val.progress.total_size.to_f * 100
+                 end
+    end
+
+    {:count => val.progress.total_count,
+     :left => val.progress.items_left,
+     :progress => progress
+    }
   end
 
   def get_product_info(product)

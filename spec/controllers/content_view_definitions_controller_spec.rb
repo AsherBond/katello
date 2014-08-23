@@ -263,6 +263,14 @@ describe ContentViewDefinitionsController, :katello => true do
         response.should be_bad_request
       end
 
+      it "should not publish a content view definition with puppet name conflicts" do
+        ContentViewDefinition.stub(:find).and_return(@definition)
+        @definition.stub_chain(:puppet_repository, :name_conflicts).and_return([:apache])
+        controller.should notify.error
+
+        post :publish, :id => @definition.id, :content_view => {:name => "published_view"}
+        response.should_not be_success
+      end
     end
 
     describe "GET content" do
@@ -341,6 +349,25 @@ describe ContentViewDefinitionsController, :katello => true do
         response.should be_success
         ContentViewDefinition.where(:id=>@definition.id).first.repositories.first.should ==
                                     @product.repos(@organization.library).first
+      end
+
+      it "should successfully update the puppet repository" do
+        assert @definition.repositories.size == 0
+        Repository.any_instance.stub(:create_pulp_repo).and_return([])
+        repo = create(:repository, :puppet, :product => @product,
+                      :environment => @organization.library,
+                      :content_view_version => @organization.library.default_content_view_version)
+
+        post :update_content, :id=>@definition.id, :puppet_repository_id => repo.id
+
+        response.should be_success
+        @definition.repositories.reload.should eql([repo])
+        @definition.puppet_repository.should eql(repo)
+
+        post :update_content, :id=>@definition.id, :puppet_repository_id => ""
+
+        response.should be_success
+        @definition.repositories.reload.length.should eql(0)
       end
     end
 

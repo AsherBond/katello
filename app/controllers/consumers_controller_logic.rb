@@ -10,7 +10,6 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-
 module ConsumersControllerLogic
 
   # Consumed subscriptions
@@ -32,13 +31,13 @@ module ConsumersControllerLogic
 
   # Available subscriptions
   # Note: Finding the provider is necessary for cross-linking in the UI
-  def available_subscriptions(cp_pools)
+  def available_subscriptions(cp_pools, organization = current_organization)
     if cp_pools
       pools = cp_pools.collect{|cp_pool| ::Pool.find_pool(cp_pool['id'], cp_pool)}
 
       subscriptions = pools.collect do |pool|
         product = Product.where(:cp_id => pool.product_id).all.select do |p|
-          !Provider.where(:id => p.provider_id, :organization_id => current_organization.id).first.nil?
+          !Provider.where(:id => p.provider_id, :organization_id => organization.id).first.nil?
         end
         next if product.empty?
 

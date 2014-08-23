@@ -10,7 +10,6 @@
 ## have received a copy of GPLv2 along with this software; if not, see
 ## http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-
 class Api::V1::GpgKeysController < Api::V1::ApiController
 
   skip_filter :set_locale, :require_user, :thread_locals, :authorize, :only => [:content]
@@ -99,7 +98,7 @@ might not always be 100% bullet proof, and its more important that yum can fetch
 
   def find_gpg_key
     @gpg_key = GpgKey.find(params[:id])
-  rescue ActiveRecord::RecordNotFound => e
+  rescue ActiveRecord::RecordNotFound
     raise HttpErrors::NotFound, _("Couldn't find GPG key '%s'") % params[:id]
   end
 

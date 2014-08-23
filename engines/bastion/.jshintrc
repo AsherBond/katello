@@ -7,7 +7,9 @@
     "esnext": true,
     "forin": true,
     "globals": {
-        "angular": false
+        "angular": false,
+        "KT": true,
+		"_": true
     },
     "immed": true,
     "indent": 4,

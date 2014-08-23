@@ -1,6 +1,9 @@
 #!/usr/bin/ruby
 # vim: ft=ruby:ts=2:sw=2:et
 
+# TODO: refactor out globals
+# rubocop:disable GlobalVars
+
 puts '$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$'
 puts '$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$'
 puts '$$$$$$$$$$$$$$7......~$$$$:......:$$$$:......$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$'
@@ -56,6 +59,7 @@ Use this as a template for your description. Please keep paragraph width max. 79
 characters. Inform user how to fix error.
 EOS
 
+# rubocop:disable AvoidGlobalVars
 $errors = {}
 def err(type, msg)
   $stderr.puts "#{type.to_s}: #{msg}"

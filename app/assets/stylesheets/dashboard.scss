@@ -186,7 +186,7 @@ $col_width: (($static_width) * 0.5);
       }
       .col_2 {
         display: inline-block;
-        width: $width * .4;
+        width: $width * .8;
         padding-left: 2px;
       }
       .subcol_2 {
@@ -205,11 +205,6 @@ $col_width: (($static_width) * 0.5);
         padding-left: 2px;
       }
       .col_3 {
-        display: inline-block;
-        width: $width* .40;
-        padding-left: 2px;
-      }
-      .col_4 {
         display: inline-block;
         width: $width * .05;
         padding-left: 2px;
@@ -549,7 +544,10 @@ $col_width: (($static_width) * 0.5);
   // about page css
 
   .dash {
-
+    height: auto;
+    .widget {
+      height: auto;
+    }
   }
 
   .column {
@@ -564,6 +562,7 @@ $col_width: (($static_width) * 0.5);
   .about-info {
     border: 1px solid #aaa;
     border-collapse: collapse;
+    margin-bottom: 2em;
 
     th, td {
       border: 1px solid #aaa;
@@ -581,9 +580,11 @@ $col_width: (($static_width) * 0.5);
 
   .support {
     height: 30px;
+    padding-bottom: 1.5em;
   }
-  .packages {
-    height: 320px;
+  .dash.packages .widget {
+    height: 340px;
+    padding-bottom: 1em;
   }
 }
 

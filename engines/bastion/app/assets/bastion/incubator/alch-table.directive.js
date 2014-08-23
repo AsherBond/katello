@@ -19,12 +19,22 @@ angular.module('alchemy')
             controller: 'AlchTableController'
         };
     }])
-    .controller('AlchTableController', ['$scope', '$element', function($scope, $element) {
+    .controller('AlchTableController', ['$scope', function($scope) {
         var rows = $scope.rows = [],
             headers = $scope.headers = [];
 
         $scope.table.numSelected = 0;
         $scope.table.allSelected = false;
+
+        $scope.table.getSelected = function() {
+            var selectedRows = [];
+            angular.forEach($scope.table.rows, function(row, rowIndex) {
+                if (row.selected === true) {
+                    selectedRows.push($scope.table.rows[rowIndex]);
+                }
+            });
+            return selectedRows;
+        };
 
         this.addRow = function(row) {
             rows.push(row);
@@ -52,71 +62,23 @@ angular.module('alchemy')
 
             table.allSelected = selected;
 
-            $scope.table.numSelected = table.allSelected ? rows.length : 0;
+            $scope.table.numSelected = table.allSelected ? table.rows.length : 0;
 
-            angular.forEach(rows, function(row) {
+            angular.forEach(table.rows, function(row) {
                 row.selected = table.allSelected;
             });
-            angular.forEach(headers, function(columns) {
-                columns.selected = table.allSelected;
-            });
         };
 
-        $scope.table.reduceColumns = function(index) {
-            angular.forEach(rows, function(row) {
-                angular.forEach(row.cells, function(cell, cellIndex) {
-                    if (index !== cellIndex) {
-                        cell.show = false;
-                    }
-                });
-            });
-
-            angular.forEach(headers, function(header) {
-                angular.forEach(header.columns, function(column, columnIndex) {
-                    if (columnIndex !== index) {
-                        column.show = false;
-                    }
-                });
-            });
-
-            $scope.shrinkTable(true);
-        };
-
-        $scope.table.showColumns = function() {
-            angular.forEach(rows, function(row) {
-                angular.forEach(row.cells, function(cell) {
-                    cell.show = true;
-                });
-            });
-            angular.forEach(headers, function(header) {
-                angular.forEach(header.columns, function(column) {
-                    column.show = true;
-                });
-            });
-
-            $scope.shrinkTable(false);
-        };
-
-        $scope.shrinkTable = function(shrink) {
-            if (shrink) {
-                //$element.addClass('table-reduced');
-                //angular.element($element.find('table')[1]).addClass('table-full');
-                $element.find('[alch-container-scroll]').addClass('table-full');
-            } else {
-                $element.removeClass('table-reduced');
-                angular.element($element.find('table')[1]).removeClass('table-full');
-                $element.find('[alch-table-scroll]').removeClass('table-reduced');
-            }
-        };
     }])
     .directive('alchTableHead', [function() {
-        var rowSelectTemplate = '<th class="row-select">' +
-                                  '<input type="checkbox"' +
-                                          'name="{{ row.id }}"' +
-                                          'value="{{ row.id }}"' +
-                                          'ng-model="row.selected"' +
-                                          'ng-change="itemSelected(row)">' +
-                                '</th>';
+        var rowSelectTemplate = function() {
+                return '<th class="row-select">' +
+                          '<input type="checkbox"' +
+                                  'ng-model="table.allSelected"' +
+                                  'ng-change="allSelected(table)">' +
+                        '</th>';
+            };
+
         return {
             require: '^alchTable',
             restrict: 'A',
@@ -124,31 +86,31 @@ angular.module('alchemy')
             controller: 'AlchTableHeadController',
             compile: function(tElement, tAttrs) {
                 if (tAttrs.rowSelect !== undefined) {
-                    tElement.prepend(rowSelectTemplate);
+                    tElement.prepend(rowSelectTemplate());
                 }
 
                 return function (scope, element, attrs, alchTableController) {
-                    alchTableController.addHeader(scope.row);
+                    alchTableController.addHeader(scope.header);
 
-                    scope.itemSelected = function(row) {
-                        alchTableController.selectAll(row.selected);
+                    scope.allSelected = function(table) {
+                        alchTableController.selectAll(table.allSelected);
                     };
                 };
             }
         };
     }])
     .controller('AlchTableHeadController', ['$scope', function($scope) {
-        $scope.row = {
+        $scope.header = {
             columns: []
         };
 
         this.addColumn = function(column) {
-            $scope.row.columns.push(column);
+            $scope.header.columns.push(column);
         };
     }])
     .directive('alchTableColumn', ['$compile', function($compile) {
         var sortIconTemplate = '<th ng-click="table.sortBy(column)">' +
-                                  '<i class="sort-icon" ng-show="table.sort.by == column.id" ng-class="{\'icon-sort-down\': column.sortOrder == \'DESC\', \'icon-sort-up\': column.sortOrder == \'ASC\'}"></i>' +
+                                  '<i class="sort-icon" ng-show="table.resource.sort.by == column.id" ng-class="{\'icon-sort-down\': column.sortOrder == \'DESC\', \'icon-sort-up\': column.sortOrder == \'ASC\'}"></i>' +
                                '</th>';
         return {
             require: '^alchTableHead',
@@ -162,6 +124,7 @@ angular.module('alchemy')
                     var newElement = angular.element(sortIconTemplate);
                     newElement.find('.sort-icon').before(element.html());
                     newElement.addClass('sortable');
+                    newElement.addClass(element.attr('class'));
                     element.replaceWith(newElement);
                 }
                 return function(scope, element, attributes, alchTableHeadController) {
@@ -179,14 +142,15 @@ angular.module('alchemy')
             }
         };
     }])
-    .directive('alchTableRow', [function() {
-        var rowSelectTemplate = '<td class="row-select">' +
-                                  '<input type="checkbox"' +
-                                          'name="{{ row.id }}"' +
-                                          'value="{{ row.id }}"' +
-                                          'ng-model="row.selected"' +
-                                          'ng-change="itemSelected(row)">' +
-                                '</td>';
+    .directive('alchTableRow', ['$parse', function($parse) {
+        var rowSelectTemplate = function(model) {
+                return '<td class="row-select">' +
+                          '<input type="checkbox"' +
+                                  'ng-model="' + model + '.selected"' +
+                                  'ng-change="itemSelected(' + model + ')">' +
+                        '</td>';
+            };
+
         return {
             require: '^alchTable',
             restrict: 'A',
@@ -194,25 +158,27 @@ angular.module('alchemy')
             controller: 'AlchTableRowController',
             compile: function(tElement, tAttrs) {
                 if (tAttrs.rowSelect !== undefined) {
-                    tElement.prepend(rowSelectTemplate);
+                    tElement.prepend(rowSelectTemplate(tAttrs.rowSelect));
                 }
 
                 return function(scope, element, attrs, alchTableController) {
                     alchTableController.addRow(scope.row);
 
-                    if (attrs.rowSelect !== undefined) {
-                        scope.$watch('row.selected', function(selected) {
+                    if (attrs.rowSelect) {
+                        scope.model = $parse(attrs.rowSelect)(scope);
+
+                        scope.$watch('model.selected', function(selected) {
                             if (selected) {
                                 element.addClass('active-row');
                             } else {
                                 element.removeClass('active-row');
                             }
                         });
-
-                        scope.itemSelected = function(row) {
-                            alchTableController.itemSelected(row);
-                        };
                     }
+
+                    scope.itemSelected = function(row) {
+                        alchTableController.itemSelected(row);
+                    };
                 };
             }
         };

@@ -18,7 +18,6 @@
   Utils = {
     serialize: function(object, prefix) {
       var element, i, key, prop, result, s, _i, _len;
-
       if (prefix == null) {
         prefix = null;
       }
@@ -65,7 +64,6 @@
     },
     clean_path: function(path) {
       var last_index;
-
       path = path.split("://");
       last_index = path.length - 1;
       path[last_index] = path[last_index].replace(/\/+/g, "/").replace(/.\/$/m, "");
@@ -73,7 +71,6 @@
     },
     set_default_url_options: function(optional_parts, options) {
       var i, part, _i, _len, _results;
-
       _results = [];
       for (i = _i = 0, _len = optional_parts.length; _i < _len; i = ++_i) {
         part = optional_parts[i];
@@ -87,7 +84,6 @@
     },
     extract_anchor: function(options) {
       var anchor;
-
       anchor = "";
       if (options.hasOwnProperty("anchor")) {
         anchor = "#" + options.anchor;
@@ -97,7 +93,6 @@
     },
     extract_options: function(number_of_params, args) {
       var ret_value;
-
       ret_value = {};
       if (args.length > number_of_params) {
         ret_value = args.pop();
@@ -106,7 +101,6 @@
     },
     path_identifier: function(object) {
       var property;
-
       if (object === 0) {
         return "0";
       }
@@ -124,7 +118,6 @@
     },
     clone: function(obj) {
       var attr, copy, key;
-
       if ((obj == null) || "object" !== this.get_object_type(obj)) {
         return obj;
       }
@@ -138,7 +131,6 @@
     },
     prepare_parameters: function(required_parameters, actual_parameters, options) {
       var i, result, val, _i, _len;
-
       result = this.clone(options) || {};
       for (i = _i = 0, _len = required_parameters.length; _i < _len; i = ++_i) {
         val = required_parameters[i];
@@ -147,8 +139,7 @@
       return result;
     },
     build_path: function(required_parameters, optional_parts, route, args) {
-      var opts, parameters, result, url, url_params;
-
+      var anchor, opts, parameters, result, url, url_params;
       args = Array.prototype.slice.call(args);
       opts = this.extract_options(required_parameters.length, args);
       if (args.length > required_parameters.length) {
@@ -156,16 +147,17 @@
       }
       parameters = this.prepare_parameters(required_parameters, args, opts);
       this.set_default_url_options(optional_parts, parameters);
+      anchor = this.extract_anchor(parameters);
       result = "" + (this.get_prefix()) + (this.visit(route, parameters));
-      url = Utils.clean_path("" + result + (this.extract_anchor(parameters)));
+      url = Utils.clean_path("" + result);
       if ((url_params = this.serialize(parameters)).length) {
         url += "?" + url_params;
       }
+      url += anchor;
       return url;
     },
     visit: function(route, parameters, optional) {
       var left, left_part, right, right_part, type, value;
-
       if (optional == null) {
         optional = false;
       }
@@ -204,8 +196,10 @@
     },
     visit_globbing: function(route, parameters, optional) {
       var left, right, type, value;
-
       type = route[0], left = route[1], right = route[2];
+      if (left.replace(/^\*/i, "") !== left) {
+        route[1] = left = left.replace(/^\*/i, "");
+      }
       value = parameters[left];
       if (value == null) {
         return this.visit(route, parameters, optional);
@@ -222,7 +216,6 @@
     },
     get_prefix: function() {
       var prefix;
-
       prefix = defaults.prefix;
       if (prefix !== "") {
         prefix = (prefix.match("/$") ? prefix : "" + prefix + "/");
@@ -232,7 +225,6 @@
     _classToTypeCache: null,
     _classToType: function() {
       var name, _i, _len, _ref;
-
       if (this._classToTypeCache != null) {
         return this._classToTypeCache;
       }
@@ -246,7 +238,6 @@
     },
     get_object_type: function(obj) {
       var strType;
-
       if (window.jQuery && (window.jQuery.type != null)) {
         return window.jQuery.type(obj);
       }
@@ -255,7 +246,6 @@
     },
     namespace: function(root, namespaceString) {
       var current, parts;
-
       parts = (namespaceString ? namespaceString.split(".") : []);
       if (!parts.length) {
         return;
@@ -296,6 +286,10 @@
 // add_system_groups_activation_key => /activation_keys/:id/add_system_groups(.:format)
   add_system_groups_activation_key_path: function(_id, options) {
   return Utils.build_path(["id"], ["format"], [2,[2,[2,[2,[2,[2,[7,"/",false],[6,"activation_keys",false]],[7,"/",false]],[3,"id",false]],[7,"/",false]],[6,"add_system_groups",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
+  },
+// add_system_groups_api_systems => /api/systems/add_system_groups(.:format)
+  add_system_groups_api_systems_path: function(options) {
+  return Utils.build_path([], ["format"], [2,[2,[2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"systems",false]],[7,"/",false]],[6,"add_system_groups",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
   },
 // add_system_groups_system => /systems/:id/add_system_groups(.:format)
   add_system_groups_system_path: function(_id, options) {
@@ -469,9 +463,9 @@
   api_custom_info_path: function(_informable_type, _informable_id, options) {
   return Utils.build_path(["informable_type","informable_id"], ["format"], [2,[2,[2,[2,[2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"custom_info",false]],[7,"/",false]],[3,"informable_type",false]],[7,"/",false]],[3,"informable_id",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
   },
-// api_destroy_custom_info => /api/custom_info/:informable_type/:informable_id/:keyname(.:format)
+// api_destroy_custom_info => /api/custom_info/:informable_type/:informable_id/*keyname(.:format)
   api_destroy_custom_info_path: function(_informable_type, _informable_id, _keyname, options) {
-  return Utils.build_path(["informable_type","informable_id","keyname"], ["format"], [2,[2,[2,[2,[2,[2,[2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"custom_info",false]],[7,"/",false]],[3,"informable_type",false]],[7,"/",false]],[3,"informable_id",false]],[7,"/",false]],[3,"keyname",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
+  return Utils.build_path(["informable_type","informable_id","keyname"], ["format"], [2,[2,[2,[2,[2,[2,[2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"custom_info",false]],[7,"/",false]],[3,"informable_type",false]],[7,"/",false]],[3,"informable_id",false]],[7,"/",false]],[5,[3,"keyname",false],false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
   },
 // api_distributor => /api/distributors/:id(.:format)
   api_distributor_path: function(_id, options) {
@@ -529,6 +523,22 @@
   api_hypervisors_path: function(options) {
   return Utils.build_path([], ["format"], [2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"hypervisors",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
   },
+// api_node => /api/nodes/:id(.:format)
+  api_node_path: function(_id, options) {
+  return Utils.build_path(["id"], ["format"], [2,[2,[2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"nodes",false]],[7,"/",false]],[3,"id",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
+  },
+// api_node_capabilities => /api/nodes/:node_id/capabilities(.:format)
+  api_node_capabilities_path: function(_node_id, options) {
+  return Utils.build_path(["node_id"], ["format"], [2,[2,[2,[2,[2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"nodes",false]],[7,"/",false]],[3,"node_id",false]],[7,"/",false]],[6,"capabilities",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
+  },
+// api_node_capability => /api/nodes/:node_id/capabilities/:id(.:format)
+  api_node_capability_path: function(_node_id, _id, options) {
+  return Utils.build_path(["node_id","id"], ["format"], [2,[2,[2,[2,[2,[2,[2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"nodes",false]],[7,"/",false]],[3,"node_id",false]],[7,"/",false]],[6,"capabilities",false]],[7,"/",false]],[3,"id",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
+  },
+// api_nodes => /api/nodes(.:format)
+  api_nodes_path: function(options) {
+  return Utils.build_path([], ["format"], [2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"nodes",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
+  },
 // api_organization => /api/organizations/:id(.:format)
   api_organization_path: function(_id, options) {
   return Utils.build_path(["id"], ["format"], [2,[2,[2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"organizations",false]],[7,"/",false]],[3,"id",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
@@ -544,6 +554,10 @@
 // api_organization_apply_default_info => /api/organizations/:organization_id/default_info/:informable_type/apply(.:format)
   api_organization_apply_default_info_path: function(_organization_id, _informable_type, options) {
   return Utils.build_path(["organization_id","informable_type"], ["format"], [2,[2,[2,[2,[2,[2,[2,[2,[2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"organizations",false]],[7,"/",false]],[3,"organization_id",false]],[7,"/",false]],[6,"default_info",false]],[7,"/",false]],[3,"informable_type",false]],[7,"/",false]],[6,"apply",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
+  },
+// api_organization_auto_attach_all_systems => /api/organizations/:organization_id/auto_attach(.:format)
+  api_organization_auto_attach_all_systems_path: function(_organization_id, options) {
+  return Utils.build_path(["organization_id"], ["format"], [2,[2,[2,[2,[2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"organizations",false]],[7,"/",false]],[3,"organization_id",false]],[7,"/",false]],[6,"auto_attach",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
   },
 // api_organization_content_view => /api/organizations/:organization_id/content_views/:id(.:format)
   api_organization_content_view_path: function(_organization_id, _id, options) {
@@ -597,9 +611,9 @@
   api_organization_create_default_info_path: function(_organization_id, _informable_type, options) {
   return Utils.build_path(["organization_id","informable_type"], ["format"], [2,[2,[2,[2,[2,[2,[2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"organizations",false]],[7,"/",false]],[3,"organization_id",false]],[7,"/",false]],[6,"default_info",false]],[7,"/",false]],[3,"informable_type",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
   },
-// api_organization_destroy_default_info => /api/organizations/:organization_id/default_info/:informable_type/:keyname(.:format)
+// api_organization_destroy_default_info => /api/organizations/:organization_id/default_info/:informable_type/*keyname(.:format)
   api_organization_destroy_default_info_path: function(_organization_id, _informable_type, _keyname, options) {
-  return Utils.build_path(["organization_id","informable_type","keyname"], ["format"], [2,[2,[2,[2,[2,[2,[2,[2,[2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"organizations",false]],[7,"/",false]],[3,"organization_id",false]],[7,"/",false]],[6,"default_info",false]],[7,"/",false]],[3,"informable_type",false]],[7,"/",false]],[3,"keyname",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
+  return Utils.build_path(["organization_id","informable_type","keyname"], ["format"], [2,[2,[2,[2,[2,[2,[2,[2,[2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"organizations",false]],[7,"/",false]],[3,"organization_id",false]],[7,"/",false]],[6,"default_info",false]],[7,"/",false]],[3,"informable_type",false]],[7,"/",false]],[5,[3,"keyname",false],false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
   },
 // api_organization_distributors => /api/organizations/:organization_id/distributors(.:format)
   api_organization_distributors_path: function(_organization_id, options) {
@@ -709,6 +723,10 @@
   api_product_sync_index_path: function(_product_id, options) {
   return Utils.build_path(["product_id"], ["format"], [2,[2,[2,[2,[2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"products",false]],[7,"/",false]],[3,"product_id",false]],[7,"/",false]],[6,"sync",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
   },
+// api_products => /api/products(.:format)
+  api_products_path: function(options) {
+  return Utils.build_path([], ["format"], [2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"products",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
+  },
 // api_provider => /api/providers/:id(.:format)
   api_provider_path: function(_id, options) {
   return Utils.build_path(["id"], ["format"], [2,[2,[2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"providers",false]],[7,"/",false]],[3,"id",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
@@ -769,6 +787,10 @@
   api_proxy_consumer_releases_path_path: function(_id, options) {
   return Utils.build_path(["id"], ["format"], [2,[2,[2,[2,[2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"consumers",false]],[7,"/",false]],[3,"id",false]],[7,"/",false]],[6,"release",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
   },
+// api_proxy_deleted_consumers_path => /api/deleted_consumers(.:format)
+  api_proxy_deleted_consumers_path_path: function(options) {
+  return Utils.build_path([], ["format"], [2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"deleted_consumers",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
+  },
 // api_proxy_entitlements_path => /api/entitlements/:id(.:format)
   api_proxy_entitlements_path_path: function(_id, options) {
   return Utils.build_path(["id"], ["format"], [2,[2,[2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"entitlements",false]],[7,"/",false]],[3,"id",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
@@ -821,6 +843,14 @@
   api_repository_packages_path: function(_repository_id, options) {
   return Utils.build_path(["repository_id"], ["format"], [2,[2,[2,[2,[2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"repositories",false]],[7,"/",false]],[3,"repository_id",false]],[7,"/",false]],[6,"packages",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
   },
+// api_repository_puppet_module => /api/repositories/:repository_id/puppet_modules/:id(.:format)
+  api_repository_puppet_module_path: function(_repository_id, _id, options) {
+  return Utils.build_path(["repository_id","id"], ["format"], [2,[2,[2,[2,[2,[2,[2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"repositories",false]],[7,"/",false]],[3,"repository_id",false]],[7,"/",false]],[6,"puppet_modules",false]],[7,"/",false]],[3,"id",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
+  },
+// api_repository_puppet_modules => /api/repositories/:repository_id/puppet_modules(.:format)
+  api_repository_puppet_modules_path: function(_repository_id, options) {
+  return Utils.build_path(["repository_id"], ["format"], [2,[2,[2,[2,[2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"repositories",false]],[7,"/",false]],[3,"repository_id",false]],[7,"/",false]],[6,"puppet_modules",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
+  },
 // api_repository_sync_index => /api/repositories/:repository_id/sync(.:format)
   api_repository_sync_index_path: function(_repository_id, options) {
   return Utils.build_path(["repository_id"], ["format"], [2,[2,[2,[2,[2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"repositories",false]],[7,"/",false]],[3,"repository_id",false]],[7,"/",false]],[6,"sync",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
@@ -849,9 +879,9 @@
   api_roles_path: function(options) {
   return Utils.build_path([], ["format"], [2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"roles",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
   },
-// api_show_custom_info => /api/custom_info/:informable_type/:informable_id/:keyname(.:format)
+// api_show_custom_info => /api/custom_info/:informable_type/:informable_id/*keyname(.:format)
   api_show_custom_info_path: function(_informable_type, _informable_id, _keyname, options) {
-  return Utils.build_path(["informable_type","informable_id","keyname"], ["format"], [2,[2,[2,[2,[2,[2,[2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"custom_info",false]],[7,"/",false]],[3,"informable_type",false]],[7,"/",false]],[3,"informable_id",false]],[7,"/",false]],[3,"keyname",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
+  return Utils.build_path(["informable_type","informable_id","keyname"], ["format"], [2,[2,[2,[2,[2,[2,[2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"custom_info",false]],[7,"/",false]],[3,"informable_type",false]],[7,"/",false]],[3,"informable_id",false]],[7,"/",false]],[5,[3,"keyname",false],false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
   },
 // api_status => /api/status(.:format)
   api_status_path: function(options) {
@@ -909,9 +939,9 @@
   api_task_path: function(_id, options) {
   return Utils.build_path(["id"], ["format"], [2,[2,[2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"tasks",false]],[7,"/",false]],[3,"id",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
   },
-// api_update_custom_info => /api/custom_info/:informable_type/:informable_id/:keyname(.:format)
+// api_update_custom_info => /api/custom_info/:informable_type/:informable_id/*keyname(.:format)
   api_update_custom_info_path: function(_informable_type, _informable_id, _keyname, options) {
-  return Utils.build_path(["informable_type","informable_id","keyname"], ["format"], [2,[2,[2,[2,[2,[2,[2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"custom_info",false]],[7,"/",false]],[3,"informable_type",false]],[7,"/",false]],[3,"informable_id",false]],[7,"/",false]],[3,"keyname",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
+  return Utils.build_path(["informable_type","informable_id","keyname"], ["format"], [2,[2,[2,[2,[2,[2,[2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"custom_info",false]],[7,"/",false]],[3,"informable_type",false]],[7,"/",false]],[3,"informable_id",false]],[7,"/",false]],[5,[3,"keyname",false],false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
   },
 // api_user => /api/users/:id(.:format)
   api_user_path: function(_id, options) {
@@ -957,6 +987,10 @@
   authenticate_path: function(options) {
   return Utils.build_path([], ["format"], [2,[2,[7,"/",false],[6,"authenticate",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
   },
+// author_auto_complete_puppet_modules => /puppet_modules/author_auto_complete(.:format)
+  author_auto_complete_puppet_modules_path: function(options) {
+  return Utils.build_path([], ["format"], [2,[2,[2,[2,[7,"/",false],[6,"puppet_modules",false]],[7,"/",false]],[6,"author_auto_complete",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
+  },
 // auto_complete_content_views => /content_views/auto_complete(.:format)
   auto_complete_content_views_path: function(options) {
   return Utils.build_path([], ["format"], [2,[2,[2,[2,[7,"/",false],[6,"content_views",false]],[7,"/",false]],[6,"auto_complete",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
@@ -988,6 +1022,10 @@
 // auto_complete_products => /products/auto_complete(.:format)
   auto_complete_products_path: function(options) {
   return Utils.build_path([], ["format"], [2,[2,[2,[2,[7,"/",false],[6,"products",false]],[7,"/",false]],[6,"auto_complete",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
+  },
+// auto_complete_puppet_modules => /puppet_modules/auto_complete(.:format)
+  auto_complete_puppet_modules_path: function(options) {
+  return Utils.build_path([], ["format"], [2,[2,[2,[2,[7,"/",false],[6,"puppet_modules",false]],[7,"/",false]],[6,"auto_complete",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
   },
 // auto_complete_search_activation_keys => /activation_keys/auto_complete_search(.:format)
   auto_complete_search_activation_keys_path: function(options) {
@@ -1253,6 +1291,10 @@
   dependencies_package_path: function(_id, options) {
   return Utils.build_path(["id"], ["format"], [2,[2,[2,[2,[2,[2,[7,"/",false],[6,"packages",false]],[7,"/",false]],[3,"id",false]],[7,"/",false]],[6,"dependencies",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
   },
+// destroy_api_systems => /api/systems/destroy(.:format)
+  destroy_api_systems_path: function(options) {
+  return Utils.build_path([], ["format"], [2,[2,[2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"systems",false]],[7,"/",false]],[6,"destroy",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
+  },
 // destroy_favorite_search_index => /search/favorite/:id(.:format)
   destroy_favorite_search_index_path: function(_id, options) {
   return Utils.build_path(["id"], ["format"], [2,[2,[2,[2,[2,[2,[7,"/",false],[6,"search",false]],[7,"/",false]],[6,"favorite",false]],[7,"/",false]],[3,"id",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
@@ -1321,10 +1363,6 @@
   discovery_api_provider_path: function(_id, options) {
   return Utils.build_path(["id"], ["format"], [2,[2,[2,[2,[2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"providers",false]],[7,"/",false]],[3,"id",false]],[7,"/",false]],[6,"discovery",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
   },
-// distributions_promotion => /promotions/:id/distributions(.:format)
-  distributions_promotion_path: function(_id, options) {
-  return Utils.build_path(["id"], ["format"], [2,[2,[2,[2,[2,[2,[7,"/",false],[6,"promotions",false]],[7,"/",false]],[3,"id",false]],[7,"/",false]],[6,"distributions",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
-  },
 // distributor => /distributors/:id(.:format)
   distributor_path: function(_id, options) {
   return Utils.build_path(["id"], ["format"], [2,[2,[2,[2,[7,"/",false],[6,"distributors",false]],[7,"/",false]],[3,"id",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
@@ -1384,6 +1422,14 @@
 // edit_api_consumer => /api/consumers/:id/edit(.:format)
   edit_api_consumer_path: function(_id, options) {
   return Utils.build_path(["id"], ["format"], [2,[2,[2,[2,[2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"consumers",false]],[7,"/",false]],[3,"id",false]],[7,"/",false]],[6,"edit",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
+  },
+// edit_api_node => /api/nodes/:id/edit(.:format)
+  edit_api_node_path: function(_id, options) {
+  return Utils.build_path(["id"], ["format"], [2,[2,[2,[2,[2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"nodes",false]],[7,"/",false]],[3,"id",false]],[7,"/",false]],[6,"edit",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
+  },
+// edit_api_node_capability => /api/nodes/:node_id/capabilities/:id/edit(.:format)
+  edit_api_node_capability_path: function(_node_id, _id, options) {
+  return Utils.build_path(["node_id","id"], ["format"], [2,[2,[2,[2,[2,[2,[2,[2,[2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"nodes",false]],[7,"/",false]],[3,"node_id",false]],[7,"/",false]],[6,"capabilities",false]],[7,"/",false]],[3,"id",false]],[7,"/",false]],[6,"edit",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
   },
 // edit_api_organization => /api/organizations/:id/edit(.:format)
   edit_api_organization_path: function(_id, options) {
@@ -1621,10 +1667,6 @@
   errata_items_content_search_index_path: function(options) {
   return Utils.build_path([], ["format"], [2,[2,[2,[2,[7,"/",false],[6,"content_search",false]],[7,"/",false]],[6,"errata_items",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
   },
-// errata_promotion => /promotions/:id/errata(.:format)
-  errata_promotion_path: function(_id, options) {
-  return Utils.build_path(["id"], ["format"], [2,[2,[2,[2,[2,[2,[7,"/",false],[6,"promotions",false]],[7,"/",false]],[3,"id",false]],[7,"/",false]],[6,"errata",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
-  },
 // erratum => /errata/:id(.:format)
   erratum_path: function(_id, options) {
   return Utils.build_path(["id"], ["format"], [2,[2,[2,[2,[7,"/",false],[6,"errata",false]],[7,"/",false]],[3,"id",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
@@ -1648,10 +1690,6 @@
 // filelist_package => /packages/:id/filelist(.:format)
   filelist_package_path: function(_id, options) {
   return Utils.build_path(["id"], ["format"], [2,[2,[2,[2,[2,[2,[7,"/",false],[6,"packages",false]],[7,"/",false]],[3,"id",false]],[7,"/",false]],[6,"filelist",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
-  },
-// filelist_repository_distribution => /repositories/:repository_id/distributions/:id/filelist(.:format)
-  filelist_repository_distribution_path: function(_repository_id, _id, options) {
-  return Utils.build_path(["repository_id","id"], ["format"], [2,[2,[2,[2,[2,[2,[2,[2,[2,[2,[7,"/",false],[6,"repositories",false]],[7,"/",false]],[3,"repository_id",false]],[7,"/",false]],[6,"distributions",false]],[7,"/",false]],[3,"id",false]],[7,"/",false]],[6,"filelist",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
   },
 // gpg_key => /gpg_keys/:id(.:format)
   gpg_key_path: function(_id, options) {
@@ -1687,7 +1725,6 @@
   },
 // i18n_dictionary => /i18n/dictionary(.:format)
   i18n_dictionary_path: function(options) {
-  if (!options){ options = {}; }
   return Utils.build_path([], ["format"], [2,[2,[2,[2,[7,"/",false],[6,"i18n",false]],[7,"/",false]],[6,"dictionary",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
   },
 // import_manifest_api_provider => /api/providers/:id/import_manifest(.:format)
@@ -1697,6 +1734,10 @@
 // import_products_api_provider => /api/providers/:id/import_products(.:format)
   import_products_api_provider_path: function(_id, options) {
   return Utils.build_path(["id"], ["format"], [2,[2,[2,[2,[2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"providers",false]],[7,"/",false]],[3,"id",false]],[7,"/",false]],[6,"import_products",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
+  },
+// install_content_api_systems => /api/systems/install_content(.:format)
+  install_content_api_systems_path: function(options) {
+  return Utils.build_path([], ["format"], [2,[2,[2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"systems",false]],[7,"/",false]],[6,"install_content",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
   },
 // install_system_errata => /systems/:system_id/errata/install(.:format)
   install_system_errata_path: function(_system_id, options) {
@@ -1857,6 +1898,14 @@
 // new_api_consumer => /api/consumers/new(.:format)
   new_api_consumer_path: function(options) {
   return Utils.build_path([], ["format"], [2,[2,[2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"consumers",false]],[7,"/",false]],[6,"new",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
+  },
+// new_api_node => /api/nodes/new(.:format)
+  new_api_node_path: function(options) {
+  return Utils.build_path([], ["format"], [2,[2,[2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"nodes",false]],[7,"/",false]],[6,"new",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
+  },
+// new_api_node_capability => /api/nodes/:node_id/capabilities/new(.:format)
+  new_api_node_capability_path: function(_node_id, options) {
+  return Utils.build_path(["node_id"], ["format"], [2,[2,[2,[2,[2,[2,[2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"nodes",false]],[7,"/",false]],[3,"node_id",false]],[7,"/",false]],[6,"capabilities",false]],[7,"/",false]],[6,"new",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
   },
 // new_api_organization => /api/organizations/new(.:format)
   new_api_organization_path: function(options) {
@@ -2082,10 +2131,6 @@
   packages_items_content_search_index_path: function(options) {
   return Utils.build_path([], ["format"], [2,[2,[2,[2,[7,"/",false],[6,"content_search",false]],[7,"/",false]],[6,"packages_items",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
   },
-// packages_promotion => /promotions/:id/packages(.:format)
-  packages_promotion_path: function(_id, options) {
-  return Utils.build_path(["id"], ["format"], [2,[2,[2,[2,[2,[2,[7,"/",false],[6,"promotions",false]],[7,"/",false]],[3,"id",false]],[7,"/",false]],[6,"packages",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
-  },
 // packages_system_system_packages => /systems/:system_id/system_packages/packages(.:format)
   packages_system_system_packages_path: function(_system_id, options) {
   return Utils.build_path(["system_id"], ["format"], [2,[2,[2,[2,[2,[2,[2,[2,[7,"/",false],[6,"systems",false]],[7,"/",false]],[3,"system_id",false]],[7,"/",false]],[6,"system_packages",false]],[7,"/",false]],[6,"packages",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
@@ -2141,10 +2186,6 @@
 // products_organization_environment => /organizations/:organization_id/environments/:id/products(.:format)
   products_organization_environment_path: function(_organization_id, _id, options) {
   return Utils.build_path(["organization_id","id"], ["format"], [2,[2,[2,[2,[2,[2,[2,[2,[2,[2,[7,"/",false],[6,"organizations",false]],[7,"/",false]],[3,"organization_id",false]],[7,"/",false]],[6,"environments",false]],[7,"/",false]],[3,"id",false]],[7,"/",false]],[6,"products",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
-  },
-// products_promotion => /promotions/:id/products(.:format)
-  products_promotion_path: function(_id, options) {
-  return Utils.build_path(["id"], ["format"], [2,[2,[2,[2,[2,[2,[7,"/",false],[6,"promotions",false]],[7,"/",false]],[3,"id",false]],[7,"/",false]],[6,"products",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
   },
 // products_repos_gpg_key => /gpg_keys/:id/products_repos(.:format)
   products_repos_gpg_key_path: function(_id, options) {
@@ -2222,6 +2263,18 @@
   publish_setup_content_view_definition_path: function(_id, options) {
   return Utils.build_path(["id"], ["format"], [2,[2,[2,[2,[2,[2,[7,"/",false],[6,"content_view_definitions",false]],[7,"/",false]],[3,"id",false]],[7,"/",false]],[6,"publish_setup",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
   },
+// puppet_module => /puppet_modules/:id(.:format)
+  puppet_module_path: function(_id, options) {
+  return Utils.build_path(["id"], ["format"], [2,[2,[2,[2,[7,"/",false],[6,"puppet_modules",false]],[7,"/",false]],[3,"id",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
+  },
+// puppet_modules_content_search_index => /content_search/puppet_modules(.:format)
+  puppet_modules_content_search_index_path: function(options) {
+  return Utils.build_path([], ["format"], [2,[2,[2,[2,[7,"/",false],[6,"content_search",false]],[7,"/",false]],[6,"puppet_modules",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
+  },
+// puppet_modules_items_content_search_index => /content_search/puppet_modules_items(.:format)
+  puppet_modules_items_content_search_index_path: function(options) {
+  return Utils.build_path([], ["format"], [2,[2,[2,[2,[7,"/",false],[6,"content_search",false]],[7,"/",false]],[6,"puppet_modules_items",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
+  },
 // rails_info_properties => /rails/info/properties(.:format)
   rails_info_properties_path: function(options) {
   return Utils.build_path([], ["format"], [2,[2,[2,[2,[2,[2,[7,"/",false],[6,"rails",false]],[7,"/",false]],[6,"info",false]],[7,"/",false]],[6,"properties",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
@@ -2262,6 +2315,10 @@
   refresh_subscriptions_api_system_path: function(_id, options) {
   return Utils.build_path(["id"], ["format"], [2,[2,[2,[2,[2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"systems",false]],[7,"/",false]],[3,"id",false]],[7,"/",false]],[6,"refresh_subscriptions",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
   },
+// registerable_paths_organization_environments => /organizations/:organization_id/environments/registerable_paths(.:format)
+  registerable_paths_organization_environments_path: function(_organization_id, options) {
+  return Utils.build_path(["organization_id"], ["format"], [2,[2,[2,[2,[2,[2,[2,[2,[7,"/",false],[6,"organizations",false]],[7,"/",false]],[3,"organization_id",false]],[7,"/",false]],[6,"environments",false]],[7,"/",false]],[6,"registerable_paths",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
+  },
 // releases_api_environment => /api/environments/:id/releases(.:format)
   releases_api_environment_path: function(_id, options) {
   return Utils.build_path(["id"], ["format"], [2,[2,[2,[2,[2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"environments",false]],[7,"/",false]],[3,"id",false]],[7,"/",false]],[6,"releases",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
@@ -2269,6 +2326,14 @@
 // releases_api_system => /api/systems/:id/releases(.:format)
   releases_api_system_path: function(_id, options) {
   return Utils.build_path(["id"], ["format"], [2,[2,[2,[2,[2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"systems",false]],[7,"/",false]],[3,"id",false]],[7,"/",false]],[6,"releases",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
+  },
+// releases_system => /systems/:id/releases(.:format)
+  releases_system_path: function(_id, options) {
+  return Utils.build_path(["id"], ["format"], [2,[2,[2,[2,[2,[2,[7,"/",false],[6,"systems",false]],[7,"/",false]],[3,"id",false]],[7,"/",false]],[6,"releases",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
+  },
+// remove_content_api_systems => /api/systems/remove_content(.:format)
+  remove_content_api_systems_path: function(options) {
+  return Utils.build_path([], ["format"], [2,[2,[2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"systems",false]],[7,"/",false]],[6,"remove_content",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
   },
 // remove_subscriptions_activation_key => /activation_keys/:id/remove_subscriptions(.:format)
   remove_subscriptions_activation_key_path: function(_id, options) {
@@ -2281,6 +2346,10 @@
 // remove_system_groups_activation_key => /activation_keys/:id/remove_system_groups(.:format)
   remove_system_groups_activation_key_path: function(_id, options) {
   return Utils.build_path(["id"], ["format"], [2,[2,[2,[2,[2,[2,[7,"/",false],[6,"activation_keys",false]],[7,"/",false]],[3,"id",false]],[7,"/",false]],[6,"remove_system_groups",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
+  },
+// remove_system_groups_api_systems => /api/systems/remove_system_groups(.:format)
+  remove_system_groups_api_systems_path: function(options) {
+  return Utils.build_path([], ["format"], [2,[2,[2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"systems",false]],[7,"/",false]],[6,"remove_system_groups",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
   },
 // remove_system_groups_system => /systems/:id/remove_system_groups(.:format)
   remove_system_groups_system_path: function(_id, options) {
@@ -2310,6 +2379,10 @@
   repo_compare_packages_content_search_index_path: function(options) {
   return Utils.build_path([], ["format"], [2,[2,[2,[2,[7,"/",false],[6,"content_search",false]],[7,"/",false]],[6,"repo_compare_packages",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
   },
+// repo_compare_puppet_modules_content_search_index => /content_search/repo_compare_puppet_modules(.:format)
+  repo_compare_puppet_modules_content_search_index_path: function(options) {
+  return Utils.build_path([], ["format"], [2,[2,[2,[2,[7,"/",false],[6,"content_search",false]],[7,"/",false]],[6,"repo_compare_puppet_modules",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
+  },
 // repo_discovery_provider => /providers/:id/repo_discovery(.:format)
   repo_discovery_provider_path: function(_id, options) {
   return Utils.build_path(["id"], ["format"], [2,[2,[2,[2,[2,[2,[7,"/",false],[6,"providers",false]],[7,"/",false]],[3,"id",false]],[7,"/",false]],[6,"repo_discovery",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
@@ -2321,6 +2394,10 @@
 // repo_packages_content_search_index => /content_search/repo_packages(.:format)
   repo_packages_content_search_index_path: function(options) {
   return Utils.build_path([], ["format"], [2,[2,[2,[2,[7,"/",false],[6,"content_search",false]],[7,"/",false]],[6,"repo_packages",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
+  },
+// repo_puppet_modules_content_search_index => /content_search/repo_puppet_modules(.:format)
+  repo_puppet_modules_content_search_index_path: function(options) {
+  return Utils.build_path([], ["format"], [2,[2,[2,[2,[7,"/",false],[6,"content_search",false]],[7,"/",false]],[6,"repo_puppet_modules",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
   },
 // report_api_environment_systems => /api/environments/:environment_id/systems/report(.:format)
   report_api_environment_systems_path: function(_environment_id, options) {
@@ -2337,10 +2414,6 @@
 // repos_content_search_index => /content_search/repos(.:format)
   repos_content_search_index_path: function(options) {
   return Utils.build_path([], ["format"], [2,[2,[2,[2,[7,"/",false],[6,"content_search",false]],[7,"/",false]],[6,"repos",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
-  },
-// repos_promotion => /promotions/:id/repos(.:format)
-  repos_promotion_path: function(_id, options) {
-  return Utils.build_path(["id"], ["format"], [2,[2,[2,[2,[2,[2,[7,"/",false],[6,"promotions",false]],[7,"/",false]],[3,"id",false]],[7,"/",false]],[6,"repos",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
   },
 // repositories => /repositories(.:format)
   repositories_path: function(options) {
@@ -2369,10 +2442,6 @@
 // repository => /repositories/:id(.:format)
   repository_path: function(_id, options) {
   return Utils.build_path(["id"], ["format"], [2,[2,[2,[2,[7,"/",false],[6,"repositories",false]],[7,"/",false]],[3,"id",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
-  },
-// repository_distribution => /repositories/:repository_id/distributions/:id(.:format)
-  repository_distribution_path: function(_repository_id, _id, options) {
-  return Utils.build_path(["repository_id","id"], ["format"], [2,[2,[2,[2,[2,[2,[2,[2,[7,"/",false],[6,"repositories",false]],[7,"/",false]],[3,"repository_id",false]],[7,"/",false]],[6,"distributions",false]],[7,"/",false]],[3,"id",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
   },
 // role => /roles/:id(.:format)
   role_path: function(_id, options) {
@@ -2409,6 +2478,10 @@
 // search_api_repository_packages => /api/repositories/:repository_id/packages/search(.:format)
   search_api_repository_packages_path: function(_repository_id, options) {
   return Utils.build_path(["repository_id"], ["format"], [2,[2,[2,[2,[2,[2,[2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"repositories",false]],[7,"/",false]],[3,"repository_id",false]],[7,"/",false]],[6,"packages",false]],[7,"/",false]],[6,"search",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
+  },
+// search_api_repository_puppet_modules => /api/repositories/:repository_id/puppet_modules/search(.:format)
+  search_api_repository_puppet_modules_path: function(_repository_id, options) {
+  return Utils.build_path(["repository_id"], ["format"], [2,[2,[2,[2,[2,[2,[2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"repositories",false]],[7,"/",false]],[3,"repository_id",false]],[7,"/",false]],[6,"puppet_modules",false]],[7,"/",false]],[6,"search",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
   },
 // search_index => /search(.:format)
   search_index_path: function(options) {
@@ -2493,6 +2566,10 @@
 // subscriptions_system => /systems/:id/subscriptions(.:format)
   subscriptions_system_path: function(_id, options) {
   return Utils.build_path(["id"], ["format"], [2,[2,[2,[2,[2,[2,[7,"/",false],[6,"systems",false]],[7,"/",false]],[3,"id",false]],[7,"/",false]],[6,"subscriptions",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
+  },
+// sync_api_node => /api/nodes/:id/sync(.:format)
+  sync_api_node_path: function(_id, options) {
+  return Utils.build_path(["id"], ["format"], [2,[2,[2,[2,[2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"nodes",false]],[7,"/",false]],[3,"id",false]],[7,"/",false]],[6,"sync",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
   },
 // sync_complete_api_repositories => /api/repositories/sync_complete(.:format)
   sync_complete_api_repositories_path: function(options) {
@@ -2650,9 +2727,17 @@
   tasks_api_organization_systems_path: function(_organization_id, options) {
   return Utils.build_path(["organization_id"], ["format"], [2,[2,[2,[2,[2,[2,[2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"organizations",false]],[7,"/",false]],[3,"organization_id",false]],[7,"/",false]],[6,"systems",false]],[7,"/",false]],[6,"tasks",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
   },
+// tasks_api_system => /api/systems/:id/tasks(.:format)
+  tasks_api_system_path: function(_id, options) {
+  return Utils.build_path(["id"], ["format"], [2,[2,[2,[2,[2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"systems",false]],[7,"/",false]],[3,"id",false]],[7,"/",false]],[6,"tasks",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
+  },
 // update_component_views_content_view_definition => /content_view_definitions/:id/update_component_views(.:format)
   update_component_views_content_view_definition_path: function(_id, options) {
   return Utils.build_path(["id"], ["format"], [2,[2,[2,[2,[2,[2,[7,"/",false],[6,"content_view_definitions",false]],[7,"/",false]],[3,"id",false]],[7,"/",false]],[6,"update_component_views",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
+  },
+// update_content_api_systems => /api/systems/update_content(.:format)
+  update_content_api_systems_path: function(options) {
+  return Utils.build_path([], ["format"], [2,[2,[2,[2,[2,[2,[7,"/",false],[6,"api",false]],[7,"/",false]],[6,"systems",false]],[7,"/",false]],[6,"update_content",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
   },
 // update_content_content_view_definition => /content_view_definitions/:id/update_content(.:format)
   update_content_content_view_definition_path: function(_id, options) {
@@ -2738,9 +2823,17 @@
   view_compare_packages_content_search_index_path: function(options) {
   return Utils.build_path([], ["format"], [2,[2,[2,[2,[7,"/",false],[6,"content_search",false]],[7,"/",false]],[6,"view_compare_packages",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
   },
+// view_compare_puppet_modules_content_search_index => /content_search/view_compare_puppet_modules(.:format)
+  view_compare_puppet_modules_content_search_index_path: function(options) {
+  return Utils.build_path([], ["format"], [2,[2,[2,[2,[7,"/",false],[6,"content_search",false]],[7,"/",false]],[6,"view_compare_puppet_modules",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
+  },
 // view_packages_content_search_index => /content_search/view_packages(.:format)
   view_packages_content_search_index_path: function(options) {
   return Utils.build_path([], ["format"], [2,[2,[2,[2,[7,"/",false],[6,"content_search",false]],[7,"/",false]],[6,"view_packages",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
+  },
+// view_puppet_modules_content_search_index => /content_search/view_puppet_modules(.:format)
+  view_puppet_modules_content_search_index_path: function(options) {
+  return Utils.build_path([], ["format"], [2,[2,[2,[2,[7,"/",false],[6,"content_search",false]],[7,"/",false]],[6,"view_puppet_modules",false]],[1,[2,[8,".",false],[3,"format",false]],false]], arguments);
   },
 // views_content_search_index => /content_search/views(.:format)
   views_content_search_index_path: function(options) {

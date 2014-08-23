@@ -19,11 +19,15 @@ $(document).ready(function() {
                   packages:{id:"packages_selector", search:'package_search'},
                   products:{id:"products_selector", autocomplete:'product_autocomplete_list'},
                   views:{id:"views_selector", autocomplete:'view_autocomplete_list'},
-                  errata:{id:"errata_selector", search:'errata_search'}};
+                  errata:{id:"errata_selector", search:'errata_search'},
+                  puppet_modules: {id:"puppet_modules_selector", search:'puppet_modules_search'}};
 
-    KT.mapping = {products:['views', 'products'], repos:['views', 'products', 'repos'],
+    KT.mapping = {views:['views'],
+                  products:['views', 'products'],
+                  repos:['views', 'products', 'repos'],
                   packages:['products', 'repos', 'packages', 'views'],
-                  errata:['products', 'repos', 'errata', 'views'], views:['views']};
+                  errata:['products', 'repos', 'errata', 'views'],
+                  puppet_modules:['views', 'products', 'repos', 'puppet_modules']};
 
     var search = KT.content_search(KT.available_environments);
 
@@ -55,8 +59,15 @@ KT.content_search_templates = (function(i18n) {
             }
             display["url"] = KT.routes.short_details_erratum_path(KT.utils.escape(display["id"]));
 
-            return KT.utils.template("<i class=\"errata-icon <%= icon_class %>\"  /><span class=\"tipsify-errata\" data-url=\"<%= url %>\"><%- errata_id %></span>",
+            return KT.utils.template("<i class=\"errata-icon <%= icon_class %>\"></i><span class=\"tipsify-errata\" data-url=\"<%= url %>\"><%- errata_id %></span>",
                     display);
+        },
+        puppet_module_header = function(display) {
+            display["url"] = KT.routes.puppet_module_path(KT.utils.escape(display["id"]));
+            display["author_label"] = i18n.author;
+
+            return KT.utils.template("<span data-url='<%= url %>' class='tipsify-package'><%- name_version %></span> \
+                                      <span><%- author_label %>: <%- author %></span>", display);
         },
         row_header_content = function(name, type) {
             if(type === "package") {
@@ -65,6 +76,9 @@ KT.content_search_templates = (function(i18n) {
             else if(type === "errata") {
                 html = errata_header(name);
             }
+            else if(type === "puppet_module") {
+                html = puppet_module_header(name);
+            }
             else {
                 html = KT.utils.escape(name);
             }
@@ -72,7 +86,7 @@ KT.content_search_templates = (function(i18n) {
             return html;
         },
         row_header = function(id, name, type, row_level, has_children, parent_id) {
-            var title = (type === "package" || type === "errata") ? "" : name,
+            var title = (type === "package" || type === "errata" || type === "puppet_module") ? "" : name,
                 html = $('<li/>', {
                             'data-id'   : id,
                             'id'        : 'row_header_' + id,
@@ -81,34 +95,22 @@ KT.content_search_templates = (function(i18n) {
 
 
             name = row_header_content(name, type);
+
             if( parent_id !== undefined ){
                 html.attr('data-parent_id', parent_id);
             }
 
-            if( row_level === 2 ){
-                if( name.length > 30 && name.length < 60 ){
-                    html.addClass('row_height_2');
-                    html.append($('<span/>', { 'class': 'one-line-ellipsis', 'title': title }).html(name));
-                } else if( name.length >= 60 && name.length <= 94 ){
-                    html.addClass('row_height_3');
-                    html.append($('<span/>', { 'class': 'one-line-ellipsis', 'title': title }).html(name));
-                } else if( name.length > 94 ) {
-                    html.addClass('row_height_3');
-                    html.append($('<span/>', { 'class' : 'three-line-ellipsis tipsify', 'title' : name }).html(name));
-                } else {
-                    html.append($('<span/>', { 'class': 'one-line-ellipsis', 'title' : title }).html(name));
-                }
-            } else if( row_level >= 3 ){
-                if( name.length > 30 ){
-                    html.addClass('row_height_2');
-                }
-                html.append($('<span/>', { 'class': 'one-line-ellipsis', 'title': title }).html(name));
-            } else {
-                if( (has_children && name.length > 26) || (parent_id && name.length > 28) || name.length > 28 ){
-                    html.append($('<span/>', { 'class' : 'one-line-ellipsis tipsify', 'title' : name }).html(name));
-                } else {
-                    html.append($('<span/>').html(name));
-                }
+            if( name.length <= 30 ) {
+                html.append($('<span/>', { 'title': title }).html(name));
+            } else if( name.length > 30 && name.length < 51 ){
+                html.addClass('row_height_2');
+                html.append($('<span/>', { 'title': title }).html(name));
+            } else if( name.length >= 51 && name.length <= 94 ){
+                html.addClass('row_height_3');
+                html.append($('<span/>', { 'title': title }).html(name));
+            } else if( name.length > 94 ) {
+                html.addClass('row_height_3');
+                html.append($('<span/>').html(name));
             }
 
             var temp_html = $('<div/>');
@@ -188,8 +190,8 @@ KT.content_search = function(paths_in){
         repo_packages:{id:'repo_packages',
                        name:i18n.packages,
                        url:KT.routes.repo_packages_content_search_index_path(),
-                       cols:{description:{id:'description', name:i18n.description, span : "5"}},
-                       selector:['repo_packages', 'repo_errata']
+                       cols:{description:{id:'description', name:i18n.description, span : "7"}},
+                       selector:['repo_packages', 'repo_errata', 'repo_puppet_modules']
 
         },
         repo_errata  :{id:'repo_errata',
@@ -200,31 +202,49 @@ KT.content_search = function(paths_in){
                            type  : {id:'type', name:i18n.type},
                            severity : {id:'severity', name:i18n.severity}
                          },
-                        selector:['repo_packages', 'repo_errata']
+                        selector:['repo_packages', 'repo_errata', 'repo_puppet_modules']
+        },
+        repo_puppet_modules:{id:'repo_puppet_modules',
+                        name:i18n.puppet_modules,
+                        url:KT.routes.repo_puppet_modules_content_search_index_path(),
+                        cols:{description:{id:'description', name:i18n.description, span : "7"}},
+                        selector:['repo_packages', 'repo_errata', 'repo_puppet_modules']
         },
         repo_compare_packages:{id:'repo_compare_packages',
-                           name:i18n.packages,
-                           url:KT.routes.repo_compare_packages_content_search_index_path(),
-                           selector:['repo_compare_packages', 'repo_compare_errata'],
-                           modes: true
+                        name:i18n.packages,
+                        url:KT.routes.repo_compare_packages_content_search_index_path(),
+                        selector:['repo_compare_packages', 'repo_compare_errata', 'repo_compare_puppet_modules'],
+                        modes: true
         },
         repo_compare_errata:{id:'repo_compare_errata',
-                       name:i18n.errata,
-                       url:KT.routes.repo_compare_errata_content_search_index_path(),
-                       selector:['repo_compare_packages', 'repo_compare_errata'],
-                       modes: true
+                        name:i18n.errata,
+                        url:KT.routes.repo_compare_errata_content_search_index_path(),
+                        selector:['repo_compare_packages', 'repo_compare_errata', 'repo_compare_puppet_modules'],
+                        modes: true
+        },
+        repo_compare_puppet_modules:{id:'repo_compare_puppet_modules',
+                        name:i18n.puppet_modules,
+                        url:KT.routes.repo_compare_puppet_modules_content_search_index_path(),
+                        selector:['repo_compare_packages', 'repo_compare_errata', 'repo_compare_puppet_modules'],
+                        modes: true
         },
         view_compare_packages:{id:'view_compare_packages',
-                           name:i18n.packages,
-                           url:KT.routes.view_compare_packages_content_search_index_path(),
-                           selector:['view_compare_packages', 'view_compare_errata'],
-                           modes: true
+                        name:i18n.packages,
+                        url:KT.routes.view_compare_packages_content_search_index_path(),
+                        selector:['view_compare_packages', 'view_compare_errata', 'view_compare_puppet_modules'],
+                        modes: true
         },
         view_compare_errata:{id:'view_compare_errata',
-                       name:i18n.errata,
-                       url:KT.routes.view_compare_errata_content_search_index_path(),
-                       selector:['view_compare_packages', 'view_compare_errata'],
-                       modes: true
+                        name:i18n.errata,
+                        url:KT.routes.view_compare_errata_content_search_index_path(),
+                        selector:['view_compare_packages', 'view_compare_errata', 'view_compare_puppet_modules'],
+                        modes: true
+        },
+        view_compare_puppet_modules:{id:'view_compare_puppet_modules',
+                        name:i18n.puppet_modules,
+                        url:KT.routes.view_compare_puppet_modules_content_search_index_path(),
+                        selector:['view_compare_packages', 'view_compare_errata', 'view_compare_puppet_modules'],
+                        modes: true
         }
     },
     search_modes = [{id:'all', name:i18n.union},
@@ -235,17 +255,22 @@ KT.content_search = function(paths_in){
                     repos:{url:KT.routes.repos_content_search_index_path(), modes:true, comparable:true},
                     products:{url:KT.routes.products_content_search_index_path(), modes:true},
                     views:{url:KT.routes.views_content_search_index_path(), modes:true, comparable:true},
-                    packages:{url:KT.routes.packages_content_search_index_path(), modes:true}
+                    packages:{url:KT.routes.packages_content_search_index_path(), modes:true},
+                    puppet_modules:{url:KT.routes.puppet_modules_content_search_index_path(), modes:true}
     },
     more_results_urls = {
         errata:   {method:"POST", url:KT.routes.errata_items_content_search_index_path(), include_search:true},
         packages: {method:"POST", url:KT.routes.packages_items_content_search_index_path(), include_search:true},
+        puppet_modules: {method:"POST", url:KT.routes.puppet_modules_items_content_search_index_path(), include_search:true},
         repo_packages:{method:"GET", url:KT.routes.repo_packages_content_search_index_path(), include_search:false},
         repo_errata: {method:"GET", url:KT.routes.repo_errata_content_search_index_path(), include_search:false},
+        repo_puppet_modules:{method:"GET", url:KT.routes.repo_puppet_modules_content_search_index_path(), include_search:false},
         repo_compare_packages: {method:"GET", url:KT.routes.repo_compare_packages_content_search_index_path(), include_search:false},
         repo_compare_errata: {method:"GET", url:KT.routes.repo_compare_errata_content_search_index_path(), include_search:false},
+        repo_compare_puppet_modules: {method:"GET", url:KT.routes.repo_compare_puppet_modules_content_search_index_path(), include_search:false},
         view_compare_packages: {method:"GET", url:KT.routes.view_packages_content_search_index_path(), include_search:false},
-        view_compare_errata: {method:"GET", url:KT.routes.view_packages_content_search_index_path(), include_search:false}
+        view_compare_errata: {method:"GET", url:KT.routes.view_packages_content_search_index_path(), include_search:false},
+        view_compare_puppet_modules: {method:"GET", url:KT.routes.view_puppet_modules_content_search_index_path(), include_search:false}
     };
 
 

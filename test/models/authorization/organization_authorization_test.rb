@@ -12,7 +12,6 @@
 
 require './test/models/authorization/authorization_base'
 
-
 class OrganizationAuthorizationAdminTest < AuthorizationTestBase
 
   def setup
@@ -73,8 +72,11 @@ class OrganizationAuthorizationAdminTest < AuthorizationTestBase
     assert @org.syncable?
   end
 
-end
+  def test_redhat_manageable?
+    assert @org.redhat_manageable?
+  end
 
+end
 
 class OrganizationAuthorizationNoPermsTest < AuthorizationTestBase
 
@@ -134,6 +136,10 @@ class OrganizationAuthorizationNoPermsTest < AuthorizationTestBase
 
   def test_syncable?
     refute @org.syncable?
+  end
+
+  def test_redhat_manageable?
+    refute @org.redhat_manageable?
   end
 
 end

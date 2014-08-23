@@ -39,7 +39,7 @@ class RolesController < ApplicationController
       :show_permission => read_check,
       :update => edit_check,
       :create_permission => edit_check,
-      :update_permission=> edit_check,
+      :update_permission => edit_check,
       :destroy_permission => edit_check,
       :destroy => delete_check,
       :create_ldap_group => edit_check,
@@ -51,7 +51,7 @@ class RolesController < ApplicationController
     perm_check = lambda do
       if params[:permission]
         perm_attrs = {:permission => [:organization_id, :verb_values, :tag_values, :name, :resource_type_attributes,
-                                                        :all_tags, :all_verbs, :description]}
+                                      :all_tags, :all_verbs, :description]}
 
         diff = check_hash_params(perm_attrs, params)
         return diff unless diff.empty?
@@ -65,7 +65,7 @@ class RolesController < ApplicationController
 
      {
        :create => {:role => [:name, :description]},
-       :update => {:role => [:name, :description], :update_users => [:user_id,:adding]},
+       :update => {:role => [:name, :description], :update_users => [:user_id, :adding]},
        :create_permission => perm_check,
        :update_permission => perm_check,
        :create_ldap_group => [:group, :role_id],
@@ -73,9 +73,8 @@ class RolesController < ApplicationController
      }
   end
 
-
   def section_id
-     'operations'
+    'operations'
   end
 
   def menu_definition
@@ -84,26 +83,26 @@ class RolesController < ApplicationController
 
   def items
     render_panel_direct(Role, @panel_options,  params[:search], params[:offset], [:name_sort, :asc],
-                        {:default_field => :name, :filter=>[{:self_role=>[false]}], :load=>true})
+                        {:default_field => :name, :filter => [{:self_role => [false]}], :load => true})
   end
 
   def setup_options
     @panel_options = { :title => _('Roles'),
-                 :col => ['name'],
-                 :titles => [_('Name')],
-                 :create => _('Role'),
-                 :create_label => _('+ New Role'),
-                 :name => controller_display_name,
-                 :ajax_load  => true,
-                 :list_partial => 'roles/list_roles',
-                 :ajax_scroll => items_roles_path(),
-                 :enable_create=> Role.creatable?,
-                 :search_class=>Role}
+                       :col => ['name'],
+                       :titles => [_('Name')],
+                       :create => _('Role'),
+                       :create_label => _('+ New Role'),
+                       :name => controller_display_name,
+                       :ajax_load  => true,
+                       :list_partial => 'roles/list_roles',
+                       :ajax_scroll => items_roles_path,
+                       :enable_create => Role.creatable?,
+                       :search_class => Role}
   end
 
   def new
     @role = Role.new
-    render :partial=>"new", :locals=>{:role=>@role}
+    render :partial => "new", :locals => {:role => @role}
   end
 
   def edit
@@ -112,9 +111,9 @@ class RolesController < ApplicationController
     # render the appropriate partial depending on whether or not the role is a self role
     @user = @role.self_role_for_user
     if @user.nil?
-      render :partial=>"edit", :locals=>{:role=>@role, :resource_types => resource_types }
+      render :partial => "edit", :locals => {:role => @role, :resource_types => resource_types }
     else
-      render :partial=>"self_role_edit", :locals=>{:role=>@role, :editable=>@user.editable?}
+      render :partial => "self_role_edit", :locals => {:role => @role, :editable => @user.editable?}
     end
   end
 
@@ -123,7 +122,7 @@ class RolesController < ApplicationController
     notify.success _("Role '%s' was created.") % @role.name
 
     if search_validate(Role, @role.id, params[:search])
-      render :partial=>"common/list_item", :locals=>{:item=>@role, :accessor=>"id", :columns=>["name"], :name=>controller_display_name}
+      render :partial => "common/list_item", :locals => {:item => @role, :accessor => "id", :columns => ["name"], :name => controller_display_name}
     else
       notify.message _("'%s' did not meet the current search criteria and is not being shown.") % @role["name"]
       render :json => { :no_match => true }
@@ -146,11 +145,11 @@ class RolesController < ApplicationController
       @role.update_attributes!(params[:role])
       notify.success _("Role '%s' was updated.") % @role.name
 
-      if not search_validate(Role, @role.id, params[:search])
+      if !search_validate(Role, @role.id, params[:search])
         notify.message _("'%s' no longer matches the current search criteria.") % @role["name"],
                        :asynchronous => false
       end
-      render :json=>params[:role]
+      render :json => params[:role]
     end
   end
 
@@ -159,18 +158,18 @@ class RolesController < ApplicationController
     if @role.destroy
       notify.success _("Role '%s' was deleted.") % @role[:name]
       #render and do the removal in one swoop!
-      render :partial => "common/list_remove", :locals => {:id=>params[:id], :name=>controller_display_name}
+      render :partial => "common/list_remove", :locals => {:id => params[:id], :name => controller_display_name}
     end
   end
 
   def verbs_and_scopes
-    details= {}
+    details = {}
 
     resource_types.each do |type, value|
       if !value["global"]
         details[type] = {}
         details[type][:verbs] = Verb.verbs_for(type, false).collect {|name, display_name| VirtualTag.new(name, display_name)}
-        details[type][:verbs].sort! {|a,b| a.display_name <=> b.display_name}
+        details[type][:verbs].sort! {|a, b| a.display_name <=> b.display_name}
         details[type][:tags] = Tag.tags_for(type, params[:organization_id]).collect { |t| VirtualTag.new(t.name, t.display_name) }
         details[type][:no_tag_verbs] = Verb.no_tag_verbs(type)
         details[type][:global] = value["global"]
@@ -184,21 +183,21 @@ class RolesController < ApplicationController
     attributes = params[:permission]
     @permission = Permission.find(params[:permission_id])
 
-    if attributes.has_key?(:tag_names) and @permission.all_tags
+    if attributes.key?(:tag_names) && @permission.all_tags
       @permission.all_tags = false
     end
 
-    if attributes.has_key?(:verb_values) and @permission.all_verbs
+    if attributes.key?(:verb_values) && @permission.all_verbs
       @permission.all_verbs = false
     end
 
-    if attributes.has_key?(:all_verbs)
+    if attributes.key?(:all_verbs)
       @permission.verbs.each do |verb|
         @permission.verbs.delete(Verb.find_or_create_by_verb(verb.name))
       end
     end
 
-    if attributes.has_key?(:all_tags)
+    if attributes.key?(:all_tags)
       @permission.tags.each do |tag|
         @permission.tags.delete(tag)
       end
@@ -220,7 +219,7 @@ class RolesController < ApplicationController
       new_params[:all_verbs] = true
     end
 
-    new_params[:resource_type] = ResourceType.find_or_create_by_name(:name=>type_name)
+    new_params[:resource_type] = ResourceType.find_or_create_by_name(:name => type_name)
     new_params.merge! params[:permission]
 
     @perm = Permission.create! new_params
@@ -232,11 +231,11 @@ class RolesController < ApplicationController
 
   def show_permission
     if params[:perm_id].nil?
-      permission = Permission.new(:role=> @role, :resource_type => ResourceType.new)
+      permission = Permission.new(:role => @role, :resource_type => ResourceType.new)
     else
       permission = Permission.find(params[:perm_id])
     end
-    render :partial=>"permission", :locals=>{:perm=>permission, :role=>@role, :data_new=>permission.new_record?}
+    render :partial => "permission", :locals => {:perm => permission, :role => @role, :data_new => permission.new_record?}
   end
 
   def destroy_permission
@@ -280,6 +279,5 @@ class RolesController < ApplicationController
   def default_notify_options
     super.merge :organization => nil
   end
-
 
 end

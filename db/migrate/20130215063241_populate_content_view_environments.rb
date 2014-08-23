@@ -4,7 +4,10 @@ class PopulateContentViewEnvironments < ActiveRecord::Migration
     # default content view version.  This will trigger the creation of
     # the content view environment.
     User.current = User.hidden.first
-   ActiveRecord::Base.connection.raw_connection.prepare('insert_cvve', "insert into content_view_version_environments (content_view_version_id, environment_id, created_at, updated_at) values ($1, $2, $3, $4)")
+    ActiveRecord::Base.connection.raw_connection.prepare('insert_cvve', <<EOS)
+insert into content_view_version_environments (content_view_version_id, environment_id, created_at, updated_at) values ($1, $2, $3, $4)
+EOS
+
     KTEnvironment.all.each do |env|
       unless env.content_view_environment
         # a kt_environment will only have a single version
@@ -13,7 +16,7 @@ class PopulateContentViewEnvironments < ActiveRecord::Migration
 
        ActiveRecord::Base.connection.raw_connection.exec_prepared('insert_cvve', [version.id, env.id, DateTime.now, DateTime.now])
 
-        ContentViewEnvironment.create!(:content_view=>view,
+        ContentViewEnvironment.create!(:content_view => view,
                                        :name => env.name,
                                        :label => view.send(:generate_cp_environment_label, env),
                                        :cp_id => view.send(:generate_cp_environment_id, env))

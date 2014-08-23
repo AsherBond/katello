@@ -40,7 +40,12 @@ describe Api::V1::EnvironmentsController do
     # user_with_permissions { |u| u.can([:update], :organizations, nil, @ogranization) }
     user_without_permissions
   end
-
+  let(:user_with_register_systems_permission) do
+    user_with_permissions { |u| u.can([:register_system], :organizations, nil, @ogranization) }
+  end
+  let(:user_without_register_systems_permission) do
+    user_without_permissions
+  end
 
   describe "create an environment" do
     before(:each) do
@@ -106,7 +111,6 @@ describe Api::V1::EnvironmentsController do
 
   end
 
-
   describe "show a environment" do
 
     before(:each) do
@@ -136,7 +140,6 @@ describe Api::V1::EnvironmentsController do
     let(:unauthorized_user) { user_without_manage_permissions }
     it_should_behave_like "protected action"
 
-
     it 'should call katello environment find api' do
       @environment.should_receive(:destroy).once
       req
@@ -157,7 +160,6 @@ describe Api::V1::EnvironmentsController do
       end
     end
   end
-
 
   describe "update an environment" do
 
@@ -195,6 +197,5 @@ describe Api::V1::EnvironmentsController do
       JSON.parse(response.body).should == { "releases" => ["6.1", "6.2", "6Server"] }
     end
   end
-
 
 end

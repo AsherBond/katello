@@ -10,7 +10,6 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-
 module Navigation
   module Menus
     class Providers < Navigation::Menu
@@ -22,9 +21,11 @@ module Navigation
         @type          = 'flyout'
         @items         = [
           Navigation::Items::RedhatProvider.new(organization),
-          Navigation::Items::Providers.new(organization),
+          Navigation::Items::Products.new(organization),
           Navigation::Items::GpgKeys.new(organization)
         ]
+
+        @items << Navigation::Items::Providers.new(organization) if ::User.current.legacy_mode
         super
       end
 

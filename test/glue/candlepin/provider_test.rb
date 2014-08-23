@@ -12,8 +12,6 @@
 
 require 'minitest_helper'
 require 'mocha/setup'
-require './test/support/user_support'
-
 
 class GlueCandlepinProviderTestBase < MiniTest::Rails::ActiveSupport::TestCase
   extend  ActiveRecord::TestFixtures
@@ -103,7 +101,6 @@ class GlueCandlepinProviderTestImport < GlueCandlepinProviderTestBase
 
 end
 
-
 class GlueCandlepinProviderTestDelete < GlueCandlepinProviderTestBase
 
   #until we can import a fake manifest into candlepin, this the best we can do
@@ -111,8 +108,6 @@ class GlueCandlepinProviderTestDelete < GlueCandlepinProviderTestBase
     @@provider.stubs(:index_subscriptions).returns(true)
     Resources::Candlepin::Owner.stubs(:pools).returns([])
     Resources::Candlepin::Owner.stubs(:destroy_imports).with(@@provider.organization.label, true).returns(true)
-    Katello.pulp_server.extensions.repository.stubs(:update_importer)
-    Katello.pulp_server.extensions.repository.stubs(:update_distributor)
     @@provider.delete_manifest
   end
 end

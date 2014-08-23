@@ -13,7 +13,7 @@ else
   gem 'rails', '= 3.2.13'
 end
 gem 'json'
-gem 'rabl'
+gem 'rabl', '= 0.7.6'
 gem 'rest-client', :require => 'rest_client'
 gem 'rails_warden', '>= 0.5.2'
 gem 'rack-openid'
@@ -29,11 +29,11 @@ if defined? JRUBY_VERSION
   gem 'tire', '>= 0.3.0'
 else
   gem 'thin', '>= 1.2.8'
-  gem 'tire', '>= 0.3.0', '< 0.4'
+  gem 'tire', '~> 0.6.0'
   gem 'pg'
 end
 
-gem 'foreigner'
+gem 'foreigner', '~> 1.4.2'
 gem 'delayed_job', '~> 3.0.2'
 gem 'delayed_job_active_record', '~> 0.3.3'
 gem 'daemons', '>= 1.1.4'
@@ -47,7 +47,7 @@ gem 'compass-rails'
 gem 'compass'
 gem 'compass-960-plugin', '>= 0.10.4', :require => 'ninesixty'
 gem 'simple-navigation', '>= 3.3.4'
-gem 'ui_alchemy-rails', '1.0.11'
+gem 'ui_alchemy-rails', '1.0.12'
 
 # Stuff for i18n
 gem 'gettext_i18n_rails'

@@ -10,7 +10,6 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-
 # sends notifications, see public instance methods
 class Notifications::Notifier
   include Rails.application.routes.url_helpers
@@ -22,6 +21,7 @@ class Notifications::Notifier
     @default_options = { :level        => :success,
                          :asynchronous => !controller,
                          :persist      => true,
+                         :persist_only => false,
                          :global       => false,
                          :details      => nil,
                          :request_type => (controller.send :requested_action if controller),
@@ -87,7 +87,6 @@ class Notifications::Notifier
 
   protected
 
-
   # Generate a notice:
   #
   # @param [Array<String>] notices the text to include or Array of texts (nil values are dropped)
@@ -119,31 +118,34 @@ class Notifications::Notifier
   #
   # @option options [User] :user the user to send the notification to.  If not set, User.current is used
   #
+  # @option options [true, false] :persist_only
+  #   If set to true, the notice is stored in the database but not sent to the
+  #   user. Thus, it is only for auditing only.
   def notice(notices, options = { })
     options = process_options options
     notices = [*notices].compact
     notices.collect! { |n| n.gsub(/[\<\>]/, '<' => '&lt;', '>' => '&gt;') }
 
-    unless options[:asynchronous]
+    if options[:asynchronous]
+      # On an async request, the client shouldn't expect to receive a notification
+      # immediately. As a result, we'll store the notification and it will be
+      # retrieved by the client on it's next polling interval.
+      persist! notices, false, options
+    else
       # On a sync request, the client should expect to receive a notification
       # immediately without polling. In order to support this, we will send a flash
       # notice.
       if options[:persist]
-        notice = persist! notices, true, options
+        persist! notices, true, options
 
         if controller
           if options[:details]
             link = NoticesController.helpers.link_to('Click here', controller.notices_url)
             notices << _("%s for more details.") % link
           end
-          controller.flash[options[:level]] = { options[:send_as] => notices }.to_json
+          controller.flash[options[:level]] = { options[:send_as] => notices }.to_json unless options[:persist_only]
         end
       end
-    else
-      # On an async request, the client shouldn't expect to receive a notification
-      # immediately. As a result, we'll store the notification and it will be
-      # retrieved by the client on it's next polling interval.
-      persist! notices, false, options
     end
   end
 
@@ -184,4 +186,3 @@ class Notifications::Notifier
     return options
   end
 end
-

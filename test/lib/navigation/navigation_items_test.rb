@@ -10,7 +10,6 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-
 require 'minitest_helper'
 
 class NavigationItemsTest < MiniTest::Rails::ActiveSupport::TestCase
@@ -54,7 +53,7 @@ class NavigationItemsTest < MiniTest::Rails::ActiveSupport::TestCase
     item = Navigation::Items::Systems.new(@acme_corporation)
 
     assert_equal  _('All'), item.display
-    assert_equal  systems_path, item.url
+    assert_equal  systems_path + '/all', item.url
     assert        item.accessible?
   end
 
@@ -115,9 +114,9 @@ class NavigationItemsTest < MiniTest::Rails::ActiveSupport::TestCase
   end
 
   def test_changesets_item
-    item = Navigation::Items::Changesets.new(@acme_corporation)
+    item = Navigation::Items::ChangesetManagement.new(@acme_corporation)
 
-    assert_equal  _('Changesets'), item.display
+    assert_equal  _('Changeset Management'), item.display
     assert_equal  promotions_path, item.url
     assert        item.accessible?
   end
@@ -165,8 +164,16 @@ class NavigationItemsTest < MiniTest::Rails::ActiveSupport::TestCase
   def test_providers_item
     item = Navigation::Items::Providers.new(@acme_corporation)
 
-    assert_equal  _('Custom Content Repositories'), item.display
+    assert_equal  _('Custom Repositories'), item.display
     assert_equal  providers_path, item.url
+    assert        item.accessible?
+  end
+
+  def test_products_item
+    item = Navigation::Items::Products.new(@acme_corporation)
+
+    assert_equal  _('Products'), item.display
+    assert_equal  products_path + '/all', item.url
     assert        item.accessible?
   end
 
@@ -214,7 +221,7 @@ class NavigationItemsTest < MiniTest::Rails::ActiveSupport::TestCase
     item = Navigation::Items::UserAccount.new(@admin)
 
     assert_equal  _('My Account'), item.display
-    assert_equal  "#{users_path(@admin)}#list_search=#{@admin.username}&panel=user_#{@admin.id}&panel_page=edit", item.url
+    assert_equal  "#{users_path(@admin)}#list_search=#{@admin.username}&panel=user_#{@admin.id}&panelpage=edit", item.url
     assert        item.accessible?
   end
 

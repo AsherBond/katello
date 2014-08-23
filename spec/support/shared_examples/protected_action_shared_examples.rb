@@ -10,7 +10,6 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-
 def login_user_by_described_class(user)
   if described_class.name =~ /^Api::/
     login_user_api(user)
@@ -42,7 +41,6 @@ shared_examples_for "protected action" do
       req
       on_success if defined?(on_success)
 
-
       response.should be_success
 
       if respond_to? :authorized_user
@@ -54,25 +52,26 @@ shared_examples_for "protected action" do
   end
   context "NOT ALLOWING me" do
     it "to it", :katello => true do #TODO headpin
-      if !defined?(on_success) && !defined?(before_success)
-        @controller.stub(action)
-        @controller.stub(:render)
-      end
-      session.delete(:current_organization_id)
-      login_user_by_described_class(unauthorized_user) if defined?  unauthorized_user
-      before_failure if defined?(before_failure)
-      if @controller.kind_of? Api::V1::ApiController
-        @controller.should_receive(:respond_for_exception).with { |e, options| options.try(:[], :status).should == :forbidden }
-      else
-        @controller.should_receive(:render_403)
-      end
+      if defined?  unauthorized_user
+        if !defined?(on_success) && !defined?(before_success)
+          @controller.stub(action)
+          @controller.stub(:render)
+        end
+        session.delete(:current_organization_id)
+        login_user_by_described_class(unauthorized_user)
+        before_failure if defined?(before_failure)
+        if @controller.kind_of? Api::V1::ApiController
+          @controller.should_receive(:respond_for_exception).with { |e, options| options.try(:[], :status).should == :forbidden }
+        else
+          @controller.should_receive(:render_403)
+        end
 
-      req
-      on_failure if defined?(on_failure)
+        req
+        on_failure if defined?(on_failure)
+      end
     end
   end
 end
-
 
 shared_examples_for "bad request" do
   context "action" do

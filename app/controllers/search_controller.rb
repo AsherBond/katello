@@ -13,7 +13,6 @@
 class SearchController < ApplicationController
   include SearchHelper
 
-
   def rules
     pass = lambda{true}
     {
@@ -22,7 +21,6 @@ class SearchController < ApplicationController
      :destroy_favorite => pass
     }
   end
-
 
   def show
     # retrieve the search history and favorites for the user...
@@ -37,7 +35,7 @@ class SearchController < ApplicationController
     # clean up the histories... we will only store the last N entries in the
     # search history, so delete any past N
     if @search_histories.length > max_search_history
-      for i in (max_search_history..@search_histories.length-1)
+      (max_search_history..@search_histories.length - 1).each do |i|
         @search_histories[i].delete unless @search_histories[i].nil?
       end
     end
@@ -46,16 +44,16 @@ class SearchController < ApplicationController
   def create_favorite
 
     # save in the user's search favorites
-    unless params[:favorite].nil? or params[:favorite].blank?
+    unless params[:favorite].nil? || params[:favorite].blank?
       search_string = String.new(params[:favorite])
       path = retrieve_path
 
       # is the search string valid?  if not, don't save it...
       if is_valid? path, search_string
         favorites = current_user.search_favorites.where(:path => path, :params => params[:favorite])
-        if favorites.nil? or favorites.empty?
+        if favorites.nil? || favorites.empty?
           # user doesn't have this favorite stored, so save it
-          favorite = current_user.search_favorites.create!(:path => path, :params => params[:favorite])
+          current_user.search_favorites.create!(:path => path, :params => params[:favorite])
         end
       end
     end
@@ -76,10 +74,10 @@ class SearchController < ApplicationController
   def retrieve_path
     # retrieve the 'path' from the referrer (e.g. /katello/organizations), leaving out info such as
     # protocol, fqdn and port
-    path = URI(request.env['HTTP_REFERER']).path
+    URI(request.env['HTTP_REFERER']).path
   end
 
-  def is_valid? path, query
+  def is_valid?(path, query)
       # the path may contain a service prefix (e.g. /katello).  if it does, remove it from the path when
       # checking for path validity.  This is required since the routes do not know of this prefix.
       #path = path.split(Katello.config.prefix_url).last

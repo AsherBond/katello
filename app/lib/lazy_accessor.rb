@@ -23,7 +23,9 @@ module LazyAccessor
     # @example lazy_accessor :a, :b, :c,
     #   :initializer => lambda { json = Resources::Candlepin::Product.get(cp_id)[0] },
     #   :unless => lambda { cp_id.nil? }
-    def lazy_accessor *args
+    # TODO: break up method
+    # rubocop:disable MethodLength
+    def lazy_accessor(*args)
       options = args.extract_options!
       @lazy_attributes = [] if @lazy_attributes.nil?
       @lazy_attributes = @lazy_attributes.concat args
@@ -69,8 +71,8 @@ module LazyAccessor
         send :define_method, symbol do
           attr = symbol.to_s
 
-          excepted = options.has_key?(:unless) ? self.instance_eval(&options[:unless]) : new_record?
-          if !instance_variable_defined?("@#{attr}") && (not excepted)
+          excepted = options.key?(:unless) ? self.instance_eval(&options[:unless]) : new_record?
+          if !instance_variable_defined?("@#{attr}") && !excepted
             remote_values = run_initializer(args.size > 1, initializer)
             if args.size > 1
               prepopulate(remote_values)
@@ -89,12 +91,13 @@ module LazyAccessor
       @changed_remote_attributes ||= {}
     end
 
+    # rubocop:disable TrivialAccessors
     def changed_remote_attributes=(val)
       @changed_remote_attributes = val
     end
 
     def remote_attribute_changed?(attr)
-      changed_remote_attributes.has_key?(attr)
+      changed_remote_attributes.key?(attr)
     end
 
     def save(*)
@@ -122,8 +125,8 @@ module LazyAccessor
       attrs.uniq
     end
 
-
     private
+
     def remote_attribute_value(attr, initializer, in_group)
       return nil if new_record?
 
@@ -145,7 +148,7 @@ module LazyAccessor
       if self.respond_to?(:load_remote_data)
         load_remote_data(remote_values)
       else
-        remote_values.each_pair {|k,v| instance_variable_set("@#{k.to_s}", v) if (attrs and attrs.include?(k.to_sym) and respond_to?("#{k.to_s}="))}
+        remote_values.each_pair {|k, v| instance_variable_set("@#{k.to_s}", v) if (attrs && attrs.include?(k.to_sym) && respond_to?("#{k.to_s}="))}
       end
     end
   end

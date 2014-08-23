@@ -54,9 +54,9 @@ module Katello::UrlConstrainedCookieStoreV32X
     session = session.to_hash
     session_id ||= options[:id] || generate_sid
 
-    if not data = set_session(env, session_id, session, options)
+    if !data = set_session(env, session_id, session, options)
       env["rack.errors"].puts("Warning! #{self.class.name} failed to save session. Content dropped.")
-    elsif options[:defer] and not options[:renew]
+    elsif options[:defer] && !options[:renew]
       env["rack.errors"].puts("Defering cookie for #{session_id}") if $VERBOSE
     else
       cookie = create_cookie(ActionDispatch::Request.new(env), data, options)
@@ -74,12 +74,12 @@ class Katello::UrlConstrainedCookieStore < ActionDispatch::Session::CookieStore
   DEFAULT_OPTIONS.merge!(:expiration_exceptions => nil)
 
   def expiration_exceptions(options)
-    exceptions = options[:expiration_exceptions] or []
+    exceptions = options[:expiration_exceptions] || []
     exceptions.instance_of?(Array) ? exceptions : [exceptions]
   end
 
   def create_cookie(request, cookie_data, options)
-    cookie = Hash.new
+    cookie = {}
     cookie[:value] = cookie_data
     if options[:expire_after]
       cookie[:value]['created_at'] ||= Time.now

@@ -12,13 +12,19 @@
 
 module DashboardHelper
 
-  def dashboard_entry name, partial, dropbutton
-    render :partial=>"entry", :locals=>{:name=>name, :partial=>partial, :dropbutton=>dropbutton}
+  def dashboard_entry(name, partial, dropbutton)
+    render :partial => "entry", :locals => {:name => name, :partial => partial, :dropbutton => dropbutton}
   end
 
-  def dashboard_ajax_entry name, identifier, url, class_wrapper, dropbutton, quantity=5
+  def dashboard_ajax_entry(name, identifier, url, class_wrapper, dropbutton, quantity = 5)
     url = Katello.config[:url_prefix] + url if !url.match(Katello.config[:url_prefix])
-    render :partial=>"ajax_entry", :locals=>{:name=>name, :url=>url, :class_wrap=>class_wrapper, :identifier=>identifier, :dropbutton=>dropbutton, :quantity=>quantity}
+    render :partial => "ajax_entry", :locals => {:name => name, :url => url, :class_wrap => class_wrapper, :identifier => identifier, :dropbutton => dropbutton, :quantity => quantity}
+  end
+
+  def systems_search_status_link(anchor_text, status)
+    href_params = {:systems_path => systems_path, :status => status}
+    href_format = "%{systems_path}#/systems?search=status:%{status}"
+    link_to(anchor_text, href_format % href_params)
   end
 
   def user_notices(num = quantity, options = {})
@@ -29,7 +35,7 @@ module DashboardHelper
     end
   end
 
-  def content_view_versions(num=quantity)
+  def content_view_versions(num = quantity)
     return ContentViewVersion.readable(current_organization).non_default_view.joins(:task_status).
         order("task_statuses.updated_at DESC").limit(num)
   end
@@ -67,30 +73,30 @@ module DashboardHelper
   end
 
   def content_view_path_helper(version)
-    content_view_definitions_path() +
+    content_view_definitions_path +
         "#panel=content_view_definition_#{version.content_view.content_view_definition.id}&panelpage=views"
   end
 
-  def promotions num=quantity
+  def promotions(num = quantity)
     return  Changeset.joins(:task_status).
-        where("changesets.environment_id"=>KTEnvironment.changesets_readable(current_organization)).
+        where("changesets.environment_id" => KTEnvironment.changesets_readable(current_organization)).
         order("task_statuses.updated_at DESC").limit(num)
   end
 
-  def changeset_class cs
-    if cs.state === Changeset::PROMOTED
+  def changeset_class(cs)
+    if cs.state == Changeset::PROMOTED
       "check_icon"
-    elsif cs.state === Changeset::PROMOTING && cs.task_status.start_time
+    elsif cs.state == Changeset::PROMOTING && cs.task_status.start_time
       "gears_icon"  #running
     else
       "clock_icon" #pending
     end
   end
 
-  def changeset_message cs
-    if cs.state === Changeset::PROMOTED
+  def changeset_message(cs)
+    if cs.state == Changeset::PROMOTED
       _("Success")
-    elsif cs.state === Changeset::PROMOTING && cs.task_status.start_time
+    elsif cs.state == Changeset::PROMOTING && cs.task_status.start_time
       _("Promoting")
     elsif cs.state == Changeset::FAILED
       _("Failed")
@@ -99,60 +105,60 @@ module DashboardHelper
     end
   end
 
-  def systems_list num=quantity
+  def systems_list(num = quantity)
     System.readable(current_organization).limit(num)
   end
 
-  def changeset_path_helper cs
-      if cs.state === Changeset::PROMOTED
-        changesets_path() + "#panel=changeset_#{cs.id}&env_id=#{cs.environment_id}"
-      else
-        promotion_path(cs.environment.prior.name)
-      end
+  def changeset_path_helper(cs)
+    if cs.state == Changeset::PROMOTED
+      changesets_path + "#panel=changeset_#{cs.id}&env_id=#{cs.environment_id}"
+    else
+      promotion_path(cs.environment.prior.name)
+    end
   end
 
-  def products_synced num=quantity
+  def products_synced(num = quantity)
     syncing_products = []
     synced_products = []
 
-    Product.readable(current_organization).each{ |prod|
+    Product.readable(current_organization).each do |prod|
       if !prod.sync_status.start_time.nil?
         syncing_products << prod
       else
         synced_products << prod
       end
-    }
+    end
 
-    syncing_products.sort{|a,b|
+    syncing_products.sort do |a, b|
       a.sync_status.start_time <=> b.sync_status.start_time
-    }
+    end
 
     return (syncing_products + synced_products)[0..num]
 
   end
 
   def sync_percentage(product)
-    stat =product.sync_status.progress
+    stat = product.sync_status.progress
     return 0 if stat.total_size == 0
-    "%.0f" % ((stat.total_size - stat.size_left)*100/stat.total_size).to_s
+    "%.0f" % ((stat.total_size - stat.size_left) * 100 / stat.total_size).to_s
   end
 
   def subscription_counts
-    info = Glue::Candlepin::OwnerInfo.new(current_organization)
+    Glue::Candlepin::OwnerInfo.new(current_organization)
   end
 
-  def errata_type_class errata
-    case errata[:type]
-      when  Errata::SECURITY
-        return "security_icon"
-      when  Errata::ENHANCEMENT
-        return "enhancement_icon"
-      when  Errata::BUGZILLA
-        return "bugzilla_icon"
+  def errata_type_class(errata)
+    case errata.type
+    when Errata::SECURITY
+      return "security_icon"
+    when Errata::ENHANCEMENT
+      return "enhancement_icon"
+    when Errata::BUGZILLA
+      return "bugzilla_icon"
     end
   end
 
-  def errata_product_names errata, repos
+  def errata_product_names(errata, repos)
     # return a comma-separated list of product names that this errata is associated with
 
     # the list will be determined by evaluating the repoids in the errata against the products
@@ -166,8 +172,8 @@ module DashboardHelper
     products.empty? ? "" : products.join(', ')
   end
 
-  def system_path_helper system
-    systems_path + "#panel=system_" + system.id.to_s + '&panelpage=errata'
+  def system_path_helper(system)
+    systems_path + "#list_search=id:#{system.id}&panel=system_#{system.id}&panelpage=errata"
   end
 
   def get_checkin(system)

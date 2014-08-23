@@ -12,15 +12,16 @@
 
 module Ext::IndexedModel
 
+  # TODO: move methods out into submodule
+  # rubocop:disable MethodLength
   def self.included(base)
     base.class_eval do
 
+      cattr_accessor :class_index_options
 
-        cattr_accessor :class_index_options
-        def self.display_attributes
-          self.class_index_options[:display_attrs].sort{|a,b| a.to_s <=> b.to_s}
-        end
-
+      def self.display_attributes
+        self.class_index_options[:display_attrs].sort{|a, b| a.to_s <=> b.to_s}
+      end
 
       if Rails.env.development? || Rails.env.production?
         include Tire::Model::Search
@@ -34,16 +35,25 @@ module Ext::IndexedModel
                     :analyzer => Util::Search.custom_analyzers
                   }
 
-        def self.index_import list
+        def self.index_import(list)
           self.index.import(list)
         end
 
+        after_save :refresh_index
+
       else
         #stub mapping
-        def self.mapping *args
+        def self.mapping(*args)
+          {}
         end
-        def self.index_import list
+        def self.index_import(list)
         end
+        def self.index_name(name)
+        end
+      end
+
+      def refresh_index
+        self.class.index.refresh if self.class.respond_to?(:index)
       end
 
       ##
@@ -51,7 +61,7 @@ module Ext::IndexedModel
       #  :extended_json  - function to call to return a hash to merge into document
       #  :display_attrs  - list of attributes to display as searchable
       ##
-      def self.index_options options={}
+      def self.index_options(options = {})
         self.class_index_options = options
       end
 
@@ -59,7 +69,7 @@ module Ext::IndexedModel
       # association (e.g. has_many) to it, we need to update the related indexes on that model (e.g system)
       #   relation - the association for the other model
       #   attribute - the attribute on the current model, which if changes needs to trigger the index update
-      def self.update_related_indexes relation, attribute
+      def self.update_related_indexes(relation, attribute)
         after_save lambda{|record| reindex_on_update(relation, attribute)}
         before_destroy lambda{|record| save_indexed_relation(relation)}
         after_destroy lambda{|record| reindex_relation}
@@ -76,7 +86,7 @@ module Ext::IndexedModel
         record.update_index if record.respond_to? :update_index
       end
 
-      def reindex_on_update relation, attribute
+      def reindex_on_update(relation, attribute)
         # If the specified attribute (e.g. name) on the current model has changed, update the related indexes
         if self.send("#{attribute}_changed?")
           related_objects = self.send(relation)
@@ -84,7 +94,7 @@ module Ext::IndexedModel
         end
       end
 
-      def save_indexed_relation relation
+      def save_indexed_relation(relation)
         # If an object (e.g. system_group) is being deleted and another object (e.g. system) has a model
         # relationship (e.g. has_many :through) with it, we need to update the indexes on that other model.
         # Unfortunately, in order to do that, the update needs to be performed after this object is destroyed
@@ -99,7 +109,7 @@ module Ext::IndexedModel
         update_related_objects @related_objects
       end
 
-      def update_related_objects objects
+      def update_related_objects(objects)
         unless objects.blank?
           objects.each do |object|
             object.update_index if object.respond_to? :update_index
@@ -141,9 +151,9 @@ module Ext::IndexedModel
 
     attrs = self.indexed_attributes
 
-    (attrs).each{|attr|
+    (attrs).each do |attr|
       to_ret[attr] = self.send(attr)
-    }
+    end
 
     if self.class.class_index_options[:extended_json]
       to_ret.merge!(self.send(self.class.class_index_options[:extended_json]))

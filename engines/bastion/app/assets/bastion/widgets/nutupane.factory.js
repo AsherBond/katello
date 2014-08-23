@@ -17,63 +17,111 @@
  *
  * @requires $location
  * @requires $q
- * @requires CurrentOrganization
+ * @requires $timeout
  *
  * @description
  *   Defines the Nutupane factory for adding common functionality to the Nutupane master-detail
- *   pattern.
+ *   pattern.  Note that the API Nutupane uses must provide a response of the following structure:
+ *
+ *   {
+ *      offset: 25,
+ *      subtotal: 50,
+ *      total: 100,
+ *      results: [...]
+ *   }
  *
  * @example
  *   <pre>
        angular.module('example').controller('ExampleController',
            ['Nutupane', function(Nutupane)) {
-               var nutupane                = new Nutupane();
+               var nutupane                = new Nutupane(ExampleResource);
                $scope.table                = nutupane.table;
            }]
        );
     </pre>
  */
 angular.module('Bastion.widgets').factory('Nutupane',
-    ['$location', '$q', '$timeout', 'CurrentOrganization',
-    function($location, $q, $timeout, CurrentOrganization) {
-        var Nutupane = function(resource) {
+    ['$location', '$q', '$timeout', function($location, $q, $timeout) {
+        var Nutupane = function(resource, params, action) {
             var self = this;
+            params = params || {};
 
             self.table = {
+                action: action || 'query',
+                params: params,
                 resource: resource,
-                searchString: $location.search().search,
-                sort: {
-                    by: 'name',
-                    order: 'ASC'
-                }
+                rows: [],
+                searchTerm: $location.search().search
+            };
+
+            // Set default resource values
+            resource.offset = 0;
+            resource.subtotal = "0";
+            resource.total = "0";
+            resource.results = [];
+
+            function load(replace) {
+                var deferred = $q.defer(),
+                    table = self.table;
+
+                replace = replace || false;
+                table.working = true;
+
+                resource[table.action](params, function (response) {
+                    if (replace) {
+                        table.rows = response.results;
+                    } else {
+                        table.rows = table.rows.concat(response.results);
+                    }
+
+                    // This $timeout is necessary to cause a digest cycle
+                    // in order to prevent loading two sets of results.
+                    $timeout(function() {
+                        deferred.resolve(response);
+                        table.resource = response;
+                        table.resource.offset = table.rows.length;
+                    }, 0);
+                    table.working = false;
+                });
+                return deferred.promise;
+            }
+
+            self.getParams = function() {
+                return params;
+            };
+
+            self.setParams = function(newParams) {
+               params = newParams;
             };
 
             self.query = function() {
-                var params = {
-                    'organization_id':  CurrentOrganization,
-                    'search':           $location.search().search || "",
-                    'sort_by':          self.table.sort.by,
-                    'sort_order':       self.table.sort.order,
-                    'paged':            true,
-                    'offset':           self.table.resource.offset
-                };
+                var table = self.table;
+                params.offset = table.rows.length;
+                params.search = table.searchTerm || "";
+                return load();
+            };
 
-                self.table.working = true;
-                var deferred = $q.defer();
+            self.refresh = function() {
+                return load(true);
+            };
 
-                self.table.resource.query(params, function(resource) {
-                    // This $timeout is necessary to cause a $digest cycle for displaying
-                    $timeout(function() {
-                        deferred.resolve(resource);
-                    }, 0);
-                    self.table.working = false;
-                });
-                return deferred.promise;
+            self.removeRow = function(id) {
+                var table = self.table;
+
+                table.rows = _.reject(table.rows, function(item) {
+                    return item.id === id;
+                }, this);
+
+                table.resource.total = table.resource.total - 1;
+                table.resource.subtotal = table.resource.subtotal - 1;
+
+                return self.table.rows;
             };
 
             self.table.search = function(searchTerm) {
                 $location.search('search', searchTerm);
                 self.table.resource.offset = 0;
+                self.table.rows = [];
                 self.table.closeItem();
 
                 if (!self.table.working) {
@@ -86,30 +134,56 @@ angular.module('Bastion.widgets').factory('Nutupane',
                 throw "NotImplementedError";
             };
 
+            self.table.replaceRow = function(row) {
+                var index = null;
+                angular.forEach(self.table.rows, function(item, itemIndex) {
+                    if (item.id === row.id) {
+                        index = itemIndex;
+                    }
+                });
+
+                if (index >= 0) {
+                    self.table.rows[index] = row;
+                }
+            };
+
+            self.table.addRow = function(row) {
+                self.table.rows.unshift(row);
+                self.table.resource.offset += 1;
+                self.table.resource.subtotal += 1;
+                self.table.resource.total += 1;
+            };
+
             self.table.nextPage = function() {
                 var table = self.table;
-                if (table.working || (table.resource.offset > 0 && table.hasMore())) {
+                if (table.working || !table.hasMore()) {
                     return;
                 }
                 return self.query();
             };
 
             self.table.hasMore = function() {
-                return self.table.resource.subtotal === self.table.resource.offset;
+                var length = self.table.rows.length;
+                var subtotal = self.table.resource.subtotal;
+                return ((length === 0 && subtotal !== 0) || (length < subtotal));
             };
 
             self.table.sortBy = function(column) {
-                var sort = self.table.sort;
-                if (column.id === sort.by) {
-                    sort.order = (sort.order === 'ASC') ? 'DESC' : 'ASC';
-                } else {
-                    sort.order = 'ASC';
-                    sort.by = column.id;
+                var sort = self.table.resource.sort;
+                if (!column) {
+                    return;
                 }
 
-                column.sortOrder = sort.order;
+                params["sort_by"] = column.id;
+                if (column.id === sort.by) {
+                    params["sort_order"] = (sort.order === 'ASC') ? 'DESC' : 'ASC';
+                } else {
+                    params["sort_order"] = 'ASC';
+                }
+
+                column.sortOrder = params["sort_order"];
                 column.active = true;
-                self.table.resource.offset = 0;
+                self.table.rows = [];
                 self.query();
             };
         };

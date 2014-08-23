@@ -36,7 +36,7 @@ class ChangesetsController < ApplicationController
       :create => manage_perm,
       :edit => read_perm,
       :update => update_perm,
-      :destroy =>manage_perm,
+      :destroy => manage_perm,
       :object => read_perm,
       :auto_complete_search => read_perm,
       :apply => apply_perm,
@@ -52,22 +52,22 @@ class ChangesetsController < ApplicationController
   def index
     accessible_envs = KTEnvironment.changesets_readable(current_organization)
     setup_environment_selector(current_organization, accessible_envs)
-    render :index, :locals=>{:accessible_envs => accessible_envs}
+    render :index, :locals => {:accessible_envs => accessible_envs}
   end
 
   #extended scroll for changeset_history
   def items
     render_panel_direct(Changeset, @panel_options, params[:search], params[:offset], [:name_sort, 'asc'],
-        {:default_field => :name, :filter=>[{:environment_id=>[@environment.id]}, {:state=>[Changeset::PROMOTED, Changeset::DELETED]}]})
+        {:default_field => :name, :filter => [{:environment_id => [@environment.id]}, {:state => [Changeset::PROMOTED, Changeset::DELETED]}]})
   end
 
   def edit
-    render :partial=>"edit", :locals=>{:editable=>@environment.changesets_manageable?, :name=>controller_display_name}
+    render :partial => "edit", :locals => {:editable => @environment.changesets_manageable?, :name => controller_display_name}
   end
 
   #list item
   def show
-    render :partial=>"common/list_update", :locals=>{:item=>@changeset, :accessor=>"id", :columns=>['name']}
+    render :partial => "common/list_update", :locals => {:item => @changeset, :accessor => "id", :columns => ['name']}
   end
 
   def section_id
@@ -84,16 +84,17 @@ class ChangesetsController < ApplicationController
 
   def new
     @changeset = Changeset.new
-    render :partial=>"new", :locals => {:changeset_type => params[:changeset_type]}
+    render :partial => "new", :locals => {:changeset_type => params[:changeset_type]}
   end
 
   def create
-    if params[:changeset][:action_type].blank? or
+    if params[:changeset][:action_type].blank? ||
        params[:changeset][:action_type] == Changeset::PROMOTION
 
       if @next_environment.blank?
         notify.error _("Please create at least one environment.")
-        render :nothing => true, :status => :not_acceptable and return
+        render :nothing => true, :status => :not_acceptable
+        return
       else
         env_id = @next_environment.id
         type = Changeset::PROMOTION
@@ -103,19 +104,21 @@ class ChangesetsController < ApplicationController
       type = Changeset::DELETION
     end
     @changeset = Changeset.create_for(type, :name => params[:changeset][:name],
-                                      :description => params[:changeset][:description],
-                                      :environment_id => env_id)
+                                            :description => params[:changeset][:description],
+                                            :environment_id => env_id)
 
     notify.success _("Promotion Changeset '%s' was created.") % @changeset["name"]
     bc = {}
     add_crumb_node!(bc, changeset_bc_id(@changeset), '', @changeset.name, ['changesets'],
-                    {:client_render => true}, {:is_new=>true})
+                    {:client_render => true}, {:is_new => true})
     render :json => {
       'breadcrumb' => bc,
       'id' => @changeset.id,
       'changeset' => simplify_changeset(@changeset)    }
   end
 
+  # TODO: break up this method
+  # rubocop:disable MethodLength
   def update
     send_changeset = params[:timestamp] && params[:timestamp] != @changeset.updated_at.to_i.to_s
 
@@ -124,55 +127,59 @@ class ChangesetsController < ApplicationController
       @changeset.name = params[:name]
       @changeset.save!
 
-      render :json=>{:name=> params[:name], :timestamp => @changeset.updated_at.to_i.to_s} and return
+      render :json => {:name => params[:name], :timestamp => @changeset.updated_at.to_i.to_s}
+      return
     end
 
     if params[:description]
       @changeset.description = params[:description]
       @changeset.save!
 
-      render :json=>{:description=> params[:description], :timestamp => @changeset.updated_at.to_i.to_s} and return
+      render :json => {:description => params[:description], :timestamp => @changeset.updated_at.to_i.to_s}
+      return
     end
 
     if params[:state]
-      raise _('Invalid state') if !["review", "new"].index(params[:state])
+      raise _('Invalid state') if !%w(review new).index(params[:state])
       if send_changeset
         to_ret = {}
         to_ret[:changeset] = simplify_changeset(@changeset) if send_changeset
-        render :json=>to_ret, :status=>:bad_request and return
+        render :json => to_ret, :status => :bad_request
+        return
       end
       @changeset.state = Changeset::REVIEW if params[:state] == "review"
       @changeset.state = Changeset::NEW if params[:state] == "new"
       @changeset.save!
-      render :json=>{:timestamp=>@changeset.updated_at.to_i.to_s} and return
+      render :json => {:timestamp => @changeset.updated_at.to_i.to_s}
+      return
     end
 
     render :text => "The promotion changeset is currently under review, no modifications can occur during this phase.",
            :status => :bad_request if @changeset.state == Changeset::REVIEW
     render :text => "This promotion changeset is already promoted, no content modifications can be made.",
-               :status => :bad_request if @changeset.state == Changeset::PROMOTED
+           :status => :bad_request if @changeset.state == Changeset::PROMOTED
 
-    if params.has_key? :data
+    if params.key? :data
       params[:data].each do |item|
         adding = item["adding"]
         type   = item["type"]
         id     = item["item_id"]   #id of item being added/removed
         case type
-          when "content_view"
-            @changeset.remove_content_view! ContentView.find(id) if !adding
+        when "content_view"
+          @changeset.remove_content_view! ContentView.find(id) if !adding
 
-            if adding
-              view, component_views = @changeset.add_content_view!(ContentView.find(id), true)
+          if adding
+            view, component_views = @changeset.add_content_view!(ContentView.find(id), true)
 
-              unless component_views.blank?
-                notify.message(_("The following content views were automatically added to changeset '%{changeset}'"\
-                                 " for composite view '%{composite_view}': %{component_views}") %
-                               {:changeset => @changeset.name, :composite_view => view.name,
-                                :component_views => component_views.map(&:name).join(', ')},
-                               {:asynchronous => false})
-                send_changeset = true
-              end
+            unless component_views.blank?
+              notify.message(_("The following content views were automatically added to changeset '%{changeset}'"\
+                               " for composite view '%{composite_view}': %{component_views}") %
+              {:changeset => @changeset.name, :composite_view => view.name,
+               :component_views => component_views.map(&:name).join(', ')},
+              {:asynchronous => false})
+              send_changeset = true
             end
+          end
         end
       end
 
@@ -182,25 +189,24 @@ class ChangesetsController < ApplicationController
       csu.save!
     end
 
-    to_ret = {:timestamp=>@changeset.updated_at.to_i.to_s}
+    to_ret = {:timestamp => @changeset.updated_at.to_i.to_s}
     to_ret[:changeset] = simplify_changeset(@changeset) if send_changeset
-    render :json=>to_ret
+    render :json => to_ret
   end
 
   def destroy
     name = @changeset.name
     @changeset.destroy
     notify.success _("Promotion Changeset '%s' was deleted.") % name
-    render :text=>""
+    render :text => ""
   end
 
   def apply
     messages = {}
     if !params[:confirm] && @environment.prior.library?
-      syncing = []
-      errors = []
-
       # TODO: CONTENT VIEW IN PROGRESS - to check if refresh is in progress... this will be done in separate commit
+      # syncing = []
+      # errors = []
       #@changeset.involved_products.each{|prod|
       #  prod.repos(current_organization.library).each{ |repo|
       #    status = repo.sync_status
@@ -214,7 +220,7 @@ class ChangesetsController < ApplicationController
 
     to_ret = {}
     if !messages.empty?
-      to_ret[:warnings] = render_to_string(:partial=>'warning', :locals=>messages)
+      to_ret[:warnings] = render_to_string(:partial => 'warning', :locals => messages)
     else
       @changeset.apply :notify => true, :async => true
       if @changeset.promotion?
@@ -225,17 +231,18 @@ class ChangesetsController < ApplicationController
       # remove user edit tracking for this changeset
       ChangesetUser.destroy_all(:changeset_id => @changeset.id)
     end
-    render :json=>to_ret
+    render :json => to_ret
   rescue => e
     notify.exception _("Failed to apply changeset."), e
-    render :text=>e.to_s, :status=>500
+    render :text => e.to_s, :status => 500
   end
 
   def changeset_status
     progress = @changeset.task_status.progress
     state = @changeset.state
-    to_ret = {'id' => 'changeset_' + @changeset.id.to_s, 'state' => state, 'progress' => progress.to_i}
-    render :json=>to_ret
+    to_ret = {'id' => 'changeset_' + @changeset.id.to_s, 'state' => state, 'progress' => progress.to_i,
+              'content_view_ids' => @changeset.content_view_ids}
+    render :json => to_ret
   end
 
   private
@@ -247,7 +254,7 @@ class ChangesetsController < ApplicationController
       @environment = KTEnvironment.find(params[:env_id])
     else
       #didnt' find an environment, just do the first the user has access to
-      list = KTEnvironment.changesets_readable(current_organization).where(:library=>false).order(:name)
+      list = KTEnvironment.changesets_readable(current_organization).where(:library => false).order(:name)
       @environment ||= list.first || current_organization.library
     end
 
@@ -257,7 +264,7 @@ class ChangesetsController < ApplicationController
   end
 
   def update_editors
-    usernames = @changeset.users.collect { |c| User.where(:id => c.user_id ).order("updated_at desc")[0].username }
+    usernames = @changeset.users.collect { |c| User.where(:id => c.user_id).order("updated_at desc")[0].username }
     usernames.delete(current_user.username)
     response.headers['X-ChangesetUsers'] = usernames.to_json
   end
@@ -268,17 +275,16 @@ class ChangesetsController < ApplicationController
 
   def setup_options
     @panel_options = { :title => _('Changesets'),
-                 :col => ['name'],
-                 :titles => [_('Name')],
-                 :enable_create => false,
-                 :create_label => _('+ New Changeset'),
-                 :name => controller_display_name,
-                 :accessor => :id,
-                 :ajax_load => true,
-                 :ajax_scroll => items_changesets_path(),
-                 :search_class=>Changeset}
+                       :col => ['name'],
+                       :titles => [_('Name')],
+                       :enable_create => false,
+                       :create_label => _('+ New Changeset'),
+                       :name => controller_display_name,
+                       :accessor => :id,
+                       :ajax_load => true,
+                       :ajax_scroll => items_changesets_path,
+                       :search_class => Changeset}
   end
-
 
   def controller_display_name
     return 'changeset'
@@ -287,7 +293,7 @@ class ChangesetsController < ApplicationController
   private
 
   #produce a simple datastructure of a changeset for the browser
-  def simplify_changeset cs
+  def simplify_changeset(cs)
     to_ret = {:id => cs.id.to_s, :name => cs.name, :type => cs.action_type, :description => cs.description,
               :timestamp => cs.updated_at.to_i.to_s, :content_views => {},
               :is_new => cs.state == Changeset::NEW, :state => cs.state}
@@ -300,9 +306,9 @@ class ChangesetsController < ApplicationController
   end
 
   def update_artifacts_valid?
-    if params.has_key?(:data)
+    if params.key?(:data)
       params[:data].each do |item|
-        return false if not update_item_valid?(item["type"], item["item_id"])
+        return false if !update_item_valid?(item["type"], item["item_id"])
       end
     end
     true

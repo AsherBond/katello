@@ -13,8 +13,8 @@
 
 class SystemSystemGroup < ActiveRecord::Base
 
-  belongs_to :system
-  belongs_to :system_group
+  belongs_to :system, :inverse_of => :system_system_groups
+  belongs_to :system_group, :inverse_of => :system_system_groups
 
   validate :validate_max_systems_not_exceeded
   validate :validate_system_environments
@@ -22,7 +22,7 @@ class SystemSystemGroup < ActiveRecord::Base
   def validate_max_systems_not_exceeded
     if new_record?
       system_group = SystemGroup.find(self.system_group_id)
-      if (system_group) and (system_group.max_systems != SystemGroup::UNLIMITED_SYSTEMS) and (system_group.systems.size >= system_group.max_systems)
+      if (system_group) && (system_group.max_systems != SystemGroup::UNLIMITED_SYSTEMS) && (system_group.systems.size >= system_group.max_systems)
         errors.add :base, _("You cannot have more than %{max_systems} system(s) associated with system group '%{group}'.") % {:max_systems => system_group.max_systems, :group => system_group.name}
       end
     end

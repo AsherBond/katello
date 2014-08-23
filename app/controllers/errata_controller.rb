@@ -16,10 +16,10 @@ class ErrataController < ApplicationController
   before_filter :authorize
 
   def rules
-    view = lambda{
+    view = lambda do
       !Repository.readable_in_org(current_organization).where(
-          :pulp_id=>@errata.repoids).empty?
-    }
+          :pulp_id => @errata.repoids).empty?
+    end
 
     auto_complete = lambda do
       if @def_filter
@@ -38,15 +38,15 @@ class ErrataController < ApplicationController
   end
 
   def show
-    render :partial=>"show"
+    render :partial => "show"
   end
 
   def packages
-    render :partial=>"packages"
+    render :partial => "packages"
   end
 
   def short_details
-    render :partial=>"short_details"
+    render :partial => "short_details"
   end
 
   def auto_complete

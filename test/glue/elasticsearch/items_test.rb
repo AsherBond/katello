@@ -21,6 +21,10 @@ class GlueElasticSearchTest < MiniTest::Rails::ActiveSupport::TestCase
 
       def self.where(*args)
       end
+
+      def self.mapping(*args)
+        {}
+      end
     end
 
     @results = MiniTest::Mock.new
@@ -32,6 +36,8 @@ class GlueElasticSearchTest < MiniTest::Rails::ActiveSupport::TestCase
 
   def test_items
     @results.expect(:total, 0)
+    @results.expect(:total, 0)
+    @results.expect(:results, [])
 
     @FakeClass.stub(:search, @results) do
       items, count = @items.retrieve("*")

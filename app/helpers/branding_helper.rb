@@ -10,7 +10,6 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-
 module BrandingHelper
   def project_name
     if Katello.config.katello?
@@ -30,7 +29,7 @@ module BrandingHelper
 
   def redhat_bugzilla_link
     url = "https://bugzilla.redhat.com/enter_bug.cgi?product=Katello"
-    link_to (_("the %s Bugzilla") % release_name), url
+    link_to((_("the %s Bugzilla") % release_name), url)
   end
 
   def release_name

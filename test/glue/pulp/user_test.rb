@@ -12,7 +12,6 @@
 
 require 'minitest_helper'
 
-
 class GluePulpUserTestBase < MiniTest::Rails::ActiveSupport::TestCase
   extend ActiveRecord::TestFixtures
 
@@ -26,55 +25,71 @@ class GluePulpUserTestBase < MiniTest::Rails::ActiveSupport::TestCase
 
   def setup
     @user = build(:user, :batman)
-
-    VCR.insert_cassette('glue_pulp_user')
   end
 
   def teardown
-    VCR.use_cassette('pulp_user_setup') do
-      @user.del_pulp_user
-    end
-  rescue => e
-  ensure
     VCR.eject_cassette
   end
 
 end
 
-
 class GluePulpUserCreateTest < GluePulpUserTestBase
 
-  def test_set_pulp_user
-    assert @user.set_pulp_user
+  def setup
+    super
+    VCR.insert_cassette('pulp/user/create')
   end
 
-  def test_del_pulp_user
-    VCR.use_cassette('pulp_user_exception_raised') do
-      assert_raises RestClient::ResourceNotFound do
-        @user.del_pulp_user
-      end
+  def test_set_pulp_user
+    assert @user.set_pulp_user({:password => @user.password})
+    @user.del_pulp_user
+  end
+
+  def test_set_pulp_user_raises_exception
+    @user.remote_id = nil
+
+    assert_raises RestClient::InternalServerError do
+      @user.set_pulp_user({:password => @user.password + "_bad"})
     end
   end
 
 end
 
 
+class GluePulpUserDeleteTest < GluePulpUserTestBase
+
+  def setup
+    super
+    VCR.insert_cassette('pulp/user/delete')
+  end
+
+  def test_del_pulp_user
+    @user.set_pulp_user({:password => @user.password})
+
+    assert @user.del_pulp_user
+  end
+
+  def test_del_pulp_user_raises_exception
+    @user.remote_id = "fake"
+
+    assert_raises RestClient::ResourceNotFound do
+      @user.del_pulp_user
+    end
+  end
+
+end
+
 class GluePulpUserTest < GluePulpUserTestBase
 
   def setup
     super
-    VCR.use_cassette('pulp_user_setup') do
-      @user.set_pulp_user
-    end
+    VCR.insert_cassette('pulp/user/user')
+    @user.set_pulp_user({:password => @user.password})
   end
 
-  def test_set_pulp_user_raises_exception
-    @user.remote_id = nil
-    VCR.use_cassette('pulp_user_exception_raised') do
-      assert_raises RestClient::InternalServerError do
-        @user.set_pulp_user
-      end
-    end
+  def teardown
+    @user.del_pulp_user
+    super
   end
 
   def test_set_super_user_role
@@ -84,10 +99,6 @@ class GluePulpUserTest < GluePulpUserTestBase
   def test_del_super_admin_role
     @user.set_super_user_role
     assert @user.del_super_admin_role
-  end
-
-  def test_del_pulp_user
-    assert @user.del_pulp_user
   end
 
   def test_prune_pulp_only_attributes

@@ -32,6 +32,8 @@ describe Api::V1::ProductsController, :katello => true do
 
     @organization = new_test_org
 
+    @test_gpg_content = File.open("#{Rails.root}/spec/assets/gpg_test_key").read
+
     @environment = create_environment(:name => "foo123", :label => "foo123", :organization => @organization, :prior => @organization.library)
     @provider    = Provider.create!(:name         => "provider", :provider_type => Provider::CUSTOM,
                                     :organization => @organization, :repository_url => "https://something.url/stuff")
@@ -77,7 +79,7 @@ describe Api::V1::ProductsController, :katello => true do
   end
 
   describe "update product" do
-    let(:gpg_key) { GpgKey.create!(:name => "Gpg key", :content => "100", :organization => @organization) }
+    let(:gpg_key) { GpgKey.create!(:name => "Gpg key", :content => @test_gpg_content, :organization => @organization) }
 
     before do
       Katello.pulp_server.extensions.repository.stub(:retrieve).and_return(RepoTestData::REPO_PROPERTIES)
@@ -110,7 +112,8 @@ describe Api::V1::ProductsController, :katello => true do
       it { should be_success }
 
       it "should change allowed attributes" do
-        @product.should_receive(:update_attributes!).with("gpg_key_name" => gpg_key.name, "description" => "another description")
+        @product.should_receive(:gpg_key_name=)
+        @product.should_receive(:update_attributes!).with("description" => "another description")
         req
       end
 
@@ -134,42 +137,7 @@ describe Api::V1::ProductsController, :katello => true do
     end
   end
 
-  context "show all @products in an environment" do
-
-    let(:action) { :index }
-    let(:req) { get 'index', :organization_id => @organization.label }
-    let(:authorized_user) { user_with_read_permissions }
-    let(:unauthorized_user) { user_without_read_permissions }
-    it_should_behave_like "protected action"
-
-    before do
-      @dumb_prod = { :id => @product.id }
-      Product.stub!(:all_readable).and_return(@products)
-      @products.stub_chain(:select, :joins, :where, :all).and_return(@dumb_prod)
-    end
-
-    it "should find organization" do
-      @controller.should_receive(:find_optional_organization)
-      get 'index', :organization_id => @organization.label
-    end
-
-    it "should find environment" do
-      KTEnvironment.should_receive(:find_by_id).once.with(@environment.id.to_s).and_return([@environment])
-      get 'index', :organization_id => @organization.label, :environment_id => @environment.id.to_s
-    end
-
-    it "should respond with success" do
-      get 'index', :organization_id => @organization.label, :environment_id => @environment.id
-      response.should be_success
-    end
-
-    it "should respond return product json" do
-      get 'index', :organization_id => @organization.label, :environment_id => @environment.id
-      response.body.should == @dumb_prod.to_json
-    end
-  end
-
-  context "show all @products in library" do
+  context "show all @products" do
     before do
       @dumb_prod = { :id => @product.id }
       Product.stub!(:all_readable).and_return(@products)
@@ -187,12 +155,12 @@ describe Api::V1::ProductsController, :katello => true do
     end
 
     it "should respond with success" do
-      get 'index', :organization_id => @organization.label, :environment_id => @environment.id
+      get 'index', :organization_id => @organization.label
       response.should be_success
     end
 
     it "should respond return product json" do
-      get 'index', :organization_id => @organization.label, :environment_id => @environment.id
+      get 'index', :organization_id => @organization.label
       response.body.should == @dumb_prod.to_json
     end
   end
@@ -219,15 +187,26 @@ describe Api::V1::ProductsController, :katello => true do
     it "should retrieve all repositories for the product" do
       @product.stub!(:readable?).and_return(true)
       Product.stub!(:all_readable).and_return(@products)
-      @product.should_receive(:repos).once.with(@environment, nil, nil).and_return({})
-      get 'repositories', :organization_id => @organization.label, :environment_id => @environment.id, :id => @product.id
+      @product.should_receive(:repos).once.with(@organization.library, nil, nil).and_return({})
+      get 'repositories', :organization_id => @organization.label, :id => @product.id
     end
 
     it "should return json of product repositories" do
+      Package.stub!(:search).and_return({})
+      PuppetModule.stub!(:search).and_return({})
+      Repository.any_instance.stub(:last_sync).and_return(nil)
+
+      @product.stub!(:readable?).and_return(true)
+      @repositories.stub!(:where).and_return(@repositories)
+      get 'repositories', :organization_id => @organization.label, :environment_id => @organization.library.id, :id => @product.id
+      response.body.should == @repositories.to_json
+    end
+
+    it "should return 400 for a non-library environment with no content_view_id" do
       @product.stub!(:readable?).and_return(true)
       @repositories.stub!(:where).and_return(@repositories)
       get 'repositories', :organization_id => @organization.label, :environment_id => @environment.id, :id => @product.id
-      response.body.should == @repositories.to_json
+      response.status.should eql(400)
     end
 
     it "should call product repos with a content view" do

@@ -762,10 +762,10 @@ var changesetEdit = (function(){
         var after_function;
         if (opened) {
             $('#edit_changeset').attr('original-title', i18n.close_edit_title);
-            name_box.html(changeset.getName());
+            name_box.html(KT.utils.escape(changeset.getName()));
             edit_button.html(i18n.close_details);
-            description.html(changeset.getDescription());
-            type.html(changeset.type());
+            description.html(KT.utils.escape(changeset.getDescription()));
+            type.html(KT.utils.escape(changeset.type()));
             edit_button.parent().addClass("highlighted");
             after_function = setup_edit;
         }
@@ -917,7 +917,7 @@ var templateLibrary = (function(){
     var changesetsListItem = function(id, name){
             var html ='<li class="slide_link">' + '<div class="simple_link link_details" id="' + id + '">';
 
-            html += '<span class="sort_attr">'+ name + '</span></div></li>';
+            html += '<span class="sort_attr">'+ KT.utils.escape(name) + '</span></div></li>';
             return html;
         },
         changesetsList = function(changesets){
@@ -957,13 +957,13 @@ var templateLibrary = (function(){
                 html = '';
             if ( showButton ){
                 anchor = '<a class="st_button content_add_remove fr remove_content_view" data-display_name="' +
-                    name +'" data-id="' + id + '" data-type="content_view" id="add_remove_content_view_' + id +
+                    KT.utils.escape(name) +'" data-id="' + id + '" data-type="content_view" id="add_remove_content_view_' + id +
                     '" data-content_view_id="' + id +
                     '">' + i18n.remove + '</a>';
             }
             html += '<li class="clear">' + anchor;
             html += '<div id="simple_link content_view-cs_' + changeset_id + '_' + id + '">' +
-                '<span class="content_view-icon sort_attr" >' + name + '</span>' +
+                '<span class="content_view-icon sort_attr" >' + KT.utils.escape(name) + '</span>' +
                 '</div></li>';
 
             return html;
@@ -1111,15 +1111,14 @@ var changesetStatusActions = (function($){
                 } else if ((data.state === 'promoted') || (data.state === 'deleted')){
                     delete promotion_page.get_current_changeset_breadcrumb()['changeset_' + id];
 
-                    // TODO: update logic to remove content view from the list. This will be done in separate commit.
-                    // if the user deleted one or more products with the changeset, remove those products
-                    // from the content tree
-//                    if (data.state === 'deleted' && data.product_ids) {
-//                        $.each(data.product_ids, function(index, product_id) {
-//                            delete content_breadcrumb['details_' + product_id];
-//                        });
-//                        promotion_page.get_content_tree().rerender_content('content');
-//                    }
+                    // If the user deleted one or more content views with the changeset
+                    // remove those products from the content tree
+                    if (data.state === 'deleted' && data.content_view_ids) {
+                        $.each(data.content_view_ids, function(index, content_view_id) {
+                            var selector = '[data-content-view-id="%s"]'.replace("%s", content_view_id);
+                            $(selector).remove();
+                        });
+                    }
 
                     finish(data.id);
                     updater.stop();

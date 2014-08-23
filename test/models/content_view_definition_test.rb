@@ -146,6 +146,16 @@ class ContentViewDefinitionTest < MiniTest::Rails::ActiveSupport::TestCase
     content_view.versions.each { |v| refute_nil v.definition_archive }
   end
 
+  def test_publish_composite_with_conflicts
+    content_view_def = FactoryGirl.create(:content_view_definition)
+    content_view_def.composite = true
+    content_view_def.save!
+    content_view_def.stubs(:has_puppet_repo_conflicts?).returns(true)
+    assert_raises(RuntimeError) do
+      content_view_def.publish('test_name', 'test_description', 'test_label')
+    end
+  end
+
   def test_archive
     content_view_def = FactoryGirl.create(:content_view_definition)
     assert content_view_def.archive
@@ -166,7 +176,7 @@ class ContentViewDefinitionTest < MiniTest::Rails::ActiveSupport::TestCase
 
   def test_validate_component_views
     content_view_def = FactoryGirl.create(:content_view_definition, :composite)
-    ContentView.any_instance.stubs(:library_repo_ids).returns([1])
+    ContentView.any_instance.stubs(:library_repos).returns([@repo])
     content_views = FactoryGirl.create_list(:content_view, 2)
 
     content_view_def.component_content_views << content_views.first
@@ -178,13 +188,112 @@ class ContentViewDefinitionTest < MiniTest::Rails::ActiveSupport::TestCase
 
   def test_validate_component_views_before_add
     content_view_def = content_view_definition_bases(:simple_cvd)
-    ContentView.any_instance.stubs(:library_repo_ids).returns([1])
+    ContentView.any_instance.stubs(:library_repos).returns([@repo])
     content_view = content_views(:library_dev_view)
 
     assert_raises(Errors::ContentViewDefinitionBadContent) do
       content_view_def.component_content_views << content_view
     end
     assert_empty content_view_def.component_content_views
+  end
+
+  def test_puppet_repository_id
+    content_view_def = ContentViewDefinition.find(content_view_definition_bases(:simple_cvd))
+    repo = Repository.find(repositories(:p_forge))
+    dev_repo = Repository.find(repositories(:dev_p_forge))
+
+    content_view_def.puppet_repository_id = repo.id
+    content_view_def.save!
+    assert_equal repo.id, content_view_def.puppet_repository_id
+    assert_includes content_view_def.repository_ids, repo.id
+
+    assert_raises(Errors::ContentViewRepositoryOverlap) do
+      content_view_def.repositories << dev_repo
+    end
+  end
+
+  def test_associate_yum_types
+    cloned = Repository.find(repositories(:fedora_17_x86_64_dev).id)
+    repo = Repository.find(repositories(:fedora_17_x86_64).id)
+    cloned.stubs(:library_instance_id).returns(repo.id)
+    cloned.stubs(:library_instance).returns(repo)
+
+    dev_repo = Repository.find(repositories(:dev_p_forge))
+
+    package_rule1 = FactoryGirl.build(:package_filter_rule)
+    filter = package_rule1.filter
+    package_rule1.inclusion = true
+    package_rule1.parameters = HashWithIndifferentAccess.new()
+    package_rule1.save!
+
+    package_rule2 = PackageRule.create!(:filter => package_rule1.filter, :inclusion => false)
+    package_rule2.parameters = HashWithIndifferentAccess.new()
+    package_rule2.save!
+
+    cvd =  filter.content_view_definition
+    cvd.repositories << repo
+    filter.repositories << repo
+    dumb_copy = [1,2,3]
+    dumb_remove = [5,6,7]
+    Util::PackageClauseGenerator.any_instance.expects(:generate).once.returns("")
+    Util::PackageClauseGenerator.any_instance.expects(:copy_clause).once.returns(dumb_copy)
+    Util::PackageClauseGenerator.any_instance.expects(:remove_clause).once.returns(dumb_remove)
+
+    PulpTaskStatus.stubs(:wait_for_tasks).returns("")
+
+    repo.expects(:clone_contents_by_filter).once.with(cloned, FilterRule::PACKAGE, dumb_copy).returns(100)
+    repo.expects(:clone_contents_by_filter).once.with(cloned, FilterRule::ERRATA, nil).returns(200)
+    repo.expects(:clone_contents_by_filter).once.with(cloned, FilterRule::PACKAGE_GROUP, nil).returns(300)
+    repo.expects(:clone_distribution).once.with(cloned)
+    repo.expects(:clone_file_metadata).once.with(cloned)
+
+    cloned.expects(:unassociate_by_filter).once.with(FilterRule::PACKAGE, dumb_remove).returns("100")
+    cloned.expects(:purge_empty_groups_errata).once.returns(500)
+
+    cvd.associate_contents(cloned)
+  end
+
+  def test_associate_puppet
+    cloned = Repository.find(repositories(:dev_p_forge).id)
+    repo = Repository.find(repositories(:p_forge))
+    cloned.stubs(:library_instance_id).returns(repo.id)
+    cloned.stubs(:library_instance).returns(repo)
+
+    puppet_module_rule = FactoryGirl.build(:puppet_module_filter_rule)
+    filter = puppet_module_rule.filter
+    puppet_module_rule.inclusion = true
+    puppet_module_rule.parameters = HashWithIndifferentAccess.new()
+    puppet_module_rule.save!
+
+    cvd =  filter.content_view_definition
+    cvd.repositories << repo
+    filter.repositories << repo
+    dumb_copy = [1,2,3]
+    Util::PuppetClauseGenerator.any_instance.expects(:generate).returns("")
+    Util::PuppetClauseGenerator.any_instance.expects(:copy_clause).returns(dumb_copy)
+
+    PulpTaskStatus.stubs(:wait_for_tasks).returns("")
+
+    repo.expects(:clone_contents_by_filter).once.with(cloned, FilterRule::PUPPET_MODULE, dumb_copy).returns(300)
+    cvd.associate_contents(cloned)
+  end
+
+  def test_destroy
+    @content_view_def.filters.create
+    @content_view_def.content_views << content_views(:library_view)
+    refute_empty @content_view_def.filters.reload
+    refute_empty @content_view_def.content_views.reload
+
+    assert @content_view_def.destroy
+    refute ContentViewDefinition.exists?(@content_view_def.id)
+  end
+
+  def test_check_puppet_names
+    @content_view_def.stubs(:puppet_repository).returns(mock(:name_conflicts => ['ntp']))
+
+    assert_raises(Errors::PuppetConflictException) do
+      @content_view_def.check_puppet_names!
+    end
   end
 
 end

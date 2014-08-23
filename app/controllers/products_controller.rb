@@ -24,13 +24,15 @@ class ProductsController < ApplicationController
     auto_complete_test = lambda {Product.any_readable?(current_organization)}
 
     {
+      :index => lambda {Product.any_readable?(current_organization)},
+      :all => lambda {Product.any_readable?(current_organization)},
       :new => edit_test,
       :create => edit_test,
       :default_label => edit_test,
-      :edit =>read_test,
+      :edit => read_test,
       :update => edit_test,
       :destroy => edit_test,
-      :auto_complete=>  auto_complete_test,
+      :auto_complete =>  auto_complete_test,
       :refresh_content => edit_test,
       :disable_content => edit_test,
     }
@@ -40,21 +42,28 @@ class ProductsController < ApplicationController
     'contents'
   end
 
+  def index
+    render 'bastion/layouts/application', :layout => false
+  end
+
+  def all
+    redirect_to action: 'index', :anchor => '/products'
+  end
+
   def new
     render :partial => "new"
   end
 
   def edit
-    render :partial => "edit", :locals=>{:editable=>@provider.editable?}
+    render :partial => "edit", :locals => {:editable => @provider.editable?}
   end
 
   def create
     product_params = params[:product]
     requested_label = String.new(product_params[:label]) unless product_params[:label].blank?
-    product_params[:label], label_assigned = generate_label(product_params[:name], 'product') if product_params[:label].blank?
+    product_params[:label], _ = generate_label(product_params[:name], 'product') if product_params[:label].blank?
 
-
-    gpg = GpgKey.readable(current_organization).find(product_params[:gpg_key]) if product_params[:gpg_key] and product_params[:gpg_key] != ""
+    gpg = GpgKey.readable(current_organization).find(product_params[:gpg_key]) if product_params[:gpg_key] && product_params[:gpg_key] != ""
     product = @provider.add_custom_product(product_params[:label], product_params[:name],
                                            product_params[:description], product_params[:url], gpg)
 
@@ -65,7 +74,7 @@ class ProductsController < ApplicationController
     elsif requested_label != product.label
       notify.message label_overridden(product, requested_label)
     end
-    render :json=>{:id=>product.id}
+    render :json => {:id => product.id}
   end
 
   def refresh_content
@@ -90,7 +99,7 @@ class ProductsController < ApplicationController
     @product.name = params[:product][:name] if params[:product][:name]
     @product.description = params[:product][:description] if params[:product][:description]
 
-    if params[:product].has_key?(:gpg_key)
+    if params[:product].key?(:gpg_key)
       if params[:product][:gpg_key] != ""
         @product.gpg_key = GpgKey.readable(current_organization).find(params[:product][:gpg_key])
         result = @product.gpg_key.id.to_s
@@ -115,7 +124,7 @@ class ProductsController < ApplicationController
   def destroy
     @product.destroy
     notify.success _("Product '%s' removed.") % @product[:name]
-    render :partial => "common/post_delete_close_subpanel", :locals => {:path=>products_repos_provider_path(@product.provider_id)}
+    render :partial => "common/post_delete_close_subpanel", :locals => {:path => products_repos_provider_path(@product.provider_id)}
   end
 
   def auto_complete
@@ -127,9 +136,9 @@ class ProductsController < ApplicationController
       end
       filter :term, {:organization_id => org.id}
     end
-    render :json=>products.collect{|s| {:label=>s.name, :value=>s.name, :id=>s.id}}
-  rescue Tire::Search::SearchRequestFailed => e
-    render :json=>Util::Support.array_with_total
+    render :json => products.collect{|s| {:label => s.name, :value => s.name, :id => s.id}}
+  rescue Tire::Search::SearchRequestFailed
+    render :json => Util::Support.array_with_total
   end
 
   protected

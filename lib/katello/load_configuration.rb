@@ -18,6 +18,8 @@ require 'util/password'
 
 module Katello
 
+  # TODO: clean up this method
+  # rubocop:disable MethodLength, BlockAlignment, HashMethods
   # @return [Configuration::Loader] configured for Katello
   def self.configuration_loader
     root = File.expand_path(File.join(File.dirname(__FILE__), '..', '..'))
@@ -27,14 +29,15 @@ module Katello
         :default_config_file_path => "#{root}/config/katello_defaults.yml",
 
         :validation               => lambda do |*_|
-          has_keys *%w( app_name candlepin notification available_locales
-                    use_cp simple_search_tokens database headpin? host ldap_roles validate_ldap
-                    cloud_forms use_pulp cdn_proxy use_ssl warden katello? url_prefix foreman
-                    search use_foreman password_reset_expiration redhat_repository_url port
-                    elastic_url rest_client_timeout elastic_index
-                    katello_version pulp email_reply_address
-                    embed_yard_documentation logging system_lang profiling
-                    exception_paranoia hide_exceptions)
+          has_keys(*%w(app_name candlepin notification available_locales
+                       use_cp simple_search_tokens database headpin? host ldap_roles validate_ldap
+                       cloud_forms use_pulp cdn_proxy use_ssl warden katello? url_prefix foreman
+                       search use_foreman password_reset_expiration redhat_repository_url port
+                       elastic_url rest_client_timeout elastic_index
+                       katello_version pulp email_reply_address
+                       embed_yard_documentation logging system_lang profiling
+                       exception_paranoia hide_exceptions)
+                  )
 
           has_values :app_mode, %w(katello headpin)
           has_values :url_prefix, %w(/headpin /sam /katello)
@@ -42,14 +45,14 @@ module Katello
           is_type :profiling, Array, nil
 
           validate :logging do
-            has_keys *%w(console_inline colorize log_trace loggers)
+            has_keys(*%w(console_inline colorize log_trace loggers))
 
             validate :loggers do
               has_keys 'root'
               validate :root do
                 has_keys 'level'
                 if config[:type] == 'file'
-                  has_keys *%w(age keep pattern filename)
+                  has_keys(*%w(age keep pattern filename))
                   has_keys 'path' unless early?
                 end
               end
@@ -65,7 +68,7 @@ module Katello
 
           if !early? && environment != :build
             validate :database do
-              has_keys *%w(adapter host encoding username password database)
+              has_keys(*%w(adapter host encoding username password database))
             end
           end
         end,
@@ -83,22 +86,24 @@ module Katello
           config[:email_reply_address] = if config[:email_reply_address]
                                            config[:email_reply_address]
                                          else
-                                           "no-reply@"+config[:host]
+                                           "no-reply@" + config[:host]
                                          end
 
           root = config.logging.loggers.root
-          root[:path] = "#{Rails.root}/log" unless root.has_key?(:path) if environment
+          root[:path] = "#{Rails.root}/log" unless root.key?(:path) if environment
           root[:type] ||= 'file'
 
-          config[:katello_version] = begin
-            rpm_command_present = system('which rpm &>/dev/null')
-            if rpm_command_present
-              package = config.katello? ? 'katello-common' : 'katello-headpin'
-              version = `rpm -q #{package} --queryformat '%{VERSION}-%{RELEASE}' 2>&1`
-              $? == 0 ? version : ""
-            else
-              hash = `git rev-parse --short HEAD 2>/dev/null`
-              $? == 0 ? "git hash (#{hash.chop})" : "Unknown"
+          unless config.key? :katello_version
+            config[:katello_version] = begin
+              rpm_command_present = system('which rpm &>/dev/null')
+              if rpm_command_present
+                package = config.katello? ? 'katello-common' : 'katello-headpin'
+                version = `rpm -q #{package} --queryformat '%{VERSION}-%{RELEASE}' 2>&1`
+                $CHILD_STATUS == 0 ? version : ""
+              else
+                hash = `git rev-parse --short HEAD 2>/dev/null`
+                $CHILD_STATUS == 0 ? "git hash (#{hash.chop})" : "Unknown"
+              end
             end
           end
         end,
@@ -140,5 +145,3 @@ module Katello
     end
   end
 end
-
-

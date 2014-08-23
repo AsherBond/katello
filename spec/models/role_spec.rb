@@ -28,6 +28,7 @@ describe Role do
    let(:organization) {Organization.create!(:name=>"test_org", :label =>"my_key")}
    let(:role) { Role.make_readonly_role("name", organization)}
    let(:global_role) { Role.make_readonly_role("global-name")}
+   let(:admin_role) { Role.make_super_admin_role}
    let(:user) {
      User.find_or_create_by_username(
          :username => 'fooo100',
@@ -42,17 +43,37 @@ describe Role do
          :email => 'global_user@somewhere.com',
          :roles => [ global_role ])
    }
+   let(:admin_user) {
+     User.find_or_create_by_username(
+         :username => 'admin_user',
+         :password => "password",
+         :email => 'admin_user@somewhere.com',
+         :roles => [ admin_role ])
+   }
 
    context "Check the orgs" do
      specify{user.allowed_to?(:read, :organizations).should be_false }
      specify{global_user.allowed_to?(:read, :organizations).should be_true }
 
-     specify{user.allowed_to?(:read, :organizations, nil, organization ).should be_true}
-     specify{global_user.allowed_to?(:read, :organizations, nil, organization ).should be_true}
+     specify{user.allowed_to?(:read, :organizations, nil, organization).should be_true}
+     specify{global_user.allowed_to?(:read, :organizations, nil, organization).should be_true}
 
      specify{user.allowed_to?(:create, :organizations).should be_false}
      specify{global_user.allowed_to?(:create, :organizations).should be_false}
      specify{user.allowed_to?(:update, :organizations).should be_false}
+
+     specify {
+       User.current = user
+       Organization.all_editable?().should be_false
+     }
+     specify {
+       User.current = global_user
+       Organization.all_editable?().should be_false
+     }
+     specify {
+       User.current = admin_user
+       Organization.all_editable?().should be_true
+     }
    end
 
    context "Check the envs", :katello => true do
@@ -65,6 +86,24 @@ describe Role do
      specify{user.allowed_to?("update_systems", :environments,environment.id,organization).should be_false}
      specify{global_user.allowed_to?("update_systems", :environments,environment.id,organization).should be_false}
    end
+ end
+
+ context "Admin permission should be recreated if role exists" do
+   before do
+     @admin_role = Role.make_super_admin_role
+     @admin_role.update_attributes(:locked=>false)
+     @admin_role.permissions.destroy_all
+     @admin_role.update_attributes(:locked=>true)
+   end
+
+   context "recreating permission" do
+     specify {
+       @admin_role.permissions.size.should == 0
+       @admin_role  = Role.make_super_admin_role
+       @admin_role.permissions.size.should == 1
+     }
+   end
+
  end
 
  context "read ldap roles" do
@@ -192,6 +231,5 @@ describe Role do
    end
 
  end
-
 
 end

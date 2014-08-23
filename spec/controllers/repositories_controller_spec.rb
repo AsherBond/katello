@@ -12,7 +12,6 @@
 
 require 'spec_helper'
 
-
 describe RepositoriesController, :katello => true do
   include LoginHelperMethods
   include LocaleHelperMethods
@@ -118,7 +117,8 @@ describe RepositoriesController, :katello => true do
 
       @org = new_test_org
       @product = new_test_product(@org, @org.library)
-      @gpg = GpgKey.create!(:name => "foo", :organization => @organization, :content => "222")
+      test_gpg_content = File.open("#{Rails.root}/spec/assets/gpg_test_key").read
+      @gpg = GpgKey.create!(:name => "foo", :organization => @organization, :content => test_gpg_content)
       controller.stub!(:current_organization).and_return(@org)
       Resources::Candlepin::Content.stub(:create => {:id => "123"})
     end
@@ -154,7 +154,7 @@ describe RepositoriesController, :katello => true do
 
         Resources::Candlepin::Content.stub!(:get).and_return(content)
         Resources::Candlepin::Content.stub!(:create).and_return(content)
-        Katello.pulp_server.extensions.repository.stub(:publish_all).and_return([])
+        Repository.any_instance.stub(:generate_metadata)
         @repo_name = "repo-#{rand 10 ** 8}"
         post :create, { :product_id => @product.id,
                         :provider_id => @product.provider.id,
@@ -162,6 +162,7 @@ describe RepositoriesController, :katello => true do
                               :label => @repo_name,
                               :feed => "http://foo.com",
                               :unprotected => false,
+                              :content_type => "yum",
                               :gpg_key =>@gpg.id.to_s}}
       end
       specify  do

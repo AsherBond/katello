@@ -44,7 +44,9 @@ KT.comparison_grid = function(){
 
                 if( in_column ){
                     cells.push({'in_column' : in_column, 'display' : cell_data[col['id']]['display'], 'span' : col['span'],
-                                'id' : col['id'], 'hover' : cell_data[col['id']]['hover'], 'comparable' : comparable, 'row_id' : id });
+                                'id' : col['id'], 'hover' : cell_data[col['id']]['hover'],
+                                'hover_details' : cell_data[col['id']]['hover_details'],
+                                'comparable' : comparable, 'row_id' : id });
                 } else {
                     cells.push({ 'in_column' : in_column, 'id' : col['id'], 'span' : col['span'], 'row_id' : id });
                 }
@@ -248,7 +250,7 @@ KT.comparison_grid = function(){
                 }
             });
 
-            $('#column_headers').width(num_columns_shown * 100);
+            $('#column_headers').width(num_columns_shown * 100 + 1);
 
             if( num_columns_shown > max_visible_columns ){
 
@@ -258,7 +260,7 @@ KT.comparison_grid = function(){
                     }
                 }
                 controls.horizontal_scroll.show();
-                $('#column_headers_window').width(100 * max_visible_columns);
+                $('#column_headers_window').width(100 * max_visible_columns + 1);
             } else {
                 controls.horizontal_scroll.reset();
                 controls.horizontal_scroll.hide();
@@ -739,6 +741,7 @@ KT.comparison_grid.events = function(grid) {
                     }
                 }
             });
+            $('.hover_details').tipsy({ gravity : 'w', live : true, html : true });
         },
         details_view = function() {
             $('#return_to_results_btn').live('click', function() {
@@ -803,14 +806,22 @@ KT.comparison_grid.templates = (function(i18n) {
     var cell = function(data, row_height) {
             var display,
                 hover = data['hover'] ? data['hover'] : false,
+                hover_details =  '',
                 html = $('<div/>', {
                             'data-span' : data['span'],
                             'class'     : 'grid_cell cell_' + data['id']
                         });
 
+            if ( data['hover_details'] ) {
+                hover_details = $('<span/>', {
+                    'class' : 'details-icon hover_details',
+                    'original-title' : data['hover_details']
+                });
+            }
+
             if( data['in_column'] ){
                 if( data['display'] !== undefined ){
-                    display = '<div class="grid_cell_data one-line-ellipsis">' + data['display'] + '</div>';
+                    display = '<div class="grid_cell_data">' + data['display'] + '</div>';
                 } else {
                     display = $('<i/>', { 'class' : "dot_icon-black" });
                 }
@@ -824,9 +835,13 @@ KT.comparison_grid.templates = (function(i18n) {
                 html.attr('data-hover', true);
 
                 if( row_height ){
-                    html.append($('<span/>', { 'class' : "hidden grid_cell_hover " + row_height, 'html' : hover }));
+                    html.append($('<span/>', { 'class' : "hidden grid_cell_hover " + row_height,
+                                               'data-span' : data['span'],
+                                               'html' : hover_details.before(hover) }));
                 } else {
-                    html.append($('<span/>', { 'class' : "hidden grid_cell_hover", 'html' : hover }));
+                    html.append($('<span/>', { 'class' : "hidden grid_cell_hover",
+                                               'data-span' : data['span'],
+                                               'html' : hover_details.before(hover) }));
                 }
             }
 
@@ -851,37 +866,21 @@ KT.comparison_grid.templates = (function(i18n) {
             if( parent_id !== undefined ){
                 html.attr('data-parent_id', parent_id);
             }
-            if( row_level === 2 ){
-                if( name.length > 30 && name.length < 60 ){
-                    html.addClass('row_height_2');
-                    for(i = 0; i < num_columns; i += 1){
-                        html.append(cell(cell_data[i], 'row_height_2'));
-                    }
 
-                } else if( name.length >= 60 ){
-                    html.addClass('row_height_3');
-                    for(i = 0; i < num_columns; i += 1){
-                        html.append(cell(cell_data[i], 'row_height_3'));
-                    }
-                } else {
-                    for(i = 0; i < num_columns; i += 1){
-                        html.append(cell(cell_data[i]));
-                    }
-                }
-            } else if( row_level >= 3 ){
-                if( name.length > 30 ){
-                    html.addClass('row_height_2');
-                    for(i = 0; i < num_columns; i += 1){
-                        html.append(cell(cell_data[i], 'row_height'));
-                    }
-                } else {
-                    for(i = 0; i < num_columns; i += 1){
-                        html.append(cell(cell_data[i]));
-                    }
-                }
-            } else {
+            if( name.length <= 30 ) {
                 for(i = 0; i < num_columns; i += 1){
                     html.append(cell(cell_data[i]));
+                }
+            } else if( name.length > 30 && name.length < 51 ) {
+                html.addClass('row_height_2');
+                for(i = 0; i < num_columns; i += 1){
+                    html.append(cell(cell_data[i], 'row_height_2'));
+                }
+
+            } else if( name.length >= 51 ){
+                html.addClass('row_height_3');
+                for(i = 0; i < num_columns; i += 1){
+                    html.append(cell(cell_data[i], 'row_height_3'));
                 }
             }
 
@@ -920,10 +919,10 @@ KT.comparison_grid.templates = (function(i18n) {
             name = this.row_header_content(name, type);
 
             if( row_level === 2 ){
-                if( name.length > 30 && name.length < 60 ){
+                if( name.length > 30 && name.length < 51 ){
                     html.addClass('row_height_2');
                     html.append($('<span/>', { 'class': 'one-line-ellipsis'}).html(name));
-                } else if( name.length >= 60 && name.length <= 94 ){
+                } else if( name.length >= 51 && name.length <= 94 ){
                     html.addClass('row_height_3');
                     html.append($('<span/>', { 'class': 'one-line-ellipsis'}).html(name));
                 } else if( name.length > 94 ) {

@@ -23,12 +23,18 @@ class Api::V1::RepositoriesController < Api::V1::ApiController
   skip_before_filter :require_org, :only => [:sync_complete]
   skip_before_filter :require_user, :only => [:sync_complete]
 
-
   def rules
-    edit_product_test = lambda { @product.editable? }
+    edit_product_test = lambda do
+      @product.custom? ? @product.editable? : @organization.redhat_manageable?
+    end
     read_test         = lambda { @repository.product.readable? }
-    edit_test         = lambda { @repository.product.editable? }
-    org_edit          = lambda { @organization.editable? }
+    edit_test         = lambda do
+      if @repository.custom?
+        @repository.product.editable?
+      else
+        @repository.organization.redhat_manageable?
+      end
+    end
 
     {
         :create                   => edit_product_test,
@@ -43,7 +49,7 @@ class Api::V1::RepositoriesController < Api::V1::ApiController
 
   def param_rules
     {
-        :update => { :repository => [:gpg_key_name] }
+        :update => { :repository => [:gpg_key_name, :url] }
     }
   end
 
@@ -53,6 +59,7 @@ class Api::V1::RepositoriesController < Api::V1::ApiController
   param :product_id, :number, :required => true, :desc => "id of a product the repository will be contained in"
   param :url, :undef, :required => true, :desc => "repository source url"
   param :gpg_key_name, String, :desc => "name of a gpg key that will be assigned to the new repository"
+  param :content_type, String, :desc => "type of repo (either 'yum' or 'puppet', defaults to 'yum')"
   see "v1#gpg_keys#index"
   def create
     raise HttpErrors::BadRequest, _("Repository can be only created for custom provider.") unless @product.custom?
@@ -63,7 +70,8 @@ class Api::V1::RepositoriesController < Api::V1::ApiController
       gpg = @product.gpg_key
     end
     params[:unprotected] ||= false
-    content              = @product.add_repo(labelize_params(params), params[:name], params[:url], 'yum', params[:unprotected], gpg)
+    content_type         = params[:content_type].blank? ? Repository::YUM_TYPE : params[:content_type]
+    content              = @product.add_repo(labelize_params(params), params[:name], params[:url], content_type, params[:unprotected], gpg)
     respond :resource => content
   end
 
@@ -78,10 +86,13 @@ class Api::V1::RepositoriesController < Api::V1::ApiController
   param :repository, Hash, :required => true do
     param :gpg_key_name, String, :desc => "name of a gpg key that will be assigned to the repository"
     param :enabled, :bool, :desc => "flag that enables/disables the repository"
+    param :url, String, :desc => "repository source url"
   end
   def update
     raise HttpErrors::BadRequest, _("A Red Hat repository cannot be updated.") if @repository.redhat?
-    @repository.update_attributes!(params[:repository].slice(:gpg_key_name, :enabled))
+    attrs = params[:repository].slice(:gpg_key_name, :enabled)
+    attrs[:feed] = params[:repository][:url] if params[:repository] && params[:repository][:url]
+    @repository.update_attributes!(attrs)
     respond
   end
 
@@ -91,11 +102,13 @@ class Api::V1::RepositoriesController < Api::V1::ApiController
     #
     # TODO: these should really be done as validations, but the orchestration engine currently converts them into OrchestrationExceptions
     #
-    raise HttpErrors::BadRequest, _("Repositories can be deleted only in the '%s' environment.") % "Library" if not @repository.environment.library?
-    raise HttpErrors::BadRequest, _("Repository cannot be deleted since it has already been promoted. Using a changeset, please delete the repository from existing environments before deleting it.") if @repository.promoted?
+    raise HttpErrors::BadRequest, _("Repositories can be deleted only in the '%s' environment.") % "Library" if !@repository.environment.library?
 
-    @repository.destroy
-    respond :message => _("Deleted repository '%s'") % params[:id]
+    if @repository.destroy
+      respond :message => _("Deleted repository '%s'") % params[:id]
+    else
+      raise HttpErrors::BadRequest, @repository.errors.full_messages.join(" ")
+    end
   end
 
   api :POST, "/repositories/:id/enable", "Enable or disable a repository"
@@ -103,7 +116,7 @@ class Api::V1::RepositoriesController < Api::V1::ApiController
   param :enable, :bool, :required => true, :desc => "flag that enables/disables the repository"
   api_version "v1"
   def enable
-    raise HttpErrors::NotFound, _("Disable/enable is not supported for custom repositories.") if not @repository.redhat?
+    raise HttpErrors::NotFound, _("Disable/enable is not supported for custom repositories.") if !@repository.redhat?
 
     @repository.enabled = query_params[:enable]
     @repository.save!
@@ -127,7 +140,6 @@ talk back to pulp within it.  Save that for the delayed job.
 Pulp doesn't send correct headers."
   EOS
   def sync_complete
-    remote_ip = request.remote_ip
     forwarded = request.env["HTTP_X_FORWARDED_FOR"]
 
     if forwarded && !['127.0.0.1', '::1'].include?(forwarded)
@@ -135,13 +147,18 @@ Pulp doesn't send correct headers."
       raise Errors::SecurityViolation
     end
 
-    User.current = User.hidden.first
-
     repo_id = params['payload']['repo_id']
+    task_id = params['call_report']['task_id']
+    if (task = TaskStatus.find_by_uuid(task_id)) && task.user
+      User.current = task.user # we act on behalf of the user that triggered the sync
+    else
+      User.current = User.hidden.first
+    end
+
     repo    = Repository.where(:pulp_id => repo_id).first
     raise _("Couldn't find repository '%s'") % repo.name if repo.nil?
     Rails.logger.info("Sync_complete called for #{repo.name}, running after_sync.")
-    repo.async(:organization => repo.environment.organization).after_sync(params[:task_id])
+    repo.async(:organization => repo.environment.organization).after_sync(task_id)
     respond_for_status
   end
 
@@ -150,7 +167,7 @@ Pulp doesn't send correct headers."
   def package_groups
     #translate group_id to id in search params (conflict with repo id used for routing)
     search_attrs = params.slice(:name)
-    search_attrs[:id] = params[:group_id] if not params[:group_id].nil?
+    search_attrs[:id] = params[:group_id] if !params[:group_id].nil?
 
     respond_for_index :collection => @repository.package_groups_search(search_attrs)
   end
@@ -160,7 +177,7 @@ Pulp doesn't send correct headers."
   def package_group_categories
     #translate category_id to id in search params (conflict with repo id used for routing)
     search_attrs = params.slice(:name)
-    search_attrs[:id] = params[:category_id] if not params[:category_id].nil?
+    search_attrs[:id] = params[:category_id] if !params[:category_id].nil?
 
     respond_for_index :collection => @repository.package_group_categories(search_attrs)
   end
@@ -188,7 +205,7 @@ Pulp doesn't send correct headers."
 
   def find_product
     #since this is only used for create, it isn't supported for rhel products, so cp_id is unique
-    @product = Product.where(:cp_id=>params[:product_id]).first
+    @product = Product.find_by_cp_id(params[:product_id])
     raise HttpErrors::NotFound, _("Couldn't find product with id '%s'") % params[:product_id] if @product.nil?
     @organization ||= @product.organization
   end

@@ -22,7 +22,9 @@ class PackageGroupRule < FilterRule
       unless unit[:name].blank?
         PackageGroup.search(unit[:name], 0, 0, [repo.pulp_id]).collect(&:package_group_id)
       end
-    end.compact.flatten
-    {"id" => {"$in" => ids}}
+    end
+    ids.flatten!
+    ids.compact!
+    {"id" => {"$in" => ids}} unless ids.empty?
   end
 end

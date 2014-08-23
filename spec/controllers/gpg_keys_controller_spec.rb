@@ -23,7 +23,7 @@ describe GpgKeysController, :katello => true do
     GPGKEY_INVALID = {}
     GPGKEY_NAME_INVALID = {:name => ""}
     GPGKEY_NAME = {:name => "Test GPG Key Updated"}
-    GPGKEY_CONTENT = {:content => "Test GPG Key Updated key contents."}
+    GPGKEY_CONTENT = {:content => File.open("#{Rails.root}/spec/assets/gpg_test_key").read}
     GPGKEY_CONTENT_UPLOAD = {}
   end
 
@@ -35,8 +35,9 @@ describe GpgKeysController, :katello => true do
     @file = Rack::Test::UploadedFile.new(test_document, "text/plain")
 
     @organization = new_test_org
-    @gpg_key = GpgKey.create!( :name => "Another Test Key", :content => "This is the key data string", :organization => @organization )
-    @gpg_key_params_pasted = { :gpg_key => { :name => "Test Key", :content => "This is the pasted key data string" } }
+    test_gpg_content = File.open("#{Rails.root}/spec/assets/gpg_test_key").read
+    @gpg_key = GpgKey.create!( :name => "Another Test Key", :content => test_gpg_content, :organization => @organization )
+    @gpg_key_params_pasted = { :gpg_key => { :name => "Test Key", :content => test_gpg_content } }
     @gpg_key_params_uploaded = { :gpg_key => { :name => "Test Key", :content_upload => @file } }
   end
 
@@ -89,7 +90,6 @@ describe GpgKeysController, :katello => true do
       end
     end
   end
-
 
   describe "GET new" do
     it "renders a new partial for 2pane" do
@@ -229,6 +229,15 @@ describe GpgKeysController, :katello => true do
         post :create, @gpg_key_params_pasted
       end
     end
+  end
+
+  describe "GET products and repos" do
+
+    it "should be successful" do
+      get :products_repos, :id => @gpg_key.id
+      response.should be_success
+    end
+
   end
 
   describe "PUT update" do

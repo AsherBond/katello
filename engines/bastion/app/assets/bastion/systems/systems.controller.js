@@ -16,9 +16,9 @@
  * @name  Bastion.systems.controller:SystemsController
  *
  * @requires $scope
- * @requires $state
  * @requires Nutupane
  * @requires Routes
+ * @requires SystemsHelper
  *
  * @description
  *   Provides the functionality specific to Systems for use with the Nutupane UI pattern.
@@ -26,28 +26,43 @@
  *   within the table.
  */
 angular.module('Bastion.systems').controller('SystemsController',
-    ['$scope', '$state', 'Nutupane', 'System',
-    function($scope, $state, Nutupane, System) {
+    ['$scope', '$location', 'i18nFilter', 'Nutupane', 'System', 'CurrentOrganization', 'SystemsHelper',
+    function($scope, $location, i18nFilter, Nutupane, System, CurrentOrganization, SystemsHelper) {
 
-        var nutupane = new Nutupane(System);
-        $scope.table = nutupane.table;
-
-        $scope.getStatusColor = function(status) {
-            var colors = {
-                    'valid': 'green',
-                    'partial': 'yellow',
-                    'invalid': 'red'
-                };
-
-            return colors[status] ? colors[status] : 'red';
+        var params = {
+            'organization_id':  CurrentOrganization,
+            'search':           $location.search().search || "",
+            'offset':           0,
+            'sort_by':          'name',
+            'sort_order':       'ASC',
+            'paged':            true
         };
 
+        var nutupane = new Nutupane(System, params);
+        $scope.table = nutupane.table;
+        $scope.removeRow = nutupane.removeRow;
+
+        $scope.table.getStatusColor = SystemsHelper.getStatusColor;
+
         $scope.table.openDetails = function (system) {
-            $state.transitionTo('systems.details.info', {systemId: system.uuid});
+            $scope.transitionTo('systems.details.info', {systemId: system.uuid});
         };
 
         $scope.table.closeItem = function() {
-            $state.transitionTo('systems.index');
+            $scope.transitionTo('systems.index');
+        };
+
+        $scope.transitionToRegisterSystem = function() {
+            $scope.transitionTo('systems.register');
+        };
+
+        $scope.removeSystem = function (system) {
+            system.$remove(function() {
+                $scope.removeRow(system.id);
+                $scope.saveSuccess = true;
+                $scope.successMessages = [i18nFilter('System %s has been deleted.'.replace('%s', system.name))];
+                $scope.transitionTo('systems.index');
+            });
         };
     }]
 );

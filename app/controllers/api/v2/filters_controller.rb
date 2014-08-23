@@ -10,7 +10,6 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-
 class Api::V2::FiltersController < Api::V1::FiltersController
 
   skip_before_filter :find_organization
@@ -62,7 +61,7 @@ class Api::V2::FiltersController < Api::V1::FiltersController
   api :PUT, "/content_view_definitions/:content_view_definition_id/filters/:id/products",
       "Update products for a content view definition filter"
   param :content_view_definition_id, :identifier, :required => true,
-        :desc                                               => "content view definition identifier"
+                                                  :desc => "content view definition identifier"
   param :id, String, :desc => "name of the filter", :required => true
   param :products, Array, :desc => "Updated list of product ids", :required => true
   def update_products

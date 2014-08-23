@@ -257,13 +257,6 @@ $container_width: ($static_width/2) - 36;
     #products {
       margin: 0 !important;
     }
-    .right_tree {
-      #changeset_tree {
-        .sliding_container {
-          height: 354px;
-        }
-      }
-    }
   }
 
 
@@ -323,7 +316,7 @@ $container_width: ($static_width/2) - 36;
   }
 
 
-  #package_filter {
+  #package_filter, #repo_selector {
     table {
       margin-bottom: 20px;
     }
@@ -399,6 +392,39 @@ $container_width: ($static_width/2) - 36;
       }
 
 
+    }
+
+    .spinner, .success {
+      display: none;
+      float: right;
+      margin: 3px 39% 0 0;
+      height: 18px;
+    }
+    .success {
+      color: green;
+    }
+  }
+
+  #repo_selector {
+    #repo_select {
+      width: 400px;
+    }
+    table {
+      margin-top: 30px;
+    }
+    #select_container {
+      .spinner, .success {
+        margin-right: 44%;
+      }
+    }
+  }
+
+  #filter_tabs {
+    #repos {
+      overflow: visible;
+    }
+    .spinner, .success {
+      margin-right: 27%;
     }
   }
 
@@ -514,6 +540,12 @@ $container_width: ($static_width/2) - 36;
 }
 
 #redhat_provider {
+  .icon-spinner {
+    margin-left: 50%;
+    margin-top: 20px;
+    font-size: 150%;
+  }
+
   .tree_table {
     label {
       color: $text_color

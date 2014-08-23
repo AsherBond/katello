@@ -33,7 +33,7 @@ class SystemGroupEventsController < ApplicationController
   end
 
   def index
-    render :partial=>'system_groups/events/index', :locals=>{:group => @group, :jobs => jobs}
+    render :partial => 'system_groups/events/index', :locals => {:group => @group, :jobs => jobs}
   end
 
   def show
@@ -41,8 +41,8 @@ class SystemGroupEventsController < ApplicationController
     if job.nil?
       render :nothing => true
     else
-      render :partial=>'system_groups/events/show',
-             :locals=>{:group => @group, :job =>job}
+      render :partial => 'system_groups/events/show',
+             :locals => {:group => @group, :job => job}
     end
   end
 
@@ -72,7 +72,7 @@ class SystemGroupEventsController < ApplicationController
   end
 
   def more_items
-    if params.has_key?(:offset)
+    if params.key?(:offset)
       offset = params[:offset].to_i
     else
       offset = current_user.page_size
@@ -90,20 +90,21 @@ class SystemGroupEventsController < ApplicationController
   def items
     render_proc = lambda do |items, options|
       if items && !items.empty?
-        render_to_string(:partial => 'system_groups/events/more_items', :locals => {:cycle_extra => false, :group => @group, :jobs=> items})
+        render_to_string(:partial => 'system_groups/events/more_items', :locals => {:cycle_extra => false, :group => @group, :jobs => items})
       else
         "<tr><td>" + _("No events matching your search criteria.") + "</td></tr>"
       end
     end
     search = params[:search]
-    render_panel_direct(Job, {:no_search_history => true,:render_list_proc => render_proc},
+    render_panel_direct(Job, {:no_search_history => true, :render_list_proc => render_proc},
                         search, params[:offset], [:id, 'desc'],
                         :filter => {:job_owner_id => [@group.id], :task_owner_type => SystemGroup.class.name},
                         :load => true,
-                        :simple_query => "#{search}" )
+                        :simple_query => "#{search}")
   end
 
   protected
+
   def find_group
     @group = SystemGroup.find(params[:system_group_id])
   end
@@ -114,7 +115,7 @@ class SystemGroupEventsController < ApplicationController
   end
 
   helper_method :total_events_length
-  def total_events_length()
+  def total_events_length
     @group.jobs.length
   end
 end

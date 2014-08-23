@@ -10,7 +10,6 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-
 module Authorization::Enforcement
 
   def self.included(base)
@@ -19,7 +18,7 @@ module Authorization::Enforcement
       # on the current logged user. The class attribute User.current must be set!
       def self.allowed_all_tags?(verb, resource_type = nil, org = nil)
         u = User.current
-        raise Errors::UserNotSet, "current user is not set" if u.nil? or not u.is_a? User
+        raise Errors::UserNotSet, "current user is not set" if u.nil? || !u.is_a?(User)
         u.allowed_all_tags?(verb, resource_type, org)
       end
 
@@ -28,7 +27,7 @@ module Authorization::Enforcement
       def self.allowed_tags_sql(verb, resource_type = nil, org = nil)
         ResourceType.check resource_type, verb
         u = User.current
-        raise Errors::UserNotSet, "current user is not set" if u.nil? or not u.is_a? User
+        raise Errors::UserNotSet, "current user is not set" if u.nil? || !u.is_a?(User)
         u.allowed_tags_sql(verb, resource_type, org)
       end
 
@@ -36,7 +35,7 @@ module Authorization::Enforcement
       # on the current logged user. The class attribute User.current must be set!
       def self.allowed_to?(verb, resource_type, tags = nil, org = nil, any_tags = false)
         u = User.current
-        raise Errors::UserNotSet, "current user is not set" if u.nil? or not u.is_a? User
+        raise Errors::UserNotSet, "current user is not set" if u.nil? || !u.is_a?(User)
         u.allowed_to?(verb, resource_type, tags, org, any_tags)
       end
 
@@ -44,7 +43,7 @@ module Authorization::Enforcement
       # SecurityViolation exception leading to the denial page.
       def self.allowed_to_or_error?(verb, resource_type, tags = nil, org = nil, any_tags = false)
         u = User.current
-        raise Errors::UserNotSet, "current user is not set" if u.nil? or not u.is_a? User
+        raise Errors::UserNotSet, "current user is not set" if u.nil? || !u.is_a?(User)
         unless u.allowed_to?(verb, resource_type, tags, org, any_tags)
           msg = "User #{u.username} is not allowed to #{verb} in #{resource_type} using #{tags}"
           Rails.logger.error msg
@@ -62,13 +61,12 @@ module Authorization::Enforcement
     ResourceType.check resource_type, verbs
     verbs = [] if verbs.nil?
     verbs = verbs.is_a?(Array) ? verbs.clone : [verbs]
-    org = Organization.find(org) if Numeric === org
+    org = Organization.find(org) if org.is_a?(Numeric)
 
     log_roles(verbs, resource_type, nil, org)
 
     org_permissions = org_permissions_query(org, resource_type == :organizations)
     org_permissions = org_permissions.where(:organization_id => nil) if resource_type == :organizations
-
 
     no_tag_verbs = ResourceType::TYPES[resource_type][:model].no_tag_verbs.clone rescue []
     no_tag_verbs ||= []
@@ -86,14 +84,12 @@ module Authorization::Enforcement
           (permissions.resource_type_id =
             (select id from resource_types where resource_types.name = :resource_type) AND
             (verbs.verb in (:no_tag_verbs) OR
-              (permissions.all_verbs=:true OR verbs.verb in (:verbs) #{all_tags_clause} )))
+              (permissions.all_verbs=:true OR verbs.verb in (:verbs) #{all_tags_clause})))
     SQL
     clause_params = { :true => true, :all => "all", :resource_type => resource_type, :verbs => verbs }
     org_permissions.where(clause_all_resources_or_tags,
                           { :no_tag_verbs => no_tag_verbs }.merge(clause_params)).count > 0
   end
-
-
 
   # Return the sql that shows all the allowed tags for a given verb, resource_type, org
   # combination .
@@ -101,16 +97,12 @@ module Authorization::Enforcement
   # Note: This returns the SQL not result of the query
   #
   # This method is called by every Model's list method
-  def allowed_tags_sql(verbs=nil, resource_type = nil, org = nil)
+  def allowed_tags_sql(verbs = nil, resource_type  =  nil, org  =  nil)
     select_on = "DISTINCT(permission_tags.tag_id)"
     select_on = "DISTINCT(permissions.organization_id)" if resource_type == :organizations
 
     allowed_tags_query(verbs, resource_type, org, false).select(select_on).to_sql
   end
-
-
-
-
 
   # Return true if the user is allowed to do the specified action for a resource type
   # verb/action can be:
@@ -121,7 +113,7 @@ module Authorization::Enforcement
   def allowed_to?(verbs, resource_type, tags = nil, org = nil, any_tags = false)
     tags = [] if tags.nil?
     tags = tags.is_a?(Array) ? tags.clone : [tags]
-    if tags.detect { |tag| !(Numeric === tag ||(String === tag && /^\d+$/=== tag.to_s)) }
+    if tags.detect { |tag| !(tag.is_a?(Numeric) || (tag.is_a?(String) && tag.to_s =~ /^\d+$/)) }
       raise ArgumentError, "Tags need to be integers - #{tags} are not."
     end
     ResourceType.check resource_type, verbs
@@ -130,7 +122,6 @@ module Authorization::Enforcement
     log_roles(verbs, resource_type, tags, org, any_tags)
 
     return true if allowed_all_tags?(verbs, resource_type, org)
-
 
     tags_query = allowed_tags_query(verbs, resource_type, org)
 
@@ -151,18 +142,20 @@ module Authorization::Enforcement
 
   private
 
+  # TODO: break up method
+  # rubocop:disable MethodLength
   def allowed_tags_query(verbs, resource_type, org = nil, allowed_to_check = true)
     ResourceType.check resource_type, verbs
     verbs = [] if verbs.nil?
     verbs = verbs.is_a?(Array) ? verbs.clone : [verbs]
     log_roles(verbs, resource_type, nil, org)
-    org = Organization.find(org) if Numeric === org
+    org = Organization.find(org) if org.is_a?(Numeric)
     org_permissions = org_permissions_query(org, resource_type == :organizations)
 
     clause        = ""
     clause_params = { :all => "all", :true => true, :resource_type => resource_type, :verbs => verbs }
 
-    unless resource_type == :organizations
+    if resource_type != :organizations
       clause = <<-SQL.split.join(" ")
                 permissions.resource_type_id =
                   (select id from resource_types where resource_types.name = :resource_type) AND

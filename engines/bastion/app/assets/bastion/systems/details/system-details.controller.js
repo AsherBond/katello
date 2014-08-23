@@ -17,21 +17,71 @@
  *
  * @requires $scope
  * @requires $state
+ * @requires $q
  * @requires System
+ * @requires Organization
  *
  * @description
  *   Provides the functionality for the system details action pane.
  */
-angular.module('Bastion.systems').controller('SystemDetailsController', ['$scope', '$state', 'System', function($scope, $state, System) {
-    $scope.system = System.get({id: $scope.$stateParams.systemId});
+angular.module('Bastion.systems').controller('SystemDetailsController',
+    ['$scope', '$state', '$q', 'System', 'Organization',
+    function($scope, $state, $q, System, Organization) {
 
-    $scope.transitionTo = function(state) {
-        if ($scope.system && $scope.system.hasOwnProperty("uuid")) {
-            $state.transitionTo(state, {systemId: $scope.system["uuid"]});
+        if ($scope.system) {
+            $scope.panel = {loading: false};
+        } else {
+            $scope.panel = {loading: true};
         }
-    };
 
-    $scope.isState = function (stateName) {
-        return $state.is(stateName);
-    };
-}]);
+        $scope.system = System.get({id: $scope.$stateParams.systemId}, function(system) {
+            $scope.$watch("table.rows.length > 0", function() {
+                $scope.table.replaceRow(system);
+            });
+
+            $scope.$broadcast('system.loaded', system);
+            $scope.panel.loading = false;
+        });
+
+        $scope.save = function(system) {
+            var deferred = $q.defer();
+
+            system.$update(function(response) {
+                deferred.resolve(response);
+                $scope.saveSuccess = true;
+            }, function(response) {
+                deferred.reject(response);
+                $scope.saveError = true;
+                $scope.errors = response.data.errors;
+            });
+
+            return deferred.promise;
+        };
+
+        $scope.transitionTo = function(state, params) {
+            var systemId = $scope.$stateParams.systemId;
+
+            if ($scope.system && $scope.system.uuid) {
+                systemId = $scope.system.uuid;
+            }
+
+            if (systemId) {
+                params = params ? params : {};
+                params.systemId  = systemId;
+                $state.transitionTo(state, params);
+                return true;
+            }
+            return false;
+        };
+
+        $scope.serviceLevels = function() {
+            var deferred = $q.defer();
+
+            Organization.get(function(organization) {
+                deferred.resolve(organization['service_levels']);
+            });
+
+            return deferred.promise;
+        };
+    }]
+);

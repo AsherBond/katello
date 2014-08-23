@@ -17,7 +17,6 @@ class Api::V1::CustomInfoController < Api::V1::ApiController
   before_filter :find_custom_info, :only => [:show, :update, :destroy]
   before_filter :authorize
 
-
   def rules
     edit_custom_info = lambda { @informable.editable? }
     view_custom_info = lambda { @informable.readable? }
@@ -80,7 +79,7 @@ class Api::V1::CustomInfoController < Api::V1::ApiController
   private
 
   def package_args(args)
-    return args.slice(:keyname, :value).delete_if { |k, v| v.nil? }.inject({}) { |h, (k, v)| h[k] = v.strip; h }
+    return args.slice(:keyname, :value).delete_if { |_, v| v.nil? }.each_with_object({}) { |(k, v), a| a[k] = v.strip }
   end
 
   def find_informable

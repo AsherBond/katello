@@ -23,20 +23,20 @@ Src::Application.routes.draw do
       end
 
       api_resources :organizations do
+        member do
+          post :repo_discover
+          post :cancel_repo_discover
+        end
         api_resources :products, :only => [:index]
         api_resources :environments
         api_resources :sync_plans, :only => [:index, :create]
-        api_resources :tasks, :only => [:index]
-        api_resources :providers, :only => [:index], :constraints => { :organization_id => /[^\/]*/ }
+        api_resources :tasks, :only => [:index, :show]
+        api_resources :providers, :only => [:index], :constraints => {:organization_id => /[^\/]*/}
         scope :constraints => RegisterWithActivationKeyContraint.new do
           match '/systems' => 'systems#activate', :via => :post
         end
         api_resources :systems, :only => [:index, :create] do
           get :report, :on => :collection
-
-          collection do
-            get :tasks
-          end
         end
         api_resources :distributors, :only => [:index, :create]
         resource :uebercert, :only => [:show]
@@ -46,7 +46,7 @@ Src::Application.routes.draw do
         api_resources :gpg_keys, :only => [:index, :create]
 
         match '/default_info/:informable_type' => 'organization_default_info#create', :via => :post, :as => :create_default_info
-        match '/default_info/:informable_type/:keyname' => 'organization_default_info#destroy', :via => :delete, :as => :destroy_default_info
+        match '/default_info/:informable_type/*keyname' => 'organization_default_info#destroy', :via => :delete, :as => :destroy_default_info
         match '/default_info/:informable_type/apply' => 'organization_default_info#apply_to_all', :via => :post, :as => :apply_default_info
 
         match '/auto_attach' => 'organizations#auto_attach_all_systems', :via => :post, :as => :auto_attach_all_systems
@@ -76,20 +76,42 @@ Src::Application.routes.draw do
           get :errata
           get :pools
           get :releases
+          get :tasks
           put :enabled_repos
           post :system_groups, :action => :add_system_groups
           delete :system_groups, :action => :remove_system_groups
+          put :refresh_subscriptions
         end
         collection do
-          match "/tasks/:id" => "tasks#show", :via => :get
+          match "/tasks/:task_id" => "systems#task", :via => :get
+          match '/add_system_groups' => 'systems_bulk_actions#bulk_add_system_groups', :via => :put
+          match '/remove_system_groups' => 'systems_bulk_actions#bulk_remove_system_groups', :via => :put
+          match '/install_content' => 'systems_bulk_actions#install_content', :via => :put
+          match '/update_content' => 'systems_bulk_actions#update_content', :via => :put
+          match '/remove_content' => 'systems_bulk_actions#remove_content', :via => :put
+          match '/destroy' => 'systems_bulk_actions#destroy_systems', :via => :put
         end
         api_resources :subscriptions, :only => [:create, :index, :destroy] do
           collection do
             match '/' => 'subscriptions#destroy_all', :via => :delete
             match '/serials/:serial_id' => 'subscriptions#destroy_by_serial', :via => :delete
+            match '/available' => 'subscriptions#available', :via => :get
           end
         end
-        resource :packages, :action => [:create, :update, :destroy], :controller => :system_packages
+        resource :packages, :only => [], :controller => :system_packages do
+          collection do
+            put :remove
+            put :install
+            put :upgrade
+            put :upgrade_all
+          end
+        end
+        api_resources :errata, :only => [:show], :controller => :system_errata do
+          collection do
+            put :apply
+          end
+        end
+
       end
 
       api_resources :distributors, :only => [:show, :destroy, :create, :index, :update] do
@@ -104,7 +126,13 @@ Src::Application.routes.draw do
         end
       end
 
-      api_resources :providers, :except => [:index] do
+      api_resources :subscriptions, :only => [] do
+        collection do
+          get :index, :action => :organization_index
+        end
+      end
+
+      api_resources :providers do
         api_resources :sync, :only => [:index, :create] do
           delete :index, :on => :collection, :action => :cancel
         end
@@ -168,7 +196,7 @@ Src::Application.routes.draw do
         #get :dependencies, :on => :member, :action => :dependencies
 
         api_attachable_resources :products, :controller => :changesets_content
-        api_attachable_resources :packages, :controller => :changesets_content, :constraints => { :id => /[0-9a-zA-Z\-_.]+/ }
+        api_attachable_resources :packages, :controller => :changesets_content, :constraints => {:id => /[0-9a-zA-Z\-_.]+/}
         api_attachable_resources :errata, :controller => :changesets_content
         api_attachable_resources :repositories, :controller => :changesets_content, :resource_name => :repo
         api_attachable_resources :distributions, :controller => :changesets_content
@@ -178,15 +206,18 @@ Src::Application.routes.draw do
 
       api_resources :ping, :only => [:index]
 
-      api_resources :repositories, :only => [:show, :update, :destroy], :constraints => { :id => /[0-9a-zA-Z\-_.]*/ } do
+      api_resources :repositories, :only => [:index, :create, :show, :update, :destroy], :constraints => { :id => /[0-9a-zA-Z\-_.]*/ } do
         api_resources :sync, :only => [:index, :create] do
           delete :index, :on => :collection, :action => :cancel
         end
         api_resources :packages, :only => [:index, :show] do
           get :search, :on => :collection
         end
-        api_resources :errata, :only => [:index, :show], :constraints => { :id => /[0-9a-zA-Z\-\+%_.:]+/ }
-        api_resources :distributions, :only => [:index, :show], :constraints => { :id => /[0-9a-zA-Z \-\+%_.]+/ }
+        api_resources :errata, :only => [:index, :show], :constraints => {:id => /[0-9a-zA-Z\-\+%_.:]+/}
+        api_resources :distributions, :only => [:index, :show], :constraints => {:id => /[0-9a-zA-Z \-\+%_.]+/}
+        api_resources :puppet_modules, :only => [:index, :show] do
+          get :search, :on => :collection
+        end
         member do
           get :package_groups
           get :package_group_categories
@@ -219,7 +250,7 @@ Src::Application.routes.draw do
         end
       end
 
-      api_resources :gpg_keys, :only => [:show, :update, :destroy] do
+      api_resources :gpg_keys, :only => [:index, :show, :update, :destroy] do
         get :content, :on => :member
       end
 
@@ -230,10 +261,10 @@ Src::Application.routes.draw do
         end
       end
 
-      api_resources :products, :only => [:show, :update, :destroy] do
+      api_resources :products, :only => [:index, :show, :update, :destroy, :create] do
         post :sync_plan, :on => :member, :action => :set_sync_plan
         delete :sync_plan, :on => :member, :action => :remove_sync_plan
-        api_resources :repositories, :only => [:create]
+        api_resources :repositories, :only => [:create, :index]
         get :repositories, :on => :member
         api_resources :sync, :only => [:index, :create] do
           delete :index, :on => :collection, :action => :cancel
@@ -270,15 +301,14 @@ Src::Application.routes.draw do
       # api custom information
       match '/custom_info/:informable_type/:informable_id' => 'custom_info#create', :via => :post, :as => :create_custom_info
       match '/custom_info/:informable_type/:informable_id' => 'custom_info#index', :via => :get, :as => :custom_info
-      match '/custom_info/:informable_type/:informable_id/:keyname' => 'custom_info#show', :via => :get, :as => :show_custom_info
-      match '/custom_info/:informable_type/:informable_id/:keyname' => 'custom_info#update', :via => :put, :as => :update_custom_info
-      match '/custom_info/:informable_type/:informable_id/:keyname' => 'custom_info#destroy', :via => :delete, :as => :destroy_custom_info
+      match '/custom_info/:informable_type/:informable_id/*keyname' => 'custom_info#show', :via => :get, :as => :show_custom_info
+      match '/custom_info/:informable_type/:informable_id/*keyname' => 'custom_info#update', :via => :put, :as => :update_custom_info
+      match '/custom_info/:informable_type/:informable_id/*keyname' => 'custom_info#destroy', :via => :delete, :as => :destroy_custom_info
 
       # subscription-manager support
       match '/users/:username/owners' => 'users#list_owners', :via => :get
 
     end # module v2
-
 
     # routes that didn't change in v2 and point to v1
     scope :module => :v1, :constraints => ApiVersionConstraint.new(:version => 2) do
@@ -319,10 +349,7 @@ Src::Application.routes.draw do
         match 'status/memory' => 'status#memory', :via => :get
       end
 
-      match '*a', :to => 'errors#render_404'
-
     end # module v1
-
 
   end # '/api' namespace
 

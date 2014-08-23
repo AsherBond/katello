@@ -13,7 +13,7 @@
 
 /**
  * @ngdoc service
- * @name  Katello.systems.factory:System
+ * @name  Bastion.systems.factory:System
  *
  * @requires $resource
  * @requires Routes
@@ -22,111 +22,43 @@
  *   Provides a $resource for system or list of systems.
  */
 angular.module('Bastion.systems').factory('System',
-    ['$resource', '$q', 'Routes',
-    function($resource, $q, Routes) {
-        var Collection = {},
-            resource,
-            updateCounts,
-            findIndex,
-            replaceInCollection;
+    ['$resource', 'Routes',
+    function($resource, Routes) {
 
-        resource = $resource(Routes.apiSystemsPath() + '/:id/:action', {id: '@uuid'}, {
-            update: { method: 'PUT'},
-            query: { method: 'GET'},
-            releaseVersions: { method: 'GET', params: {action: 'releases'}},
-            subscriptions: { method: 'GET', params: {action: 'subscriptions'}}
+        return $resource(Routes.apiSystemsPath() + '/:id/:action/:action2', {id: '@uuid'}, {
+            get: {method: 'GET', params: {fields: 'full'}},
+            update: {method: 'PUT'},
+            query: {method: 'GET', isArray: false},
+            releaseVersions: {method: 'GET', params: {action: 'releases'}},
+            saveSystemGroups: {method: 'POST', params: {action: 'system_groups'}},
+            refreshSubscriptions: {method: 'PUT', params: {action: 'refresh_subscriptions'}},
+            availableSubscriptions: {method: 'GET', params: {action: 'subscriptions', action2:'available'}},
+            tasks: {method: 'GET', params: {action: 'tasks', paged: true}}
         });
 
-        findIndex = function(record) {
-            var index;
+    }]
+);
 
-            angular.forEach(Collection.records, function(item, itemIndex) {
-                if (item.id === record.id) {
-                    index = itemIndex;
-                }
-            });
-
-            return index;
-        };
-
-        replaceInCollection = function(record) {
-            var index = findIndex(record);
-
-            if (index) {
-                Collection.records[index] = record;
-            } else {
-                Collection.records.push(record);
-                updateCounts(1);
-            }
-        };
-
-        updateCounts = function(count) {
-            Collection.offset += count;
-            Collection.total  += count;
-            Collection.subtotal += count;
-        };
-
-        Collection.records  = [];
-        Collection.offset   = 0;
-        Collection.total    = 0;
-        Collection.subtotal = 0;
-        Collection.resource = resource;
-
-        Collection.get = function(args, callback) {
-            args = args || {};
-            callback = callback || function() {};
-
-            if (args['id']) {
-                return resource.get(args, function(record) {
-                    replaceInCollection(record);
-                    callback();
-                });
-            }
-        };
-
-        Collection.query = function(args, callback) {
-            args = args || {};
-            callback = callback || function() {};
-
-            if (args['offset'] === 0) {
-                Collection.offset = 0;
-            } else {
-                Collection.offset = args['offset'];
-            }
-
-            resource.query(args, function(data) {
-                if (Collection.offset === 0) {
-                    Collection.records = data.records;
-                } else {
-                    Collection.records = Collection.records.concat(data.records);
-                }
-
-                Collection.offset = Collection.records.length;
-                Collection.total = data.total;
-                Collection.subtotal = data.subtotal;
-                callback();
-            });
-        };
-
-        Collection.releaseVersions = function(args) {
-            var deferred = $q.defer();
-
-            resource.releaseVersions(args, function(data) {
-                deferred.resolve(data.releases);
-            });
-
-            return deferred.promise;
-        };
-
-        Collection.subscriptions = function(args) {
-            var deferred = $q.defer();
-
-            resource.subscriptions(args, function(data) {
-                deferred.resolve(data.entitlements);
-            });
-
-            return deferred.promise;
-        };
-        return Collection;
+/**
+ * @ngdoc service
+ * @name  Bastion.systems.factory:BulkAction
+ *
+ * @requires $resource
+ * @requires Routes
+ *
+ * @description
+ *   Provides a $resource for bulk actions on systems.
+ */
+angular.module('Bastion.systems').factory('BulkAction',
+    ['$resource', 'Routes',
+    function($resource, Routes) {
+        return $resource(Routes.apiSystemsPath() + '/:action', {}, {
+            addSystemGroups: {method: 'PUT', params: {action: 'add_system_groups'}},
+            removeSystemGroups: {method: 'PUT', params: {action: 'remove_system_groups'}},
+            installContent: {method: 'PUT', params: {action: 'install_content'}},
+            updateContent: {method: 'PUT', params: {action: 'update_content'}},
+            removeContent: {method: 'PUT', params: {action: 'remove_content'}},
+            removeSystems: {method: 'PUT', params: {action: 'destroy'}}
+        });
     }]
 );

@@ -10,7 +10,6 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-
 class Api::V2::PermissionsController < Api::V1::PermissionsController
 
   include Api::V2::Rendering
@@ -39,7 +38,7 @@ class Api::V2::PermissionsController < Api::V1::PermissionsController
   end
   def create
     perm_attrs = params[:permission]
-    perm_attrs.merge! ({
+    perm_attrs.merge!({
         :role          => @role,
         :organization  => @organization,
         :all_tags      => (params[:all_tags].to_bool if params[:all_tags]),

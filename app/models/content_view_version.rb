@@ -10,12 +10,11 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-
 class ContentViewVersion < ActiveRecord::Base
   include AsyncOrchestration
   include Authorization::ContentViewVersion
 
-  belongs_to :content_view
+  belongs_to :content_view, :inverse_of => :content_view_versions
   has_many :content_view_version_environments, :dependent => :destroy
   has_many :environments, {:through      => :content_view_version_environments,
                            :class_name   => "KTEnvironment",
@@ -27,7 +26,7 @@ class ContentViewVersion < ActiveRecord::Base
   has_many :repositories, :dependent => :destroy
   has_one :task_status, :as => :task_owner, :dependent => :destroy
   belongs_to :definition_archive, :class_name => "ContentViewDefinitionArchive",
-    :inverse_of => :content_view_versions
+                                  :inverse_of => :content_view_versions
 
   validates :definition_archive_id, :presence => true, :if => :has_definition?
 
@@ -44,7 +43,7 @@ class ContentViewVersion < ActiveRecord::Base
     self.repositories.in_environment(env)
   end
 
-  def products(env=nil)
+  def products(env = nil)
     if env
       repos(env).map(&:product).uniq(&:id)
     else
@@ -75,14 +74,14 @@ class ContentViewVersion < ActiveRecord::Base
   end
 
   def self.in_environment(env)
-    joins(:content_view_version_environments).where('content_view_version_environments.environment_id'=>env).
+    joins(:content_view_version_environments).where('content_view_version_environments.environment_id' => env).
         order('content_view_version_environments.environment_id')
   end
 
   def refresh_version(notify = false)
-    PulpTaskStatus::wait_for_tasks self.refresh_repos
-    PulpTaskStatus::wait_for_tasks self.generate_metadata
-    self.content_view.index_repositories(self.content_view.organization.library)
+    PulpTaskStatus.wait_for_tasks self.refresh_repos
+    self.trigger_repository_changes
+
     self.content_view.update_cp_content(self.content_view.organization.library) if Katello.config.use_cp
 
     if notify
@@ -90,8 +89,10 @@ class ContentViewVersion < ActiveRecord::Base
           {:view_name => self.content_view.name, :view_version => self.version}
 
       Notify.success(message, :request_type => "content_view_definitions___refresh",
-                     :organization => self.content_view.organization)
+                              :organization => self.content_view.organization)
     end
+
+    Glue::Event.trigger(Katello::Actions::ContentViewRefresh, self.content_view)
 
   rescue => e
     Rails.logger.error(e)
@@ -102,16 +103,22 @@ class ContentViewVersion < ActiveRecord::Base
           {:view_name => self.content_view.name, :view_version => self.version}
 
       Notify.exception(message, e, :request_type => "content_view_definitions___refresh",
-                       :organization => self.content_view.organization)
+                                   :organization => self.content_view.organization)
     end
 
     raise e
   end
 
+  # TODO: break up method
+  # rubocop:disable MethodLength
   def refresh_repos
     # generate a hash of the repos associated with the definition, where key = repo id & value = repo
-    definition_repos_hash = has_definition? ?
-        Hash[ self.content_view.content_view_definition.repos.collect{|repo| [repo.id, repo]}] : {}
+    definition_repos_hash = if has_definition?
+                              Hash[ self.content_view.content_view_definition.
+                                    repos.collect{|repo| [repo.id, repo]}]
+                            else
+                              {}
+                            end
 
     async_tasks = []
     # prepare the repos currently in the library for the refresh
@@ -127,7 +134,7 @@ class ContentViewVersion < ActiveRecord::Base
       end
       self.reload
     end
-    PulpTaskStatus::wait_for_tasks async_tasks unless async_tasks.blank?
+    PulpTaskStatus.wait_for_tasks async_tasks unless async_tasks.blank?
 
     async_tasks = []
     repos_to_filter = []
@@ -138,32 +145,32 @@ class ContentViewVersion < ActiveRecord::Base
       if library_clone.nil?
         # this repo doesn't currently exist in the library
         clone = repo.create_clone(self.content_view.organization.library, self.content_view)
-        async_tasks << repo.clone_contents(clone)
         repos_to_filter << clone
       else
         # this repo already exists in the library, so update it
         library_clone = Repository.find(library_clone) # reload readonly obj
-        async_tasks << repo.clone_contents(library_clone)
         repos_to_filter << library_clone
       end
     end
     if has_definition?
-      self.content_view.content_view_definition.unassociate_contents(repos_to_filter)
+      repos_to_filter.each do |repo|
+        self.content_view.content_view_definition.associate_contents(repo)
+      end
     end
 
     async_tasks.flatten(1)
   end
 
   def deletable?(from_env)
-    !System.exists?(:environment_id=>from_env, :content_view_id=>self.content_view) ||
+    !System.exists?(:environment_id => from_env, :content_view_id => self.content_view) ||
         self.content_view.versions.in_environment(from_env).count > 1
   end
 
   def delete(from_env)
     unless deletable?(from_env)
-          raise Errors::ChangesetContentException.new(_("Cannot delete view %{view} from %{env}, systems are currently subscribed. " +
-                                                      "Please move subscribed systems to another content view or environment.") %
-                                                          {:env=>from_env.name, :view=>self.content_view.name})
+      raise Errors::ChangesetContentException.new(_("Cannot delete view %{view} from %{env}, systems are currently subscribed. " +
+                                                    "Please move subscribed systems to another content view or environment.") %
+                                                    {:env => from_env.name, :view => self.content_view.name})
     end
 
     self.environments.delete(from_env)
@@ -175,8 +182,8 @@ class ContentViewVersion < ActiveRecord::Base
     end
   end
 
-  def generate_metadata
-    self.repositories.collect{|repo| repo.generate_metadata}.flatten(1)
+  def trigger_repository_changes
+    Repository.trigger_contents_changed(self.repositories, :wait => true, :reindex => true)
   end
 
   private

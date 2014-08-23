@@ -10,13 +10,17 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-
 module Authorization::User
   extend ActiveSupport::Concern
 
   READ_PERM_VERBS = [:read, :update, :create, :delete]
 
   module ClassMethods
+    # scope
+    def readable
+      User.allowed_all_tags?(READ_PERM_VERBS, :users) ? where(:hidden => false) : where("0 = 1")
+    end
+
     def creatable?
       User.allowed_to?([:create], :users, nil)
     end
@@ -25,7 +29,7 @@ module Authorization::User
       User.allowed_to?(READ_PERM_VERBS, :users, nil)
     end
 
-    def list_verbs(global=false)
+    def list_verbs(global = false)
       { :create => _("Administer Users"),
         :read   => _("Read Users"),
         :update => _("Modify Users"),
@@ -44,9 +48,6 @@ module Authorization::User
 
   included do
 
-    scope :readable, lambda { User.allowed_all_tags?(READ_PERM_VERBS, :users) ?
-        where(:hidden => false) : where("0 = 1") }
-
     def readable?
       User.any_readable? && !hidden
     end
@@ -62,7 +63,7 @@ module Authorization::User
     def allowed_organizations
       #test for all orgs
       perms = ::Permission.joins(:role).joins("INNER JOIN roles_users ON roles_users.role_id = roles.id").
-          where("roles_users.user_id = ?", self.id).where(:organization_id => nil).count()
+          where("roles_users.user_id = ?", self.id).where(:organization_id => nil).count
       return ::Organization.all if perms > 0
 
       perms = ::Permission.joins(:role).joins("INNER JOIN roles_users ON roles_users.role_id = roles.id").

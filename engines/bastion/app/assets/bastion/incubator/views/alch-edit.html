@@ -1,8 +1,14 @@
-<div>
-  <div class="value editable clickable" ng-click="edit()" ng-hide="editMode">
-    <span class="editable-value">{{ model }}</span>
-    <i class="icon-edit inline-icon" ng-hide="editMode"></i>
+<div class="alch-edit">
+  <div class="value" ng-class="{ 'editable clickable' : !readonly }" ng-click="edit()" ng-hide="editMode || workingMode">
+    <span class="editable-value">{{ displayValue }}</span>
+    <span class="fr">
+      <i class="icon-edit inline-icon" ng-hide="editMode || readonly"></i>
+      <i class="icon-remove inline-icon" ng-click="delete($event)" ng-show="deletable"></i>
+    </span>
   </div>
-  <button class="btn primary small fl" ng-click="save()" ng-show="editMode">{{ "Save" | i18n }}</button>
-  <button class="btn small fl" ng-click="cancel()" ng-show="editMode">{{ "Cancel" | i18n }}</button>
+
+  <span ng-switch on="buttonConfig">
+    <div ng-switch-when="addRemove" ng-include="'incubator/views/alch-edit-add-remove-cancel.html'"></div>
+    <div ng-switch-default ng-include="'incubator/views/alch-edit-save-cancel.html'"></div>
+  </span>
 </div>

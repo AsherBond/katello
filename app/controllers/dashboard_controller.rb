@@ -14,7 +14,7 @@ class DashboardController < ApplicationController
 
   helper ErrataHelper
 
-  skip_before_filter :authorize,:require_org
+  skip_before_filter :authorize, :require_org
 
   before_filter :update_preferences_quantity , :except => [:index, :section_id]
   #before_filter :update_preferences_age , :except => [:index, :section_id]
@@ -35,63 +35,44 @@ class DashboardController < ApplicationController
   end
 
   def sync
-    render :partial=>"sync", :locals=>{:quantity=> quantity}
+    render :partial => "sync", :locals => {:quantity => quantity}
   end
 
   def errata
     # retrieve the list of repos that are readable by the user,
     # but since a system cannot be registered to Library,
     # skip repos in Library
-    repos = Repository.readable_in_org(current_organization, true)
+    system_uuids = System.readable(current_organization).pluck(:uuid)
+    errata = Errata.applicable_for_consumers(system_uuids)
 
-    systems_hash = {}
-    unless repos.empty?
-      errata_by_consumer = Errata.errata_by_consumer(repos)
-
-      # grab the N (i.e. quantity) errata that have the most systems associated with them
-      n_errata = errata_by_consumer.sort_by{ |hash| hash[:summary][:applicable_consumers].length }.
-          reverse[0..quantity - 1]
-
-      system_uuids = Set.new
-      n_errata.each do |erratum|
-        erratum[:summary][:applicable_consumers].each{ |uuid| system_uuids.add(uuid) }
-      end
-
-      unless system_uuids.empty?
-        # retrieve the systems (id, name and env)
-        systems = System.readable(current_organization).where(:uuid => system_uuids.to_a)
-        systems.each{ |system| systems_hash[system.uuid] = system }
-      end
-    end
+    errata = errata.sort_by{|e| (e.applicable_consumers || []).length }.reverse[0...quantity]
 
     render :partial => "errata", :locals => { :quantity => quantity,
-                                              :repos => repos,
-                                              :n_errata => n_errata,
-                                              :systems_hash => systems_hash }
+                                              :errata => errata }
   end
 
   def content_views
-    render :partial=>"content_views", :locals=>{:quantity=>quantity}
+    render :partial => "content_views", :locals => {:quantity => quantity}
   end
 
   def promotions
-    render :partial=>"promotions", :locals=>{:quantity=>quantity}
+    render :partial => "promotions", :locals => {:quantity => quantity}
   end
 
   def systems
-    render :partial=>"systems", :locals=>{:quantity=>quantity}
+    render :partial => "systems", :locals => {:quantity => quantity}
   end
 
   def system_groups
-    render :partial=>"system_groups", :locals=>{:quantity=>quantity}
+    render :partial => "system_groups", :locals => {:quantity => quantity}
   end
 
   def subscriptions
-    render :partial=>"subscriptions", :locals=>{:quantity=>quantity}
+    render :partial => "subscriptions", :locals => {:quantity => quantity}
   end
 
   def notices
-    render :partial=>"notices", :locals=>{:quantity=>quantity}
+    render :partial => "notices", :locals => {:quantity => quantity}
   end
 
   private
@@ -107,7 +88,7 @@ class DashboardController < ApplicationController
 
   def update_user_preference(key, value)
     current_user.preferences = HashWithIndifferentAccess.new  unless current_user.preferences
-    current_user.preferences[:dashboard] = {} unless current_user.preferences.has_key? :dashboard
+    current_user.preferences[:dashboard] = {} unless current_user.preferences.key? :dashboard
     current_user.preferences[:dashboard][key] = value
     current_user.save!
   end

@@ -32,13 +32,13 @@ class Api::V1::PermissionsController < Api::V1::ApiController
         :available_verbs => read_test
     }
   end
+
   def param_rules
     {
         :create => [:name, :description, :role_id, :organization_id, :verbs, :tags,
                     :type, :all_tags, :all_verbs]
     }
   end
-
 
   api :GET, "/roles/:role_id/permissions", "List permissions for a role"
   param :name, String, :desc => "filter by name"
@@ -54,7 +54,6 @@ class Api::V1::PermissionsController < Api::V1::ApiController
   def show
     respond
   end
-
 
   api :POST, "/roles/:role_id/permissions", "Create a roles permission"
   param :description, String, :allow_nil => true
@@ -86,9 +85,8 @@ class Api::V1::PermissionsController < Api::V1::ApiController
     new_params[:resource_type] = ResourceType.find_or_create_by_name(params[:type])
 
     @permission = Permission.create! new_params
-    render :json => @permission.to_json()
+    render :json => @permission.to_json
   end
-
 
   api :DELETE, "/roles/:role_id/permissions/:id", "Destroy a roles permission"
   def destroy

@@ -1,3 +1,3 @@
-collection @collection, :object_root => :product
+object false
 
-extends 'api/v2/products/show'
+extends "api/v2/common/index"

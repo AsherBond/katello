@@ -12,8 +12,6 @@
 
 require 'minitest_helper'
 require './test/support/candlepin/consumer_support'
-require './test/support/user_support'
-
 
 class GlueCandlepinConsumerTestBase < MiniTest::Rails::ActiveSupport::TestCase
   extend  ActiveRecord::TestFixtures
@@ -132,7 +130,7 @@ class GlueCandlepinConsumerTestDistributor < GlueCandlepinConsumerTestBase
   end
 
   def test_candlepin_distributor_update
-    assert_equal({}, @@dist.facts)
+    assert_equal({"distributor_version"=>"sam-1.3"}, @@dist.facts)
     @@dist.facts = {:some => 'fact'}
     @@dist.update_candlepin_consumer
     assert_equal({:some => 'fact'}, @@dist.facts)

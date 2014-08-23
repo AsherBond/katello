@@ -36,12 +36,14 @@
        <packagereq type="default">katello-repos-testing</packagereq>
        <packagereq type="default">katello-selinux</packagereq>
        <packagereq type="default">katello-utils</packagereq>
-       <packagereq type="default">pulp-katello-plugin</packagereq>
+       <packagereq type="default">pulp-katello-plugins</packagereq>
        <packagereq type="default">lucene3</packagereq>
        <packagereq type="default">lucene3-contrib</packagereq>
+       <packagereq type="default">pulp-katello-plugins</packagereq>
        <packagereq type="default">rubygem-acts_as_reportable</packagereq>
        <packagereq type="default">rubygem-ui_alchemy-rails</packagereq>
        <packagereq type="default">rubygem-anemone</packagereq>
+       <packagereq type="default">rubygem-ansi</packagereq>
        <packagereq type="default">rubygem-apipie-rails</packagereq>
        <packagereq type="default">rubygem-apipie-params</packagereq>
        <packagereq type="default">rubygem-closure-compiler</packagereq>
@@ -49,6 +51,7 @@
        <packagereq type="default">rubygem-deface</packagereq>
        <packagereq type="default">rubygem-dynflow</packagereq>
        <packagereq type="default">rubygem-delayed_job_active_record</packagereq>
+       <packagereq type="default">rubygem-fast_gettext</packagereq>
        <packagereq type="default">rubygem-foreman-katello-engine</packagereq>
        <packagereq type="default">rubygem-gettext_i18n_rails</packagereq>
        <packagereq type="default">rubygem-hooks</packagereq>
@@ -77,6 +80,14 @@
        <packagereq type="default">signo</packagereq>
        <packagereq type="default">signo-katello</packagereq>
        <packagereq type="default">rubygem-bundler_ext</packagereq>
+
+       <!-- node installer packages -->
+       <packagereq type="default">node-installer</packagereq>
+       <packagereq type="default">rubygem-ansi</packagereq>
+       <packagereq type="default">rubygem-clamp</packagereq>
+       <packagereq type="default">rubygem-hashie</packagereq>
+       <packagereq type="default">rubygem-kafo</packagereq>
+       <packagereq type="default">rubygem-powerbar</packagereq>
     </packagelist>
   </group>
   <group>

@@ -47,6 +47,7 @@ body {
 pre  { text-indent: 18px; }
 a { outline: 0 none;}
 strong { font-weight: bold; }
+ul { -webkit-padding-start: 0; }
 .clear { clear: both; }
 .clearfloat { /* this class can be placed on a <br /> or empty div as the final element following the last floated div (within the #container) if the overflow:hidden on the .container is removed */
   clear:both;
@@ -849,7 +850,7 @@ fieldset {
 
 #panel-frame {
   position: fixed;
-  max-width:700px;
+  width:0px;
   z-index: -1;
 
   .tupane_footer {
@@ -1090,7 +1091,7 @@ fieldset {
 }
 
 /* begin helptip */
-.helptip-open {
+.helptip, .helptip-open {
   background-color: $helptip-background_color;
   display: block;
   padding: 12px;
@@ -1352,7 +1353,7 @@ footer a {
 #maincontent section.maincontent {
   box-shadow: none !important;
   background: white;
-  margin: 0 auto;
+  margin: 40px auto;
   box-sizing: border-box;
   padding-top: 40px;
   padding-bottom: 20px;
@@ -1419,10 +1420,13 @@ footer a {
   background: url("icons/spinner.gif") no-repeat 50% 50%, linear-gradient(#ffffff, #e5e5e4);
 }
 
-#experimental_indicator {
-  display: none;
+#legacy_indicator {
+  position: absolute;
+  color: rgb(255, 196, 90);
+  top: 6px;
+  left: 132px;
+  font-family: Overpass;
 }
-
 
 tr.no_sort.not_filtered {
   .button {
@@ -1466,4 +1470,24 @@ pre {
 
 .instruction-page {
   padding: 10px 20px;
+}
+
+.info-tipsy {
+  opacity: 0.6;
+  color: orange;
+  font-size: 13px;
+
+  &:hover {
+    opacity: 1;
+    color: orange;
+  }
+}
+
+#main .text-list {
+  padding-left: 20px;
+
+  &, li {
+    list-style-type: disc;
+  }
+
 }

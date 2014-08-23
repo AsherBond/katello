@@ -10,7 +10,6 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-
 module NavigationHelper
 
   def generate_menu
@@ -22,7 +21,7 @@ module NavigationHelper
       site_menu   = Navigation::Menus::Site.new
     end
 
-    user_menu   = Navigation::Menus::User.new(current_user)
+    banner_menu   = Navigation::Menus::Banner.new(current_user)
 
     menu = {
       :location => 'left',
@@ -34,18 +33,18 @@ module NavigationHelper
       :items    => site_menu.items
     }
 
-    user_menu = {
+    banner_menu = {
       :location => 'right',
-      :items    => [user_menu]
+      :items    => banner_menu.items
     }
 
     javascript do
-      # TODO Get rid of this ugliness
+      # TODO: Get rid of this ugliness
       (
         'angular.module("Bastion.menu").constant("Menus", {
           menu: ' + menu.to_json + ',
           adminMenu: ' + site_menu.to_json + ',
-          userMenu: ' + user_menu.to_json + ',
+          bannerMenu: ' + banner_menu.to_json + ',
           notices: ' + add_notices.to_json + '
         });'
       ).html_safe

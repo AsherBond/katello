@@ -10,7 +10,6 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-
 module Navigation
   module Items
     class UserAccount < Navigation::Item
@@ -19,7 +18,7 @@ module Navigation
         @key           = :user_account
         @display       = _("My Account")
         @authorization = true
-        @url           = "#{users_path(user)}#list_search=#{user.username}&panel=user_#{user.id}&panel_page=edit"
+        @url           = "#{users_path(user)}#list_search=#{user.username}&panel=user_#{user.id}&panelpage=edit"
       end
 
     end

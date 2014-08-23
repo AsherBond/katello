@@ -24,26 +24,26 @@ class Changeset < ActiveRecord::Base
   FAILED    = 'failed'
   STATES    = [NEW, REVIEW, PROMOTING, PROMOTED, FAILED, DELETING, DELETED]
 
-
   PROMOTION = 'promotion'
   DELETION  = 'deletion'
   TYPES     = [PROMOTION, DELETION]
 
-  validates_inclusion_of :state,
-                         :in          => STATES,
-                         :allow_blank => false,
-                         :message     => "A changeset must have one of the following states: #{STATES.join(', ')}."
-
-  validates :name, :presence => true, :allow_blank => false
-  validates_uniqueness_of :name, :scope => :environment_id, :message => N_("Label has already been taken")
+  validates :name, :presence => true, :allow_blank => true,
+                   :uniqueness => {:scope => :environment_id,
+                                   :message => N_("Label has already been taken")}
   validates :environment, :presence => true
+  validates :state, :inclusion => {:in          => STATES,
+                                   :allow_blank => false,
+                                   :message     => <<-EOS}
+        A changeset must have one of the following states: #{STATES.join(', ')}
+      EOS
   validates_with Validators::KatelloDescriptionFormatValidator, :attributes => :description
   validates_with Validators::NotInLibraryValidator
   validates_with Validators::KatelloNameFormatValidator, :attributes => :name
 
-  has_many :users, :class_name => "ChangesetUser", :inverse_of => :changeset
-  belongs_to :environment, :class_name => "KTEnvironment"
-  belongs_to :task_status
+  has_many :users, :class_name => "ChangesetUser", :inverse_of => :changeset, :dependent => :destroy
+  belongs_to :environment, :class_name => "KTEnvironment", :inverse_of => :changesets
+  belongs_to :task_status, :inverse_of => :changeset
   has_many :changeset_content_views, :dependent => :destroy
   has_many :content_views, :through => :changeset_content_views
 
@@ -51,17 +51,18 @@ class Changeset < ActiveRecord::Base
   scope :with_state, lambda { |*states| where(:state => states.map(&:to_s)) }
   # first thing after start is that progress is set to 0 so we can easily detect already started
   scope :started, with_state(PROMOTING, DELETING)
+
   # find colliding changesets which are those having target same as to.start or start same se
   # to.target or same start and target, others should be safe, ignoring self of course
-  scope :colliding, lambda { |to|
+  def self.colliding(to)
     start  = to.environment.prior.id
     target = to.environment.id
     joins(:environment => :priors).
-        where(['"changesets"."id" <> ? AND ('<<
+        where(['"changesets"."id" <> ? AND (' <<
                    '"environments"."id" = ? OR "environment_priors"."prior_id" = ? OR ' <<
                    '("environments"."id" = ? AND "environment_priors"."prior_id" = ?))',
                to.id, start, target, target, start])
-  }
+  end
 
   def self.new_changeset(args)
     return self.changeset_class(args).new(args)
@@ -80,8 +81,7 @@ class Changeset < ActiveRecord::Base
     end
   end
 
-
-  def key_for item
+  def key_for(item)
     "changeset_#{id}_#{item}"
   end
 
@@ -91,7 +91,7 @@ class Changeset < ActiveRecord::Base
   end
 
   def action_type
-    return PROMOTION if PromotionChangeset === self
+    return PROMOTION if promotion?
     DELETION
   end
 
@@ -120,7 +120,7 @@ class Changeset < ActiveRecord::Base
     end
   end
 
-  def self.create_for( acct_type, options)
+  def self.create_for(acct_type, options)
     if PROMOTION == acct_type
       PromotionChangeset.create!(options)
     else
@@ -128,9 +128,14 @@ class Changeset < ActiveRecord::Base
     end
   end
 
-  def add_content_view!(view, include_components=false)
+  def add_content_view!(view, include_components = false)
     unless env_to_verify_on_add_content.content_views.include?(view)
-      raise Errors::ChangesetContentException.new("Content view not found within environment you want to promote from.")
+      raise Errors::ChangesetContentException.new(_("Content view not found within environment you want to promote from."))
+    end
+    if promotion? && content_view_in_environment?(view)
+      raise Errors::ChangesetContentException.new(
+        _("Cannot add content view '%{view}' to changeset. View version already in environment '%{env}'.") %
+        {:view => view.name, :env => environment.name})
     end
 
     self.content_views << view
@@ -164,8 +169,8 @@ class Changeset < ActiveRecord::Base
 
   protected
 
-  def validate_content! elements
-    elements.each { |e| raise ActiveRecord::RecordInvalid.new(e) if not e.valid? }
+  def validate_content!(elements)
+    elements.each { |e| raise ActiveRecord::RecordInvalid.new(e) if !e.valid? }
   end
 
   def validate_content_view_tasks_complete!
@@ -204,7 +209,13 @@ class Changeset < ActiveRecord::Base
     end
   end
 
-  def update_progress! percent
+  def content_view_in_environment?(view)
+    (cvv = environment.content_view_versions.find_by_content_view_id(view)) &&
+      (prior_cvv = environment.prior.content_view_versions.find_by_content_view_id(view)) &&
+      cvv == prior_cvv
+  end
+
+  def update_progress!(percent)
     if self.task_status
       self.task_status.progress = percent
       self.task_status.save!
@@ -212,4 +223,3 @@ class Changeset < ActiveRecord::Base
   end
 
 end
-

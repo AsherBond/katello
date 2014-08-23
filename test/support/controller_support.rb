@@ -10,7 +10,6 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-
 module ControllerSupport
   def check_permission(params)
     permissions = params[:permission].is_a?(Array) ? params[:permission] : [params[:permission]]
@@ -39,6 +38,19 @@ module ControllerSupport
         assert_equal 403, response.status, msg
       end
     end
+  end
+
+  def assert_protected_action(action_name, allowed_perms, denied_perms, &block)
+    assert_authorized(
+              :permission => allowed_perms,
+              :action => action_name,
+              :request => block
+    )
+    refute_authorized(
+        :permission => denied_perms,
+        :action => action_name,
+        :request => block
+    )
   end
 
   def assert_authorized(params)

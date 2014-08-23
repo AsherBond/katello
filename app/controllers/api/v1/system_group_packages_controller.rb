@@ -58,6 +58,7 @@ class Api::V1::SystemGroupPackagesController < Api::V1::ApiController
   param_group :packages_or_groups, Api::V1::SystemPackagesController
   def update
     if params[:packages]
+      params[:packages] = [] if params[:packages] == 'all'
       packages = validate_package_list_format(params[:packages])
       task     = @group.update_packages(packages)
       respond_for_async :resource => task
@@ -100,7 +101,7 @@ class Api::V1::SystemGroupPackagesController < Api::V1::ApiController
 
   def validate_package_list_format(packages)
     packages.each do |package_name|
-      if not valid_package_name?(package_name)
+      if !valid_package_name?(package_name)
         raise HttpErrors::BadRequest.new(_("%s is not a valid package name") % package_name)
       end
     end

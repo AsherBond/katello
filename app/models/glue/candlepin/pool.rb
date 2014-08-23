@@ -18,16 +18,16 @@ module Glue::Candlepin::Pool
     base.send :extend, ClassMethods
 
     base.class_eval do
-      lazy_accessor :remote_data, :pool_derived, :product_name, :consumed, :quantity, :support_level, :support_type,
+      lazy_accessor :remote_data, :pool_derived, :product_name, :consumed, :quantity, :available, :support_level, :support_type,
         :start_date, :end_date, :attrs, :owner, :product_id, :account_number, :contract_number,
         :source_pool_id, :host_id, :virt_only, :virt_limit, :multi_entitlement, :stacking_id,
         :arch, :sockets, :cores, :ram, :description, :product_family, :variant, :provided_products, :instance_multiplier, :suggested_quantity,
-        :initializer => lambda {|s|
-          json = Resources::Candlepin::Pool.find(cp_id)
-          # symbol "attributes" is reserved by Rails and cannot be used
-          json['attrs'] = json['attributes']
-          json
-        }
+        :initializer => (lambda do |s|
+                           json = Resources::Candlepin::Pool.find(cp_id)
+                           # symbol "attributes" is reserved by Rails and cannot be used
+                           json['attrs'] = json['attributes']
+                           json
+                         end)
     end
   end
 
@@ -42,8 +42,8 @@ module Glue::Candlepin::Pool
 
   module InstanceMethods
 
-    def initialize(attrs=nil, options={})
-      if not attrs.nil? and attrs.member? 'id'
+    def initialize(attrs = nil, options = {})
+      if !attrs.nil? && attrs.member?('id')
         # initializing from cadlepin json
         load_remote_data(attrs)
         super({:cp_id => attrs['id']}, options)
@@ -58,6 +58,8 @@ module Glue::Candlepin::Pool
 
     # if defined +load_remote_data+ will be used by +lazy_accessors+
     # to define instance variables
+    # TODO: break up method
+    # rubocop:disable MethodLength
     def load_remote_data(attrs)
       @remote_data = attrs
       @product_name = attrs["productName"]
@@ -65,6 +67,11 @@ module Glue::Candlepin::Pool
       @end_date = Date.parse(attrs["endDate"]) if attrs["endDate"]
       @consumed = attrs["consumed"]
       @quantity = attrs["quantity"]
+      if attrs["quantity"].is_a?(Integer) && attrs["consumed"].is_a?(Integer)
+        @available = attrs["quantity"] - attrs["consumed"]
+      else
+        @available = 0
+      end
       @attrs = attrs["attributes"]
       @owner = attrs["owner"]
       @product_id = attrs["productId"]
@@ -78,14 +85,14 @@ module Glue::Candlepin::Pool
       @pool_derived = false
       attrs['attributes'].each do |attr|
         case attr['name']
-          when 'source_pool_id'
-            @source_pool_id = attr['value']
-          when 'requires_host'
-            @host_id = attr['value']
-          when 'virt_only'
-            @virt_only = attr['value'] == 'true' ? true : false
-          when 'pool_derived'
-            @pool_derived = attr['value'] == 'true' ? true : false
+        when 'source_pool_id'
+          @source_pool_id = attr['value']
+        when 'requires_host'
+          @host_id = attr['value']
+        when 'virt_only'
+          @virt_only = attr['value'] == 'true' ? true : false
+        when 'pool_derived'
+          @pool_derived = attr['value'] == 'true' ? true : false
         end
       end if attrs['attributes']
       @virt_limit = 0
@@ -102,40 +109,40 @@ module Glue::Candlepin::Pool
       @stacking_id = ""
       attrs['productAttributes'].each do |attr|
         case attr['name']
-          when 'virt_limit'
-            @virt_limit = attr['value'].to_i
-          when 'support_type'
-            @support_type = attr['value']
-          when 'arch'
-            @arch = attr['value']
-          when 'support_level'
-            @support_level = attr['value']
-          when 'sockets'
-            @sockets = attr['value'].to_i
-          when 'cores'
-            @cores = attr['value'].to_i
-          when 'ram'
-            @ram = attr['value'].to_i
-          when 'description'
-            @description = attr['value']
-          when 'product_family'
-            @product_family = attr['value']
-          when 'variant'
-            @variant = attr['value']
-          when 'multi-entitlement'
-            @multi_entitlement = (attr['value'] == 'true' || attr['value'] == 'yes') ? true : false
-          when 'stacking_id'
-            @stacking_id = attr['value']
-          when 'instance_multiplier'
-            @instance_multiplier = attr['value'].to_i
+        when 'virt_limit'
+          @virt_limit = attr['value'].to_i
+        when 'support_type'
+          @support_type = attr['value']
+        when 'arch'
+          @arch = attr['value']
+        when 'support_level'
+          @support_level = attr['value']
+        when 'sockets'
+          @sockets = attr['value'].to_i
+        when 'cores'
+          @cores = attr['value'].to_i
+        when 'ram'
+          @ram = attr['value'].to_i
+        when 'description'
+          @description = attr['value']
+        when 'product_family'
+          @product_family = attr['value']
+        when 'variant'
+          @variant = attr['value']
+        when 'multi-entitlement'
+          @multi_entitlement = (attr['value'] == 'true' || attr['value'] == 'yes') ? true : false
+        when 'stacking_id'
+          @stacking_id = attr['value']
+        when 'instance_multiplier'
+          @instance_multiplier = attr['value'].to_i
         end
       end if attrs['productAttributes']
 
       @suggested_quantity = 1
       attrs['calculatedAttributes'].each_key do |key|
         case key
-          when 'suggested_quantity'
-            @suggested_quantity = attrs['calculatedAttributes']['suggested_quantity'].to_i
+        when 'suggested_quantity'
+          @suggested_quantity = attrs['calculatedAttributes']['suggested_quantity'].to_i
         end
       end if attrs['calculatedAttributes']
     end

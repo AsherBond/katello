@@ -13,15 +13,17 @@
 module Dashboard
   class Layout
 
-    AVAILABLE_WIDGETS = [
-      "subscriptions",
-      "notices",
-      "content_views",
-      "sync",
-      "promotions"
-    ]
+    AVAILABLE_WIDGETS = %w(
+      subscriptions
+      notices
+      content_views
+      sync
+      promotions
+      system_groups
+      errata
+    )
 
-    attr_accessor :widgets, :columns
+    attr_accessor :widgets, :columns, :organization, :current_user
 
     def initialize(organization, current_user)
       @widgets = []
@@ -39,7 +41,14 @@ module Dashboard
     def setup_layout
       if (user_layout = current_user.try(:preferences).try(:[], :dashboard).try(:[], :layout))
         user_layout.each do |col|
-          @columns << col.map{ |name| get_widget(name, organization) }
+          @columns << col.each_with_object([]) do |name, column|
+            begin
+              widget = get_widget(name, organization)
+              column << widget if widget.accessible?
+            rescue NameError
+              Rails.logger.info("Could not load dashboard widget #{name}")
+            end
+          end
         end
       else
         setup_default_layout
@@ -47,7 +56,7 @@ module Dashboard
     end
 
     def setup_default_layout
-      @columns << Array.new
+      @columns << []
       @widgets.each_with_index{ |w, i| @columns[0] << w if i.even? }
       @columns << @widgets.select{ |w| !@columns[0].include?(w) }
     end
@@ -58,14 +67,6 @@ module Dashboard
 
     def get_widget(name, org)
       "Dashboard::#{name.camelcase}Widget".constantize.new(org)
-    end
-
-    def organization
-      @organization
-    end
-
-    def current_user
-      @current_user
     end
   end
 end

@@ -10,7 +10,6 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-
 class Api::V2::ContentViewDefinitionsController < Api::V1::ContentViewDefinitionsController
 
   skip_before_filter :find_organization, :except => [:create, :index]
@@ -40,7 +39,7 @@ class Api::V2::ContentViewDefinitionsController < Api::V1::ContentViewDefinition
   end
 
   api :PUT, "/content_view_definitions/:id", "Update a definition"
-  param :id, :number, :desc => "Definition identifer", :required => true
+  param :id, :number, :desc => "Definition identifier", :required => true
   param :org, String, :desc => "Organization name", :required => true
   param_group :content_view_definition
   def update
@@ -58,7 +57,7 @@ class Api::V2::ContentViewDefinitionsController < Api::V1::ContentViewDefinition
   end
 
   api :POST, "/content_view_definitions/:id/clone", "Clone a definition"
-  param :id, :identifier, :desc => "Definition identifer", :required => true
+  param :id, :identifier, :desc => "Definition identifier", :required => true
   param_group :content_view_definition
   param :content_view_definition, Hash do
     param :label, String, :desc => "Content view identifier"
@@ -78,7 +77,7 @@ class Api::V2::ContentViewDefinitionsController < Api::V1::ContentViewDefinition
 
   api :GET, "/content_view_definitions/:content_view_definition_id/repositories",
       "List all the repositories for a content view definition"
-  param :content_view_definition_id, :identifer, :required => true, :desc => "Definition id"
+  param :content_view_definition_id, :identifier, :required => true, :desc => "Definition id"
   def list_repositories
     super
   end
@@ -86,7 +85,7 @@ class Api::V2::ContentViewDefinitionsController < Api::V1::ContentViewDefinition
   api :PUT, "/content_view_definitions/:content_view_definition_id/repositories",
       "Update repositories for content view definition"
   param :content_view_definition_id, :identifier, :required => true,
-        :desc                                               => "content view definition identifier"
+                                                  :desc => "content view definition identifier"
   param :repos, Array, :desc => "Updated list of repo ids", :required => true
   def update_repositories
     _update_repositories! params
@@ -97,7 +96,7 @@ class Api::V2::ContentViewDefinitionsController < Api::V1::ContentViewDefinition
       "Get products for content view definition"
   param :organization_id, :identifier, :desc => "organization identifier", :required => true
   param :content_view_definition_id, :identifier, :required => true,
-        :desc                                               => "content view definition identifier"
+                                                  :desc => "content view definition identifier"
   def list_products
     super
   end
@@ -105,7 +104,7 @@ class Api::V2::ContentViewDefinitionsController < Api::V1::ContentViewDefinition
   api :PUT, "/content_view_definitions/:content_view_definition_id/products",
       "Update products for content view definition"
   param :content_view_definition_id, :identifier, :required => true,
-        :desc                                               => "content view definition identifier"
+                                                  :desc => "content view definition identifier"
   param :products, Array, :desc => "Updated list of products", :required => true
   def update_products
     _update_products! params
@@ -116,7 +115,7 @@ class Api::V2::ContentViewDefinitionsController < Api::V1::ContentViewDefinition
       "Get a list of products belonging to the content view definition, even if one its repositories have been" +
           " associated to this definition. Mainly used by filter api  "
   param :content_view_definition_id, :identifier, :required => true,
-        :desc                                               => "content view definition identifier"
+                                                  :desc => "content view definition identifier"
   def list_all_products
     super
   end

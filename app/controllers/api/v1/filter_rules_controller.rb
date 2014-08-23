@@ -51,7 +51,7 @@ class Api::V1::FilterRulesController < Api::V1::ApiController
   param :organization_id, :identifier, :desc => "organization identifier", :required => true
   param :content_view_definition_id, String, :desc => "id of the content view definition", :required => true
   param :filter_id, String, :desc => "name of the filter", :required => true
-  param :id, :String, :desc => "Id of the filter rule", :required => true
+  param :id, String, :desc => "Id of the filter rule", :required => true
   def destroy
     @filter_rule.destroy
     respond :resource => @filter_rule
@@ -63,10 +63,10 @@ class Api::V1::FilterRulesController < Api::V1::ApiController
     rule         = JSON.parse(rule_params[:rule]).with_indifferent_access
     inclusion    = rule_params[:inclusion].to_s.to_bool
     content_type = rule_params[:content]
-    if rule.has_key?(:date_range)
+    if rule.key?(:date_range)
       date_range = rule[:date_range]
-      date_range[:start] = date_range[:start].to_time.to_i if date_range.has_key?(:start)
-      date_range[:end] = date_range[:end].to_time.to_i if date_range.has_key?(:end)
+      date_range[:start] = date_range[:start].to_time.to_i if date_range.key?(:start)
+      date_range[:end] = date_range[:end].to_time.to_i if date_range.key?(:end)
     end
     FilterRule.create_for(content_type, :filter => @filter, :inclusion => inclusion, :parameters => rule)
   end

@@ -12,29 +12,37 @@
 
 //= require "jquery-1.7.2"
 //= require "alchemy/jquery/plugins/jquery.periodicalupdater"
-//
+
+//= require "alchemy/underscore"
+
 //= require "ui_alchemy/angular/angular"
 //= require "ui_alchemy/angular-resource/angular-resource"
 //= require "ui_alchemy/angular-sanitize/angular-sanitize"
 //= require "angular-ui-states"
+//= require "ng-upload"
 
 //= require "ui_alchemy/alchemy/alchemy"
 //= require "ui_alchemy/alchemy-header/alchemy-header"
 
 //= require "common/katello.global"
 
-//= require "bastion/bastion.module"
-
 //= require "common/notices"
 //= require "common/bastion-routes"
 //= require "common/routes"
+//= require "common/katello.common"
+//= require "common/env_select_scroll"
+//= require "widgets/path_selector"
 
 //= require "common/experimental/katello-globals.module"
 
-//= require "bastion/incubator/alch-table.directive"
-//= require "bastion/incubator/alch-container-scroll.directive"
-//= require "bastion/incubator/alch-infinite-scroll.directive"
-//= require "bastion/incubator/inline-edit.directive"
+
+//= require "bastion/bastion.module"
+
+//= require_tree "./incubator"
+
+//= require "bastion/incubator/format/alch-format.module.js"
+//= require "bastion/incubator/format/array-to-string.filter.js"
+//= require "bastion/incubator/format/key-value-to-string.filter.js"
 
 //= require "bastion/i18n/i18n.module"
 //= require "bastion/i18n/i18n-dictionary.factory"
@@ -45,19 +53,48 @@
 
 //= require "bastion/widgets/widgets.module"
 //= require "bastion/widgets/org-switcher.widget"
+//= require "bastion/widgets/path-selector.directive"
 //= require "bastion/widgets/nutupane-table.directive"
 //= require "bastion/widgets/nutupane.factory"
 
 //= require "bastion/utils/utils.module"
 //= require "bastion/utils/routes.factory"
 
+//= require "bastion/system-groups/system-groups.module.js"
+//= require "bastion/system-groups/system-group.factory.js"
+
 //= require "bastion/systems/systems.module"
-//= require "bastion/systems/system-url-router.config.temporary"
-//= require "bastion/systems/system.factory"
-//= require "bastion/systems/systems.controller"
-//= require "bastion/systems/details/system-details.controller"
-//= require "bastion/systems/details/system-details-info.controller"
-//= require "bastion/systems/details/system-subscriptions.controller"
+//= require_tree "./systems"
 
 //= require "bastion/subscriptions/subscriptions.module.js"
 //= require "bastion/subscriptions/subscriptions.factory.js"
+//
+//= require "bastion/content-views/content-views.module"
+//= require "bastion/content-views/content-view.factory"
+
+//= require "bastion/environments/environments.module"
+//= require "bastion/environments/environment.factory"
+
+//= require "bastion/nodes/nodes.module.js"
+//= require_tree "./nodes"
+
+//= require "bastion/organizations/organizations.module.js"
+//= require_tree "./organizations"
+
+//= require "bastion/products/products.module.js"
+//= require_tree "./products"
+
+//= require "bastion/providers/providers.module.js"
+//= require_tree "./providers"
+
+//= require "bastion/repositories/repositories.module.js"
+//= require_tree "./repositories"
+
+//= require "bastion/tasks/tasks.module.js"
+//= require_tree "./tasks"
+//
+//= require "bastion/gpg-keys/gpg-keys.module.js"
+//= require_tree "./gpg-keys"
+
+//= require "bastion/tasks/tasks.module.js"
+//= require_tree "./tasks"

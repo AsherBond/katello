@@ -13,7 +13,6 @@
 
 require './test/models/user_base'
 
-
 class UserClassTest < UserTestBase
 
   def test_authenticate
@@ -51,7 +50,6 @@ class UserClassTest < UserTestBase
   end
 
 end
-
 
 class UserCreateTest < UserTestBase
 
@@ -118,7 +116,6 @@ class UserCreateTest < UserTestBase
 
 end
 
-
 class UserTest < UserTestBase
 
   def setup
@@ -132,6 +129,8 @@ class UserTest < UserTestBase
   end
 
   def test_destroy
+    # Add helptip which could prevent destruction
+    assert @no_perms_user.disable_helptip('repositories-index')
     @no_perms_user.destroy
 
     assert @no_perms_user.destroyed?
@@ -269,7 +268,6 @@ class UserTest < UserTestBase
 
 end
 
-
 class UserProtectedMethodTest < UserTestBase
 
   def setup
@@ -287,7 +285,6 @@ class UserProtectedMethodTest < UserTestBase
     refute @admin.valid?
   end
 end
-
 
 class UserInstancePrivateMethodTest < UserTestBase
 
@@ -320,7 +317,6 @@ class UserInstancePrivateMethodTest < UserTestBase
   end
 
 end
-
 
 class UserLdapTest < UserTestBase
 
@@ -361,16 +357,22 @@ class UserLdapTest < UserTestBase
   end
 
   def test_clear_existing_ldap_roles
+    options = { :warden => "ldap" }
+    override_config(options)
+
     LdapFluff.stub(:new, @ldap) do
       @@user.set_ldap_roles
       refute_empty @@user.roles
 
-      @@user.clear_existing_ldap_roles
+      @@user.clear_existing_ldap_roles!
       assert_empty @@user.ldap_roles
     end
   end
 
   def test_set_ldap_roles
+    options = { :warden => "ldap" }
+    override_config(options)
+    
     LdapFluff.stub(:new, @ldap) do
       @@user.set_ldap_roles
 
@@ -379,6 +381,9 @@ class UserLdapTest < UserTestBase
   end
 
   def test_verify_ldap_roles
+    options = { :warden => "ldap" }
+    override_config(options)
+
     LdapFluff.stub(:new, @ldap) do
       @@user.set_ldap_roles
 
@@ -391,7 +396,6 @@ class UserLdapTest < UserTestBase
   end
 
 end
-
 
 class UserDefaultEnvTest < UserTestBase
 

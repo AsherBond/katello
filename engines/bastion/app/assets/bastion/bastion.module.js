@@ -13,44 +13,71 @@
 
 /**
  * @ngdoc module
- * @name  Katello
+ * @name  Bastion
  *
  * @description
  *   Base module that defines the Katello module namespace and includes any thirdparty
  *   modules used by the application.
  */
-var Katello = angular.module('Katello', [
+angular.module('Bastion', [
     'alchemy',
+    'alchemy.format',
     'alch-templates',
     'ngSanitize',
     'Katello.globals',
     'Bastion.i18n',
     'Bastion.menu',
-    'Bastion.systems'
+    'Bastion.systems',
+    'Bastion.environments',
+    'Bastion.content-views',
+    'Bastion.nodes',
+    'Bastion.organizations',
+    'Bastion.products',
+    'Bastion.providers',
+    'Bastion.repositories',
+    'Bastion.gpg-keys',
+    'Bastion.tasks'
 ]);
 
 /**
  * @ngdoc config
- * @name  Katello.config
+ * @name  Bastion.config
  *
  * @requires $httpProvider
+ * @requires $urlRouterProvider
  *
  * @description
  *   Used for establishing application wide configuration such as adding the Rails CSRF token
  *   to every request.
  */
-Katello.config(['$httpProvider', function($httpProvider) {
+angular.module('Bastion').config(['$httpProvider', '$urlRouterProvider', function($httpProvider, $urlRouterProvider) {
     $httpProvider.defaults.headers.common['X-CSRF-TOKEN'] = $('meta[name=csrf-token]').attr('content');
+    $httpProvider.defaults.headers.common['ACCEPT'] = 'application/json, text/plain, */*, version=2';
+    $urlRouterProvider.otherwise("/");
 }]);
 
 
 /**
  * @ngdoc run
- * @name Bastion.i18n.dictionary.run
+ * @name Bastion.run
  *
  * @description
  *   Prime the i18n dictionary to avoid delay in translation replacement.
  */
-angular.module('Katello').run(['i18nDictionary', function(i18nDictionary) {
-    i18nDictionary.get();
-}]);
+angular.module('Bastion').run(['i18nDictionary', '$rootScope', '$state', '$stateParams',
+    function(i18nDictionary, $rootScope, $state, $stateParams) {
+
+        i18nDictionary.get();
+
+        $rootScope.$state = $state;
+        $rootScope.$stateParams = $stateParams;
+        $rootScope.transitionTo = $state.transitionTo;
+
+        $rootScope.isState = function (stateName) {
+            return $state.is(stateName);
+        };
+
+        $rootScope.stateIncludes = $state.includes;
+    }
+]);
+
