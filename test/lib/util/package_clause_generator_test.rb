@@ -1,5 +1,5 @@
 #
-# Copyright 2013 Red Hat, Inc.
+# Copyright 2014 Red Hat, Inc.
 #
 # This software is licensed to you under the GNU General Public
 # License as published by the Free Software Foundation; either version
@@ -18,9 +18,9 @@ class Util::PackageClauseGeneratorTest < MiniTest::Rails::ActiveSupport::TestCas
   INCLUDE_ALL_PACKAGES = {"filename" => {"$exists" => true}}
 
   def self.before_suite
-    models = ["Organization", "KTEnvironment", "User","ContentViewEnvironment", "ContentViewDefinitionBase",
-              "ContentViewDefinition", "Filter", "FilterRule", "ContentView",
-              "PackageRule", "PackageGroupRule", "ErratumRule"]
+    models = ["Organization", "KTEnvironment", "User","ContentViewEnvironment",
+              "ContentViewFilter", "ContentView", "ContentViewPackageFilterRule",
+              "ContentViewPackageGroupFilterRule", "ContentViewErratumFilterRule"]
     disable_glue_layers(["Candlepin", "Pulp", "ElasticSearch"], models, true)
   end
 
@@ -181,12 +181,12 @@ class Util::PackageClauseGeneratorTest < MiniTest::Rails::ActiveSupport::TestCas
 
   def setup_filter_clause(inclusion, content_type, parameter)
     repo = Repository.find(repositories(:fedora_17_x86_64).id)
-    content_rule_hash = { FilterRule::PACKAGE => :package_filter_rule,
-                          FilterRule::PACKAGE_GROUP => :package_group_filter_rule,
-                          FilterRule::ERRATA => :erratum_filter_rule,
+    content_rule_hash = { ContentViewPackageFilter::CONTENT_TYPE => :katello_package_filter_rule,
+                          ContentViewPackageGroupFilter::CONTENT_TYPE => :katello_package_group_filter_rule,
+                          ContentViewErratumFilter::CONTENT_TYPE => :katello_erratum_filter_rule,
                         }
 
-    fr_build = content_rule_hash[content_type] || :filter_rule
+    fr_build = content_rule_hash[content_type] || :katello_filter_rule
     filter_rule = FactoryGirl.build(fr_build)
     filter = filter_rule.filter
     filter_rule.inclusion = inclusion

@@ -1,7 +1,11 @@
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 Katello [![Build Status](https://travis-ci.org/Katello/katello.png?branch=master)](https://travis-ci.org/Katello/katello)
 =======
+=======
+# Katello [![Dependency Status](https://gemnasium.com/Katello/katello.svg)](https://gemnasium.com/Katello/katello)
+>>>>>>> 0f7bb1d6f4bbffa6f2ace508eb758df206e34ea8
 
 About
 -----
@@ -68,59 +72,66 @@ Katello [![Build Status](https://travis-ci.org/Katello/katello.png?branch=master
 
 Full documentation is at http://katello.github.io/katello
 
-About
------
+## About
 
 [Katello](http://www.katello.org) is a systems life cycle management
-tool. It allows you to manage hundreds and thousands machines with one
-click. Katello can pull content from remote repositories into isolated
-environments, make subscriptions management easier and provide
-provisioning at scale.
+plugin to [Foreman](http://www.theforeman.org). Katello allows you to manage
+thousands of machines with one click. Katello can pull content
+from remote repositories into isolated environments, and make subscriptions
+management a breeze.
 
 Currently, it is able to handle Fedora and Red Hat Enterprise
 Linux based systems.
 
-Getting Started
----------------
+## Development
 
-The easiest way to get stable version of Katello up and running is following
-[Katello Wiki Installation Instructions](https://fedorahosted.org/katello/wiki/Install).
+The recommended way to set up Katello for development to use the [katello-devel-installer](https://github.com/Katello/katello-installer#development-usage) directly or via [katello-deploy](https://github.com/Katello/katello-deploy#development-deployment).
 
-If you like living on the edge, go for
-[nightly builds](https://fedorahosted.org/katello/wiki/InstallTesting)
-instead.
+### Test Run
 
-Found a bug?
-------------
+At this point, the development environment should be completely setup and the Katello engine functionality available. To verify this, go to your Foreman checkout:
+
+1. Start the development server
+
+    ```bash
+    cd $GITDIR/foreman
+
+    rails s
+    ```
+
+2. Access Foreman in your browser (e.g. `http://<hostname>:3000/`)
+3. Login to Foreman (default: `admin` and `changeme`)
+4. Create an initial Foreman organization
+5. Navigate to the Katello engine (e.g. `http://<hostname>:3000/katello`)
+
+### Reset Development Environment
+
+In order to reset the development environment, all backend data and the database needs to be reset. To reiterate, the following will destroy all data in Pulp, Candlepin and your Foreman/Katello database. From the Foreman checkout run:
+
+```bash
+rake katello:reset
+```
+
+## Found a bug?
 
 That's rather unfortunate. But don't worry! We can help. Just file a bug
-[on our Bugzilla](https://bugzilla.redhat.com/enter_bug.cgi?product=Katello) or
-[in Github](https://github.com/Katello/katello/issues).
+[in our project tracker](http://projects.theforeman.org/projects/katello).
 
 
-Contributing
-------------
+## Contributing
 
-See
-[development instructions](https://fedorahosted.org/katello/wiki/AdvancedInstallation#GettingupandRunningGIT).
+See [getting involved](http://www.katello.org/get-involved/).
 
-What's included in this repository:
-
- * script - various development scripts
- * actual Rails app of Katello
-
-Contact & Resources
--------------------
+## Contact & Resources
 
  * [Katello.org](http://katello.org)
  * [Wiki](https://fedorahosted.org/katello/wiki)
- * [User mailing list](https://fedorahosted.org/mailman/listinfo/katello)
- * [Developer mailing list](https://www.redhat.com/mailman/listinfo/katello-devel)
- * [IRC Freenode](http://freenode.net/using_the_network.shtml): #katello
+ * [Foreman User Mailing List](https://groups.google.com/forum/?fromgroups#!forum/foreman-users)
+ * [Foreman Developer mailing list](https://groups.google.com/forum/?fromgroups#!forum/foreman-dev)
+ * [IRC Freenode](http://freenode.net/using_the_network.shtml): #theforeman-dev
  * [Twitter](https://twitter.com/Katello_Project)
 
-Documentation
--------------
+## Documentation
 
 Documentation is generated with [YARD](http://yardoc.org/) and hosted at <http://katello.github.io/katello/>.
 This documentation is intended for developers, user documentation can be found on
@@ -141,8 +152,7 @@ This documentation is intended for developers, user documentation can be found o
 
 -   see {file:doc/YARDDocumentation.md}
 
-Current documentation
----------------------
+## Current documentation
 
 -   {file:doc/YARDDocumentation.md}
 -   {file:doc/Graphs.md}

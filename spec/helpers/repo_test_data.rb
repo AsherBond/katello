@@ -1,5 +1,5 @@
 #
-# Copyright 2013 Red Hat, Inc.
+# Copyright 2014 Red Hat, Inc.
 #
 # This software is licensed to you under the GNU General Public
 # License as published by the Free Software Foundation; either version
@@ -9,6 +9,8 @@
 # NON-INFRINGEMENT, or FITNESS FOR A PARTICULAR PURPOSE. You should
 # have received a copy of GPLv2 along with this software; if not, see
 # http =>//www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
+
+require 'active_support/core_ext/hash/indifferent_access'
 
 module RepoTestData
   REPO_NAME = 'repo'
@@ -31,7 +33,7 @@ module RepoTestData
     :arch => 'architecture',
     :relative_path => "ACME_Corporation/Library/zoo/base",
     :content_id=>'123234',
-    :feed => 'https://localhost',
+    :url => 'https://localhost',
     "distributors" => [
        {'config' => {'relative_url'=>"ACME_Corporation/Library/zoo/base"}}
     ],
@@ -45,7 +47,7 @@ module RepoTestData
     :label => REPO_LABEL,
     :arch => 'architecture',
     :relative_path => "ACME_Corporation/Dev/zoo/base",
-    :feed => 'https://localhost',
+    :url => 'https://localhost',
     "distributors" => [
        {'config' => {'relative_url'=>"ACME_Corporation/Library/zoo/base"}}
     ]

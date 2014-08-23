@@ -1,6 +1,6 @@
 
 #
-# Copyright 2013 Red Hat, Inc.
+# Copyright 2014 Red Hat, Inc.
 #
 # This software is licensed to you under the GNU General Public
 # License as published by the Free Software Foundation; either version
@@ -12,7 +12,7 @@
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
 FactoryGirl.define do
-  factory :gpg_key do
+  factory :katello_gpg_key, :class => Katello::GpgKey do
     sequence(:content) { |n| "abc123#{n}" }
   end
 end

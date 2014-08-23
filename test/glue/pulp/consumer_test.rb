@@ -1,5 +1,5 @@
 #
-# Copyright 2013 Red Hat, Inc.
+# Copyright 2014 Red Hat, Inc.
 #
 # This software is licensed to you under the GNU General Public
 # License as published by the Free Software Foundation; either version
@@ -10,35 +10,39 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-require 'minitest_helper'
-require './test/support/pulp/repository_support'
-require './test/support/pulp/user_support'
+require 'katello_test_helper'
+require 'support/pulp/repository_support'
 
-class GluePulpConsumerTestBase < MiniTest::Rails::ActiveSupport::TestCase
-  extend ActiveRecord::TestFixtures
+module Katello
+class GluePulpConsumerTestBase < ActiveSupport::TestCase
   include RepositorySupport
 
-  fixtures :all
-
   def self.before_suite
-    @loaded_fixtures = load_fixtures
-    configure_runcible
-
     services  = ['Candlepin', 'ElasticSearch', 'Foreman']
     models    = ['System', 'Repository', 'User']
     disable_glue_layers(services, models)
-
-    User.current = User.find(@loaded_fixtures['users']['admin']['id'])
+    configure_runcible
+    super
   end
 
+  def self.set_pulp_consumer(system)
+    # TODO: this tests should move to actions tests once we
+    # have more actions in Dynflow. For now just peform the
+    # things that system.set_pulp_consumer did before.
+    ForemanTasks.sync_task(::Actions::Pulp::Consumer::Create,
+                           uuid: system.uuid, name: system.name)
+  end
+
+  def set_pulp_consumer(system)
+    self.class.set_pulp_consumer(system)
+  end
 end
 
 
 class GluePulpConsumerTestCreateDestroy < GluePulpConsumerTestBase
-
   def setup
     VCR.insert_cassette('pulp/consumer/create')
-    @simple_server = System.find(systems(:simple_server).id)
+    @simple_server = System.find(katello_systems(:simple_server).id)
   end
 
   def teardown
@@ -46,7 +50,7 @@ class GluePulpConsumerTestCreateDestroy < GluePulpConsumerTestBase
   end
 
   def test_set_pulp_consumer
-    assert @simple_server.set_pulp_consumer
+    assert set_pulp_consumer(@simple_server)
     @simple_server.del_pulp_consumer
   end
 
@@ -57,8 +61,8 @@ class GluePulpConsumerDeleteTest < GluePulpConsumerTestBase
 
   def setup
     VCR.insert_cassette('pulp/consumer/delete')
-    @simple_server = System.find(systems(:simple_server).id)
-    @simple_server.set_pulp_consumer
+    @simple_server = System.find(katello_systems(:simple_server).id)
+    set_pulp_consumer(@simple_server)
   end
 
   def teardown
@@ -68,20 +72,14 @@ class GluePulpConsumerDeleteTest < GluePulpConsumerTestBase
   def test_del_pulp_consumer
     assert @simple_server.del_pulp_consumer
   end
-
-  def test_rollback_on_pulp_create
-    assert @simple_server.rollback_on_pulp_create
-  end
-
 end
 
 
 class GluePulpConsumerTest < GluePulpConsumerTestBase
-
   def setup
     VCR.insert_cassette('pulp/consumer/consumer')
-    @simple_server = System.find(systems(:simple_server).id)
-    @simple_server.set_pulp_consumer
+    @simple_server = System.find(katello_systems(:simple_server).id)
+    set_pulp_consumer(@simple_server)
   end
 
   def teardown
@@ -103,26 +101,32 @@ class GluePulpConsumerTest < GluePulpConsumerTestBase
     assert @simple_server.upload_package_profile(profile)
   end
 
+  def test_katello_agent_installed
+    package = Glue::Pulp::SimplePackage.new(:name => "katello-agent")
+    @simple_server.stubs(:simple_packages).returns([package])
+    assert @simple_server.katello_agent_installed?
+
+    package.name = "not-katello-agent"
+    @simple_server.stubs(:simple_packages).returns([package])
+    refute @simple_server.katello_agent_installed?
+  end
 end
 
 
 class GluePulpConsumerBindTest < GluePulpConsumerTestBase
-
   @@simple_server = nil
 
   def self.before_suite
     super
     VCR.insert_cassette('pulp/consumer/bind')
 
-    Pulp::UserSupport.setup_hidden_user
-    RepositorySupport.create_and_sync_repo(@loaded_fixtures['repositories']['fedora_17_x86_64']['id'])
+    RepositorySupport.create_and_sync_repo(@loaded_fixtures['katello_repositories']['fedora_17_x86_64']['id'])
 
-    @@simple_server = System.find(@loaded_fixtures['systems']['simple_server']['id'])
-    @@simple_server.set_pulp_consumer
+    @@simple_server = System.find(@loaded_fixtures['katello_systems']['simple_server']['id'])
+    set_pulp_consumer(@@simple_server)
   end
 
   def self.after_suite
-    Pulp::UserSupport.delete_hidden_user
     RepositorySupport.destroy_repo
     @@simple_server.del_pulp_consumer
     VCR.eject_cassette
@@ -134,92 +138,69 @@ class GluePulpConsumerBindTest < GluePulpConsumerTestBase
     assert_includes processed_ids, RepositorySupport.repo.pulp_id
     refute_includes error_ids, RepositorySupport.repo.pulp_id
   end
-
 end
 
 
 class GluePulpConsumerRequiresBoundRepoTest < GluePulpConsumerTestBase
-
   @@simple_server = nil
 
   def self.before_suite
     super
     VCR.insert_cassette('pulp/consumer/content')
 
-    Pulp::UserSupport.setup_hidden_user
-    RepositorySupport.create_and_sync_repo(@loaded_fixtures['repositories']['fedora_17_x86_64']['id'])
-    @@simple_server = System.find(@loaded_fixtures['systems']['simple_server']['id'])
-    @@simple_server.set_pulp_consumer
+    RepositorySupport.create_and_sync_repo(@loaded_fixtures['katello_repositories']['fedora_17_x86_64']['id'])
+    @@simple_server = System.find(@loaded_fixtures['katello_systems']['simple_server']['id'])
+    set_pulp_consumer(@@simple_server)
     @@simple_server.enable_yum_repos([RepositorySupport.repo.pulp_id])
   end
 
   def self.after_suite
-    Pulp::UserSupport.delete_hidden_user
     RepositorySupport.destroy_repo
     @@simple_server.del_pulp_consumer if defined? @@simple_server
     VCR.eject_cassette
   end
 
   def test_install_package
-    task = @@simple_server.install_package(['elephant'])
-    TaskSupport.wait_on_tasks(task, :ignore_exception => true)
+    tasks = @@simple_server.install_package(['elephant'])
 
-    assert_includes task['tags'], 'pulp:action:unit_install'
+    assert tasks[:spawned_tasks].first['task_id']
   end
 
   def test_uninstall_package
-    task = @@simple_server.install_package(['cheetah'])
-    TaskSupport.wait_on_tasks(task, :ignore_exception => true)
+    tasks = @@simple_server.uninstall_package(['cheetah'])
 
-    task = @@simple_server.uninstall_package(['cheetah'])
-    TaskSupport.wait_on_tasks(task, :ignore_exception => true)
-
-    assert_includes task['tags'], 'pulp:action:unit_uninstall'
+    assert tasks[:spawned_tasks].first['task_id']
   end
 
   def test_update_package
-    task = @@simple_server.install_package(['cheetah'])
-    TaskSupport.wait_on_tasks(task, :ignore_exception => true)
+    tasks = @@simple_server.update_package(['cheetah'])
 
-    task = @@simple_server.update_package(['cheetah'])
-    TaskSupport.wait_on_tasks(task, :ignore_exception => true)
-
-    assert_includes task['tags'], 'pulp:action:unit_update'
+    assert tasks[:spawned_tasks].first['task_id']
   end
 
   def test_update_all_packages
-    task = @@simple_server.install_package(['cheetah'])
-    TaskSupport.wait_on_tasks(task, :ignore_exception => true)
+    tasks = @@simple_server.update_package([])
 
-    task = @@simple_server.update_package([])
-    TaskSupport.wait_on_tasks(task, :ignore_exception => true)
-
-    assert_includes task['tags'], 'pulp:action:unit_update'
+    assert tasks[:spawned_tasks].first['task_id']
   end
 
   def test_install_package_group
-    task = @@simple_server.install_package_group(['mammls'])
-    TaskSupport.wait_on_tasks(task, :ignore_exception => true)
+    tasks = @@simple_server.install_package_group(['mammls'])
 
-    assert_includes task['tags'], 'pulp:action:unit_install'
+    assert tasks[:spawned_tasks].first['task_id']
   end
 
   def test_uninstall_package_group
-    task = @@simple_server.install_package_group(['mammals'])
-    TaskSupport.wait_on_tasks(task, :ignore_exception => true)
+    tasks = @@simple_server.uninstall_package_group(['mammals'])
 
-    task = @@simple_server.uninstall_package_group(['mammals'])
-    TaskSupport.wait_on_tasks(task, :ignore_exception => true)
-
-    assert_includes task['tags'], 'pulp:action:unit_uninstall'
+    assert tasks[:spawned_tasks].first['task_id']
   end
 
   def test_install_consumer_errata
-    erratum_id = RepositorySupport.repo.errata.select{ |errata| errata.errata_id == 'RHEA-2010:0002' }.first.id
-    task = @@simple_server.install_consumer_errata([erratum_id])
-    TaskSupport.wait_on_tasks(task, :ignore_exception => true)
+    erratum_id = RepositorySupport.repo.errata.select{ |errata| errata.errata_id == 'RHEA-2010:0002' }.first.errata_id
+    tasks = @@simple_server.install_consumer_errata([erratum_id])
 
-    assert_includes task['tags'], 'pulp:action:unit_install'
+    assert tasks[:spawned_tasks].first['task_id']
   end
-
+end
 end

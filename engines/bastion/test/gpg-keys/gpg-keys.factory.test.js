@@ -1,5 +1,5 @@
 /**
- * Copyright 2013 Red Hat, Inc.
+ * Copyright 2014 Red Hat, Inc.
  *
  * This software is licensed to you under the GNU General Public
  * License as published by the Free Software Foundation; either version
@@ -15,7 +15,7 @@ describe('Factory: GPGKey', function() {
     var $httpBackend,
         gpgKeys;
 
-    beforeEach(module('Bastion.gpg-keys'));
+    beforeEach(module('Bastion.gpg-keys', 'Bastion.test-mocks'));
 
     beforeEach(module(function($provide) {
         gpgKeys = {
@@ -41,9 +41,9 @@ describe('Factory: GPGKey', function() {
     });
 
     it('provides a way to get a list of repositorys', function() {
-        $httpBackend.expectGET('/katello/api/gpg_keys?organization_id=ACME').respond(gpgKeys);
+        $httpBackend.expectGET('/api/v2/gpg_keys?organization_id=ACME').respond(gpgKeys);
 
-        GPGKey.query(function(gpgKeys) {
+        GPGKey.queryPaged(function(gpgKeys) {
             expect(gpgKeys.records.length).toBe(1);
         });
     });

@@ -1,6 +1,6 @@
 # encoding: utf-8
 #
-# Copyright 2013 Red Hat, Inc.
+# Copyright 2014 Red Hat, Inc.
 #
 # This software is licensed to you under the GNU General Public
 # License as published by the Free Software Foundation; either version
@@ -11,30 +11,31 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-require 'minitest_helper'
+require 'katello_test_helper'
 
-class KTEnvironmentTestBase < MiniTest::Rails::ActiveSupport::TestCase
+module Katello
+class KTEnvironmentTestBase < ActiveSupport::TestCase
 
   extend ActiveRecord::TestFixtures
 
-  fixtures :all
-
   def self.before_suite
     services  = ['Candlepin', 'Pulp', 'ElasticSearch', 'Foreman']
-    models    = ['Repository', 'KTEnvironment', 'ContentView',
+    models    = ['Repository', 'KTEnvironment', 'ContentView', 'ContentViewVersion',
                  'ContentViewEnvironment', 'Organization', 'Product',
                  'Provider']
     disable_glue_layers(services, models, true)
   end
 
   def setup
-    @library              = KTEnvironment.find(environments(:library).id)
-    @dev                  = KTEnvironment.find(environments(:dev).id)
-    @staging              = KTEnvironment.find(environments(:staging).id)
-    @acme_corporation     = Organization.find(organizations(:acme_corporation).id)
+    @acme_corporation     = get_organization
+
+    @library              = KTEnvironment.find(katello_environments(:library).id)
+    @dev                  = KTEnvironment.find(katello_environments(:dev).id)
+    @staging              = KTEnvironment.find(katello_environments(:staging).id)
   end
 
 end
+
 
 class KTEnvironmentTest < KTEnvironmentTestBase
 
@@ -44,26 +45,35 @@ class KTEnvironmentTest < KTEnvironmentTestBase
     assert_nil env.default_content_view_version
   end
 
-  def test_destroy_content_view_environment
-    env = @staging
-    cve = env.content_views.first.content_view_environments.where(:environment_id=>env.id).first
-    cve_cp_id = cve.cp_id
-    env.destroy
-    assert_empty ContentViewEnvironment.where(:cp_id=>cve_cp_id)
+  def test_destroy_env_with_systems_should_fail
+    env = KTEnvironment.create!(:name => "batman", :organization => @acme_corporation, :prior => @library)
+    env.expects(:systems).returns([stub])
+    assert_raises(RuntimeError) do
+      env.destroy!
+    end
+  end
+
+  def test_destroy_env_with_activation_keys_should_fail
+    env = KTEnvironment.create!(:name => "batman", :organization => @acme_corporation, :prior => @library)
+    env.stubs(:activation_keys).returns([stub])
+    assert_raises(RuntimeError) do
+      env.destroy!
+    end
   end
 
   def test_destroy_library
-    org = FactoryGirl.create(:organization)
+    User.current = User.find(users(:admin))
+    org = FactoryGirl.create(:katello_organization)
     env = org.library
     env.destroy
     refute env.destroyed?
   end
 
   def test_products_are_unique
-    provider = create(:provider, organization: @acme_corporation)
-    product = create(:product, provider: provider)
+    provider = create(:katello_provider, organization: @acme_corporation)
+    product = create(:katello_product, provider: provider, organization: @acme_corporation)
     2.times do
-      create(:repository, product: product, environment: @library,
+      create(:katello_repository, product: product, environment: @library,
              content_view_version: @library.default_content_view_version)
     end
 
@@ -71,4 +81,13 @@ class KTEnvironmentTest < KTEnvironmentTestBase
     assert_equal @library.products.uniq.sort, @library.products.sort
     assert_operator @library.repositories.map(&:product).length, :>, @library.products.length
   end
+
+  def test_content_view_label
+    env = @acme_corporation.kt_environments.build(:name => "Test", :label => ContentView::CONTENT_DIR,
+                                                  :prior => @library)
+    refute env.save
+    assert_equal 1, env.errors.size
+    assert env.errors.has_key?(:label)
+  end
+end
 end

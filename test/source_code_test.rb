@@ -1,5 +1,5 @@
 #
-# Copyright 2013 Red Hat, Inc.
+# Copyright 2014 Red Hat, Inc.
 #
 # This software is licensed to you under the GNU General Public
 # License as published by the Free Software Foundation; either version
@@ -113,7 +113,6 @@ for more info.
               %r'config/(application|boot)\.rb',
               %r'engines/bastion/test/test_helper\.rb',
               %r'test/base_test_helper\.rb', # TODO clean up minitest_helper
-              %r'engines/fort/test/test_helper.rb',
               %r'lib/util/puppet\.rb').
           check_lines(<<-DOC) { |line| (line !~ /ENV\[[^\]]+\]/) ? true : line =~ /#\s?ok/ }
 Katello.config or Katello.early_config should be always used instead of ENV variables, Katello.config is

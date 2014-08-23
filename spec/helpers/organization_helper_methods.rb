@@ -1,5 +1,5 @@
 #
-# Copyright 2013 Red Hat, Inc.
+# Copyright 2014 Red Hat, Inc.
 #
 # This software is licensed to you under the GNU General Public
 # License as published by the Free Software Foundation; either version
@@ -10,10 +10,11 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-require 'models/model_spec_helper'
+require File.expand_path("../models/model_spec_helper", File.dirname(__FILE__))
+
+module Katello
 module OrganizationHelperMethods
   include OrchestrationHelper
-
   def new_test_org user=nil
     disable_org_orchestration
     suffix = Organization.count + 1
@@ -30,10 +31,11 @@ module OrganizationHelperMethods
   end
 
   def current_organization=(org)
-    controller.stub!(:current_organization).and_return(org)
+    controller.stubs(:current_organization).returns(org)
   end
 
   def create_environment(attrs)
+    User.current.remote_id =  User.current.login
     env = KTEnvironment.create!(attrs)
     if block_given?
       yield env
@@ -50,31 +52,31 @@ module OrganizationHelperMethods
     if !env.library? && !env.default_content_view
       return env.content_views.first unless env.content_views.empty?
 
-      count = ContentViewDefinition.count + 1
-      definition = ContentViewDefinition.create!(:name => "test def #{count}", :label => "test_def_#{count}",
-                                              :description => 'test description',
-                                              :organization => env.organization)
       count = ContentView.count + 1
       view = ContentView.create!(:name => "test view #{count}", :label => "test_view_#{count}",
-                              :organization => env.organization,
-                              :content_view_definition => definition)
+                              :organization => env.organization)
 
       version = ContentViewVersion.new(:content_view => view,
                                        :version => 1)
-      version.environments << env
+      view.add_environment(env, version)
       version.save!
       view.save!
     end
     view
   end
 
-  def promote_content_view(cv, from_env, to_env)
-    Katello.pulp_server.extensions.repository.stub(:create).and_return({})
-    Repository.any_instance.stub(:clone_contents).and_return([])
-    Repository.any_instance.stub(:sync).and_return([])
-    Repository.any_instance.stub(:pulp_repo_facts).and_return({:clone_ids => []})
-    Glue::Event.stub(:trigger).and_return({})
-    cv.promote(from_env, to_env)
+  def publish_content_view(name, org, repos)
+    Katello.pulp_server.extensions.repository.stubs(:create).returns({})
+    Repository.any_instance.stubs(:clone_contents).returns([])
+    ContentView.any_instance.stubs(:associate_yum_content).returns([])
+    Repository.stubs(:trigger_contents_changed).returns([])
+    cv = ContentView.create!(:organization => org, :name => name)
+    cv.stubs(:repositories_to_publish).returns(repos)
+    cv.stubs(:check_ready_to_publish!)
+    cv.save!
+    plan = ForemanTasks.dynflow.world.plan(::Actions::Katello::ContentView::Publish, cv)
+    plan.failed_steps.each { |step| raise step.error if step.error }
+    cv
   end
 
   def create_activation_key(attrs)
@@ -91,4 +93,5 @@ module OrganizationHelperMethods
     end
     ak
   end
+end
 end

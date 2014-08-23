@@ -1,0 +1,65 @@
+#
+# Copyright 2014 Red Hat, Inc.
+#
+# This software is licensed to you under the GNU General Public
+# License as published by the Free Software Foundation; either version
+# 2 of the License (GPLv2) or (at your option) any later version.
+# There is NO WARRANTY for this software, express or implied,
+# including the implied warranties of MERCHANTABILITY,
+# NON-INFRINGEMENT, or FITNESS FOR A PARTICULAR PURPOSE. You should
+# have received a copy of GPLv2 along with this software; if not, see
+# http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
+
+module Katello
+module Glue::ElasticSearch::ContentView
+  extend ActiveSupport::Concern
+
+  included do
+    include Ext::IndexedModel
+
+    update_related_indexes :repositories, :name
+
+    index_options :extended_json => :extended_index_attrs,
+                  :json => {:only => [:id, :name, :label, :description, :default, :composite]},
+                  :display_attrs => [:name, :description]
+
+    mapping do
+      indexes :name, :type => 'string', :analyzer => :kt_name_analyzer
+      indexes :name_sort, :type => 'string', :index => :not_analyzed
+      indexes :label, :type => 'string', :index => :not_analyzed
+      indexes :description, :type => 'string', :analyzer => :kt_name_analyzer
+      indexes :name_autocomplete, :type => 'string', :analyzer => 'autcomplete_name_analyzer'
+      indexes :default, :type => 'boolean'
+      indexes :composite, :type => 'boolean'
+    end
+  end
+
+  def extended_index_attrs
+    {
+      :name_sort => name.downcase,
+      :name_autocomplete => self.name,
+      :organization_id => organization.id,
+      :composite => !!composite
+    }
+  end
+
+  def total_package_count(env)
+    repoids = self.repos(env).collect{|r| r.pulp_id}
+    result = Katello::Package.legacy_search('*', 0, 1, repoids)
+    result.length > 0 ? result.total : 0
+  end
+
+  def total_errata_count(env)
+    repo_ids = self.repos(env).collect{|r| r.pulp_id}
+    results = Katello::Errata.legacy_search('', :page_size => 1, :filters => {:repoids => repo_ids})
+    results.empty? ? 0 : results.total
+  end
+
+  def total_puppet_module_count(env)
+    repoids = self.repos(env).collect{|r| r.pulp_id}
+    result = Katello::PuppetModule.legacy_search('*', :page_size => 1, :repoids => repoids)
+    result.length > 0 ? result.total : 0
+  end
+
+end
+end

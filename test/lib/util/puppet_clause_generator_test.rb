@@ -1,5 +1,5 @@
 #
-# Copyright 2013 Red Hat, Inc.
+# Copyright 2014 Red Hat, Inc.
 #
 # This software is licensed to you under the GNU General Public
 # License as published by the Free Software Foundation; either version
@@ -18,9 +18,9 @@ class Util::PuppetClauseGeneratorTest < MiniTest::Rails::ActiveSupport::TestCase
   INCLUDE_ALL_MODULES = {"unit_id" => {"$exists" => true}}
 
   def self.before_suite
-    models = ["Organization", "KTEnvironment", "User","ContentViewEnvironment", "ContentViewDefinitionBase",
-              "ContentViewDefinition", "Filter", "FilterRule", "ContentView",
-              "PackageRule", "PackageGroupRule", "ErratumRule"]
+    models = ["Organization", "KTEnvironment", "User","ContentViewEnvironment",
+              "ContentViewFilter", "ContentView", "ContentViewPackageFilterRule",
+              "ContentViewPackageGroupFilterRule", "ContentViewErratumFilterRule"]
     disable_glue_layers(["Candlepin", "Pulp", "ElasticSearch"], models, true)
   end
 
@@ -88,7 +88,7 @@ class Util::PuppetClauseGeneratorTest < MiniTest::Rails::ActiveSupport::TestCase
 
   def setup_filter_clause(inclusion, parameter)
     repo = Repository.find(repositories(:fedora_17_x86_64).id)
-    filter_rule = FactoryGirl.build(:puppet_module_filter_rule)
+    filter_rule = FactoryGirl.build(:katello_puppet_module_filter_rule)
     filter = filter_rule.filter
     filter_rule.inclusion = inclusion
     filter_rule.parameters = HashWithIndifferentAccess.new(parameter)

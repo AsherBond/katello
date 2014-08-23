@@ -1,6 +1,6 @@
 # encoding: utf-8
 #
-# Copyright 2013 Red Hat, Inc.
+# Copyright 2014 Red Hat, Inc.
 #
 # This software is licensed to you under the GNU General Public
 # License as published by the Free Software Foundation; either version
@@ -21,6 +21,10 @@ module Support
 
       def retrieve(*args)
         return [], 0
+      end
+
+      def facets
+        {}
       end
 
       def total_items

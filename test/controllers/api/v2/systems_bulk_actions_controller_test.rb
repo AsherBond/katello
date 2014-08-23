@@ -1,6 +1,6 @@
 # encoding: utf-8
 #
-# Copyright 2013 Red Hat, Inc.
+# Copyright 2014 Red Hat, Inc.
 #
 # This software is licensed to you under the GNU General Public
 # License as published by the Free Software Foundation; either version
@@ -11,159 +11,196 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-require "minitest_helper"
+require "katello_test_helper"
 
-class Api::V2::SystemsBulkActionsControllerTest < Minitest::Rails::ActionController::TestCase
-
-  fixtures :all
+module Katello
+class Api::V2::SystemsBulkActionsControllerTest < ActionController::TestCase
+  include Support::ForemanTasks::Task
 
   def self.before_suite
-    models = ["System"]
-    disable_glue_layers(["Candlepin", "Pulp", "ElasticSearch"], models)
+    models = ["System", "KTEnvironment",  "ContentViewEnvironment", "ContentView"]
+    disable_glue_layers(["Candlepin", "Pulp", "ElasticSearch"], models, true)
   end
 
   def permissions
-    @read_permission = UserPermission.new(:read_systems, :organizations, nil, @system1.organization)
-    @update_permission = UserPermission.new(:update_systems, :organizations, nil, @system1.organization)
-    @delete_permission = UserPermission.new(:delete_systems, :organizations, nil, @system1.organization)
-    @no_permission = NO_PERMISSION
+    @view_permission = :view_content_hosts
+    @create_permission = :create_content_hosts
+    @update_permission = :edit_content_hosts
+    @destroy_permission = :destroy_content_hosts
   end
 
   def setup
+    setup_controller_defaults_api
     login_user(User.find(users(:admin)))
     @request.env['HTTP_ACCEPT'] = 'application/json'
 
-    @system1 = systems(:simple_server)
-    @system2 = systems(:simple_server2)
-    @system_ids = [@system1.id, @system2.id]
+    @system1 = System.find(katello_systems(:simple_server))
+    @system2 = System.find(katello_systems(:simple_server2))
     @systems = [@system1, @system2]
-    @system_ids = @systems.map(&:id)
+    @system_ids = @systems.map(&:uuid)
 
-    @system_group1 = system_groups(:simple_group)
-    @system_group2 = system_groups(:another_simple_group)
+    @org = get_organization
+    @view = katello_content_views(:library_view)
+    @library = @org.library
+    @host_collection1 = katello_host_collections(:simple_host_collection)
+    @host_collection2 = katello_host_collections(:another_simple_host_collection)
 
     permissions
 
+    System.any_instance.stubs(:update_host_collections)
     System.stubs(:find).returns(@systems)
   end
 
-  def test_add_system_group
-    assert_equal 1, @system1.system_groups.length # system initially has simple_group
-    put :bulk_add_system_groups, :ids => @system_ids, :system_group_ids => [@system_group1.id, @system_group2.id]
+  def test_add_host_collection
+    assert_equal 1, @system1.host_collections.count # system initially has simple_host_collection
+    put :bulk_add_host_collections, {:included => {:ids => @system_ids},
+                                     :organization_id => @org.id,
+                                     :host_collection_ids => [@host_collection1.id, @host_collection2.id]}
 
     assert_response :success
-    assert_equal 2, @system1.system_groups.length
+    assert_equal 2, @system1.host_collections.count
   end
 
-  def test_remove_system_group
-    assert_equal 1, @system1.system_groups.length # system initially has simple_group
-    put :bulk_remove_system_groups, :ids => @system_ids, :system_group_ids => [@system_group1.id, @system_group2.id]
+  def test_remove_host_collection
+    assert_equal 1, @system1.host_collections.count # system initially has simple_host_collection
+    put :bulk_remove_host_collections, {:included => {:ids => @system_ids},
+                                        :organization_id => @org.id,
+                                        :host_collection_ids => [@host_collection1.id, @host_collection2.id]}
 
     assert_response :success
-    assert_equal 0, @system1.system_groups.length
+    assert_equal 0, @system1.host_collections.count
   end
 
   def test_install_package
-    @system1.expects(:install_packages).with(["foo"]).returns(TaskStatus.new)
-    @system2.expects(:install_packages).with(["foo"]).returns(TaskStatus.new)
+    BulkActions.any_instance.expects(:install_packages).once.returns(Job.new)
 
-    put :install_content, :ids => @system_ids, :content_type => 'package', :content => ['foo']
+    put :install_content,  :included => {:ids => @system_ids}, :organization_id => @org.id,
+        :content_type => 'package', :content => ['foo']
 
     assert_response :success
   end
 
   def test_update_package
-    @system1.expects(:update_packages).with(["foo"]).returns(TaskStatus.new)
-    @system2.expects(:update_packages).with(["foo"]).returns(TaskStatus.new)
+    BulkActions.any_instance.expects(:update_packages).once.returns(Job.new)
 
-    put :update_content, :ids => @system_ids, :content_type => 'package', :content => ['foo']
+    put :update_content, :included => {:ids => @system_ids}, :organization_id => @org.id,
+        :content_type => 'package', :content => ['foo']
 
     assert_response :success
   end
 
   def test_remove_package
-    @system1.expects(:uninstall_packages).with(["foo"]).returns(TaskStatus.new)
-    @system2.expects(:uninstall_packages).with(["foo"]).returns(TaskStatus.new)
+    BulkActions.any_instance.expects(:uninstall_packages).once.returns(Job.new)
 
-    put :remove_content, :ids => @system_ids, :content_type => 'package', :content => ['foo']
+    put :remove_content, :included => {:ids => @system_ids}, :organization_id => @org.id,
+        :content_type => 'package', :content => ['foo']
 
     assert_response :success
   end
 
   def test_install_package_group
-    @system1.expects(:install_package_groups).with(["foo group"]).returns(TaskStatus.new)
-    @system2.expects(:install_package_groups).with(["foo group"]).returns(TaskStatus.new)
+    BulkActions.any_instance.expects(:install_package_groups).once.returns(Job.new)
 
-    put :install_content, :ids => @system_ids, :content_type => 'package_group', :content => ['foo group']
+    put :install_content, :included => {:ids => @system_ids}, :organization_id => @org.id,
+        :content_type => 'package_group', :content => ['foo group']
 
     assert_response :success
   end
 
   def test_update_package_group
-    @system1.expects(:install_package_groups).with(["foo group"]).returns(TaskStatus.new)
-    @system2.expects(:install_package_groups).with(["foo group"]).returns(TaskStatus.new)
+    BulkActions.any_instance.expects(:update_package_groups).once.returns(Job.new)
 
-    put :update_content, :ids => @system_ids, :content_type => 'package_group', :content => ['foo group']
+    put :update_content, :included => {:ids => @system_ids}, :organization_id => @org.id,
+        :content_type => 'package_group', :content => ['foo group']
 
     assert_response :success
   end
 
   def test_remove_package_group
-    @system1.expects(:uninstall_package_groups).with(["foo group"]).returns(TaskStatus.new)
-    @system2.expects(:uninstall_package_groups).with(["foo group"]).returns(TaskStatus.new)
+    BulkActions.any_instance.expects(:uninstall_package_groups).once.returns(Job.new)
 
-    put :remove_content, :ids => @system_ids, :content_type => 'package_group', :content => ['foo group']
+    put :remove_content, :included => {:ids => @system_ids}, :organization_id => @org.id,
+        :content_type => 'package_group', :content => ['foo group']
 
     assert_response :success
   end
 
   def test_install_errata
-    @system1.expects(:install_errata).with(["RHSA-2013:0123"]).returns(TaskStatus.new)
-    @system2.expects(:install_errata).with(["RHSA-2013:0123"]).returns(TaskStatus.new)
+    BulkActions.any_instance.expects(:install_errata).once.returns(Job.new)
 
-    put :install_content, :ids => @system_ids, :content_type => 'errata', :content => ['RHSA-2013:0123']
+    put :install_content, :included => {:ids => @system_ids}, :organization_id => @org.id,
+        :content_type => 'errata', :content => ['RHSA-2013:0123']
 
     assert_response :success
   end
 
   def test_destroy_systems
-    put :destroy_systems, :ids => @system_ids
+    System.stubs(:where).returns([@system1, @system2])
+    assert_sync_task(::Actions::Katello::System::Destroy, @system1)
+    assert_sync_task(::Actions::Katello::System::Destroy, @system2)
+
+    put :destroy_systems, :included => {:ids => @system_ids}, :organization_id => @org.id
+    assert_response :success
+  end
+
+  def test_content_view_environment
+    put :environment_content_view, :included => {:ids => @system_ids}, :organization_id => @org.id,
+        :environment_id => @library.id, :content_view_id => @view.id
 
     assert_response :success
-    assert_nil System.find_by_id(@system1.id)
-    assert_nil System.find_by_id(@system2.id)
+    system = System.find_by_id(@system1)
+    assert_equal @view.id, system.content_view_id
+    assert_equal @library.id, system.environment_id
   end
 
   def test_permissions
     good_perms = [@update_permission]
-    bad_perms = [@read_permission, @delete_permission, @no_permission]
+    bad_perms = [@view_permission, @destroy_permission, @create_permission]
 
-    assert_protected_action(:bulk_add_system_groups, good_perms, bad_perms) do
-      put :bulk_add_system_groups, :ids => @system_ids, :system_group_ids => [@system_group1.id, @system_group2.id]
+    assert_protected_action(:bulk_add_host_collections, good_perms, bad_perms) do
+      put :bulk_add_host_collections,  {:included => {:ids => @system_ids},
+                                        :organization_id => @org.id,
+                                        :host_collection_ids => [@host_collection1.id, @host_collection2.id]}
     end
 
-    assert_protected_action(:bulk_remove_system_groups, good_perms, bad_perms) do
-      put :bulk_remove_system_groups, :ids => @system_ids, :system_group_ids => [@system_group1.id, @system_group2.id]
+    assert_protected_action(:bulk_remove_host_collections, good_perms, bad_perms) do
+      put :bulk_remove_host_collections,  {:included => {:ids => @system_ids},
+                                        :organization_id => @org.id,
+                                        :host_collection_ids => [@host_collection1.id, @host_collection2.id]}
     end
 
     assert_protected_action(:install_content, good_perms, bad_perms) do
-      put :install_content, :ids => @system_ids, :content_type => 'package', :content => ['foo']
+      put :install_content, :included => {:ids => @system_ids}, :organization_id => @org.id,
+          :content_type => 'package', :content => ['foo']
     end
 
     assert_protected_action(:update_content, good_perms, bad_perms) do
-      put :update_content, :ids => @system_ids, :content_type => 'package', :content => ['foo']
+      put :update_content, :included => {:ids => @system_ids}, :organization_id => @org.id,
+          :content_type => 'package', :content => ['foo']
     end
 
     assert_protected_action(:remove_content, good_perms, bad_perms) do
-      put :remove_content, :ids => @system_ids, :content_type => 'package', :content => ['foo']
+      put :remove_content, :included => {:ids => @system_ids}, :organization_id => @org.id,
+          :content_type => 'package', :content => ['foo']
     end
 
-    good_perms = [@delete_permission]
-    bad_perms = [@read_permission, @update_permission, @no_permission]
+    good_perms = [@destroy_permission]
+    bad_perms = [@view_permission, @update_permission, @create_permission]
 
     assert_protected_action(:destroy_systems, good_perms, bad_perms) do
-      put :destroy_systems, :ids => @system_ids
+      put :destroy_systems, :included => {:ids => @system_ids}, :organization_id => @org.id
     end
   end
 
+  def test_environment_content_view_permission
+    good_perms = [@update_permission]
+    bad_perms = [@view_permission, @destroy_permission, @create_permission]
+
+    assert_protected_action(:environment_content_view, good_perms, bad_perms) do
+      put :environment_content_view, :included => {:ids => @system_ids}, :organization_id => @org.id,
+          :environment_id => @library.id, :content_view_id => @view.id
+    end
+  end
+
+end
 end

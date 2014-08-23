@@ -1,5 +1,5 @@
 #
-# Copyright 2013 Red Hat, Inc.
+# Copyright 2014 Red Hat, Inc.
 #
 # This software is licensed to you under the GNU General Public
 # License as published by the Free Software Foundation; either version
@@ -10,17 +10,17 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
+require "#{Katello::Engine.root}/test/support/auth_support"
+
 module ControllerSupport
+  include Katello::AuthorizationSupportMethods
+
   def check_permission(params)
     permissions = params[:permission].is_a?(Array) ? params[:permission] : [params[:permission]]
 
     permissions.each do |permission|
-      # TODO: allow user to be passed in via params and clear permissions between iterations
-      user = no_permission_user
-
-      if permission
-        permission.call(::AuthorizationSupportMethods::UserPermissionsGenerator.new(user))
-      end
+      user = User.find(users(:restricted))
+      setup_user_with_permissions(permission, user)
 
       action = params[:action]
       req = params[:request]
@@ -31,26 +31,30 @@ module ControllerSupport
 
       if params[:authorized]
         msg = "Expected response for #{action} to be a <success>, but was <#{response.status}> instead. \n" +
-                                                "#{user.own_role.summary}"
-        assert_response :success, msg
+                 "permission -> #{permission.to_yaml}"
+        assert  (response.status >= 200) && (response.status < 300), msg
       else
-        msg = "Security Violation (403) expected for #{action}, got #{response.status} instead. \n#{user.own_role.summary}"
+        msg = "Security Violation (403) expected for #{action}, got #{response.status} instead. \n" +
+                "permission -> #{permission.to_yaml}"
         assert_equal 403, response.status, msg
       end
     end
   end
 
-  def assert_protected_action(action_name, allowed_perms, denied_perms, &block)
+  def assert_protected_action(action_name, allowed_perms, denied_perms = [], &block)
     assert_authorized(
-              :permission => allowed_perms,
-              :action => action_name,
-              :request => block
-    )
-    refute_authorized(
-        :permission => denied_perms,
+        :permission => allowed_perms,
         :action => action_name,
         :request => block
     )
+
+    if !denied_perms.empty?
+      refute_authorized(
+          :permission => denied_perms,
+          :action => action_name,
+          :request => block
+      )
+    end
   end
 
   def assert_authorized(params)
@@ -63,46 +67,4 @@ module ControllerSupport
     check_permission(check_params)
   end
 
-  def no_permission_user
-    begin
-      user = User.find(users(:no_perms_user))
-      user.own_role.permissions.delete_all
-      user
-    rescue
-      # fixtures not loaded
-      FactoryGirl.create(:user)
-    end
-  end
-end
-
-UserPermission = Struct.new(:verbs, :resource_type, :tags, :org, :options) do
-  def call(generator)
-    self.tags ||= []
-    self.options ||= {}
-    generator.can(verbs, resource_type, tags, org, options)
-  end
-
-  def +(permission)
-    UserPermissionSet.new([self, permission])
-  end
-end
-
-# create a constant for a lack of permissions
-NO_PERMISSION = lambda { |user| }
-
-class UserPermissionSet
-  attr_accessor :permissions
-
-  def initialize(permissions = [])
-    self.permissions = permissions
-  end
-
-  def +(user_permission)
-    self.permissions << user_permission
-  end
-  alias_method :<<, :+
-
-  def call(generator)
-    permissions.each { |p| p.call(generator) }
-  end
 end

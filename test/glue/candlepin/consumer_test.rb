@@ -1,5 +1,5 @@
 #
-# Copyright 2013 Red Hat, Inc.
+# Copyright 2014 Red Hat, Inc.
 #
 # This software is licensed to you under the GNU General Public
 # License as published by the Free Software Foundation; either version
@@ -10,42 +10,54 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-require 'minitest_helper'
-require './test/support/candlepin/consumer_support'
+require 'katello_test_helper'
+require 'support/candlepin/owner_support'
+require 'support/candlepin/consumer_support'
 
-class GlueCandlepinConsumerTestBase < MiniTest::Rails::ActiveSupport::TestCase
-  extend  ActiveRecord::TestFixtures
+module Katello
+class GlueCandlepinConsumerTestBase < ActiveSupport::TestCase
+  include CandlepinConsumerSupport
 
-  fixtures :all
   @@dev = nil
   @@org = nil
   @@dev_cv = nil
   @@dev_cve = nil
 
   def self.before_suite
-    @loaded_fixtures = load_fixtures
+    super
 
     services  = ['Pulp', 'ElasticSearch', 'Foreman']
-    models    = ['System', 'User', 'KTEnvironment', 'Organization', 'Product', 'ContentView', 'ContentViewDefinition', 'ContentViewEnvironment', 'ContentViewVersion', "Distributor"]
+    models    = ['System', 'KTEnvironment', 'Organization', 'Product', 'ContentView', 'ContentViewEnvironment', 'ContentViewVersion', "Distributor"]
     disable_glue_layers(services, models)
 
     User.current = User.find(@loaded_fixtures['users']['admin']['id'])
     VCR.insert_cassette('glue_candlepin_consumer', :match_requests_on => [:path, :params, :method, :body_json])
 
-    @@dev      = KTEnvironment.find(@loaded_fixtures['environments']['candlepin_dev']['id'])
-    @@org      = Organization.find(@loaded_fixtures['organizations']['candlepin_org']['id'])
-    @@dev_cv   = ContentView.find(@loaded_fixtures['content_views']['candlepin_library_dev_cv']['id'])
-    @@dev_cve  = ContentViewEnvironment.find(@loaded_fixtures['content_view_environments']['candlepin_library_dev_cve']['id'])
+    @@dev      = KTEnvironment.find(@loaded_fixtures['katello_environments']['candlepin_dev']['id'])
+
+    @@org      = Organization.find(@loaded_fixtures['taxonomies']['organization2']['id'])
+    @@org.setup_label_from_name
+    @@org.save
+
+    @@dev_cv   = ContentView.find(@loaded_fixtures['katello_content_views']['candlepin_library_dev_cv']['id'])
+    @@dev_cve  = ContentViewEnvironment.find(@loaded_fixtures['katello_content_view_environments']['candlepin_library_dev_cve']['id'])
     @@dev_cve.cp_id = @@dev_cv.cp_environment_id @@dev
 
     # Create the environment in candlepin
-    @@org.set_owner
-    @@dev_cve.set_environment
+    CandlepinOwnerSupport.set_owner(@@org)
+
+    User.current.remote_id =  User.current.login
+    ForemanTasks.sync_task(::Actions::Katello::ContentView::EnvironmentCreate, @@dev_cve)
   end
 
   def self.after_suite
-    @@dev_cve.del_environment unless @@dev_cve.nil?
-    @@org.del_owner unless @@org.nil?
+    unless @@dev_cve.nil?
+      User.current.remote_id =  User.current.login
+      # To prevent deletion of the fixture object
+      @@dev_cve.stubs(:destroy).returns(true)
+      ForemanTasks.sync_task(::Actions::Katello::ContentViewEnvironment::Destroy, @@dev_cve)
+    end
+    Resources::Candlepin::Owner.destroy(@@org.label) unless @@org.nil?
   ensure
     VCR.eject_cassette
   end
@@ -54,14 +66,13 @@ end
 
 class GlueCandlepinConsumerTestSystem < GlueCandlepinConsumerTestBase
 
+  def setup
+    super
+  end
+
   def self.before_suite
     super
     @@sys = CandlepinConsumerSupport.create_system('GlueCandlepinConsumerTestSystem_1', @@dev, @@dev_cv)
-  end
-
-  def self.after_suite
-    CandlepinConsumerSupport.destroy_system(@@sys.id)
-    super
   end
 
   def setup
@@ -69,13 +80,6 @@ class GlueCandlepinConsumerTestSystem < GlueCandlepinConsumerTestBase
     @@sys.facts.delete 'dmi.memory.size'
     @@sys.facts['cpu.cpu_socket(s)'] = '2'
     @@sys.facts['uname.machine'] = 'x86_64'
-  end
-
-  def test_update_candlepin_system
-    assert_equal 'x86_64', @@sys.arch
-    @@sys.arch = 'i686'
-    @@sys.update_candlepin_consumer
-    assert_equal 'i686', @@sys.arch
   end
 
   # Socket values
@@ -124,18 +128,6 @@ class GlueCandlepinConsumerTestDistributor < GlueCandlepinConsumerTestBase
     @@dist = CandlepinConsumerSupport.create_distributor('GlueCandlepinConsumerTestDistributor_1', @@dev, @@dev_cv)
   end
 
-  def self.after_suite
-    CandlepinConsumerSupport.destroy_distributor(@@dist.id)
-    super
-  end
-
-  def test_candlepin_distributor_update
-    assert_equal({"distributor_version"=>"sam-1.3"}, @@dist.facts)
-    @@dist.facts = {:some => 'fact'}
-    @@dist.update_candlepin_consumer
-    assert_equal({:some => 'fact'}, @@dist.facts)
-  end
-
   def test_candlepin_distributor_export
     skip "Not ready to test"
     assert true
@@ -143,23 +135,4 @@ class GlueCandlepinConsumerTestDistributor < GlueCandlepinConsumerTestBase
   end
 
 end
-
-class GlueCandlepinConsumerTestSecondDelete < GlueCandlepinConsumerTestBase
-
-  def test_candlepin_system_second_delete
-    @sys = CandlepinConsumerSupport.create_system('GlueCandlepinConsumerTestSecondDelete_1', @@dev, @@dev_cv)
-    # First delete
-    CandlepinConsumerSupport.destroy_system(@sys.id)
-    # Second delete
-    assert_equal true, CandlepinConsumerSupport.destroy_system(@sys.id, 'support/candlepin/system_delete')
-  end
-
-  def test_candlepin_distributor_second_delete
-    @dist = CandlepinConsumerSupport.create_distributor('GlueCandlepinConsumerTestSecondDelete_2', @@dev, @@dev_cv)
-    # First delete
-    CandlepinConsumerSupport.destroy_distributor(@dist.id)
-    # Second delete
-    assert_equal true, CandlepinConsumerSupport.destroy_distributor(@dist.id, 'support/candlepin/distributor_delete')
-  end
-
 end

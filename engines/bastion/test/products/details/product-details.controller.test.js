@@ -1,5 +1,5 @@
 /**
- * Copyright 2013 Red Hat, Inc.
+ * Copyright 2014 Red Hat, Inc.
  *
  * This software is licensed to you under the GNU General Public
  * License as published by the Free Software Foundation; either version
@@ -37,26 +37,6 @@ describe('Controller: ProductDetailsController', function() {
         expect($scope.product).toBeDefined();
     });
 
-    it('provides a method to transition to repositories index for a product', function() {
-        spyOn($scope, 'transitionTo');
-        $scope.transitionToRepositories($scope.product);
-
-        expect($scope.transitionTo).toHaveBeenCalledWith(
-            'products.details.repositories.index',
-            {productId: $scope.product.id}
-        );
-    });
-
-    it('provides a method to transition to product details', function() {
-        spyOn($scope, 'transitionTo');
-        $scope.transitionToInfo($scope.product);
-
-        expect($scope.transitionTo).toHaveBeenCalledWith(
-            'products.details.info',
-            {productId: $scope.product.id}
-        );
-    });
-
     it('provides a method to remove a product', function() {
         spyOn($scope, 'transitionTo');
         spyOn($scope, 'removeRow');
@@ -67,4 +47,29 @@ describe('Controller: ProductDetailsController', function() {
         expect($scope.removeRow).toHaveBeenCalledWith($scope.product.id);
     });
 
+    describe("it provides a method to get the read only reason", function() {
+        var product;
+
+        beforeEach(function () {
+            product = {$resolved: true};
+            $scope.denied = function() {};
+        });
+
+        it ("if the permission was denied", function() {
+            spyOn($scope, 'denied').andReturn(true);
+            expect($scope.getReadOnlyReason(product)).toBe('permissions');
+            expect($scope.denied).toHaveBeenCalledWith('delete_products', product);
+        });
+
+        it("if the product was published in a content view", function() {
+            product['published_content_views'] = [1, 2];
+            expect($scope.getReadOnlyReason(product)).toBe('published');
+        });
+
+        it("if the product is a Red Hat product", function() {
+            product['published_content_views'] = [];
+            product.redhat = true;
+            expect($scope.getReadOnlyReason(product)).toBe('redhat');
+        });
+    });
 });

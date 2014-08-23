@@ -1,5 +1,5 @@
 #
-# Copyright 2013 Red Hat, Inc.
+# Copyright 2014 Red Hat, Inc.
 #
 # This software is licensed to you under the GNU General Public
 # License as published by the Free Software Foundation; either version
@@ -10,28 +10,54 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-require './test/models/repository_base'
-require './test/models/authorization/repository_authorization_test'
+require File.expand_path("repository_base", File.dirname(__FILE__))
 
+module Katello
 class RepositoryCreateTest < RepositoryTestBase
 
   def setup
     super
     User.current = @admin
-    @repo = build(:repository, :fedora_17_el6,
+    @repo = build(:katello_repository, :fedora_17_el6,
                   :environment => @library,
-                  :product => products(:fedora),
+                  :product => katello_products(:fedora),
                   :content_view_version => @library.default_content_view_version
                  )
   end
 
   def teardown
-    @repo.destroy if @repo.id
+    @repo.destroy if @repo
   end
 
   def test_create
     assert        @repo.save
     refute_empty  Repository.where(:id=>@repo.id)
+  end
+
+  def test_unique_repository_name_per_product_and_environment
+    @repo.save
+    @repo2 = build(:katello_repository,
+                   :environment => @repo.environment,
+                   :product => @repo.product,
+                   :content_view_version => @repo.content_view_version,
+                   :name => @repo.name,
+                   :label => 'Another Label'
+                  )
+
+    refute @repo2.valid?
+  end
+
+  def test_unique_repository_label_per_product_and_environment
+    @repo.save
+    @repo2 = build(:katello_repository,
+                   :environment => @repo.environment,
+                   :product => @repo.product,
+                   :content_view_version => @repo.content_view_version,
+                   :name => 'Another Name',
+                   :label => @repo.label
+                  )
+
+    refute @repo2.valid?
   end
 
   def test_create_with_no_type
@@ -109,6 +135,16 @@ class RepositoryInstanceTest < RepositoryTestBase
 
   def test_promoted?
     assert @fedora_17_x86_64.promoted?
+
+    repo = build(:katello_repository,
+                 :environment => @dev,
+                 :content_view_version => @fedora_17_x86_64.content_view_version,
+                 :product => @fedora_17_x86_64.product
+                )
+
+    assert repo.valid?
+    refute_nil repo.organization
+    refute repo.promoted?
   end
 
   def test_get_clone
@@ -131,56 +167,109 @@ class RepositoryInstanceTest < RepositoryTestBase
   end
 
   def test_create_clone
-    clone = @fedora_17_x86_64.create_clone(@staging)
+    @fedora_17_x86_64.stubs(:checksum_type).returns(nil)
+    clone = @fedora_17_x86_64.create_clone(:environment => @staging)
     assert clone.id
     assert Repository.in_environment(@staging).where(:library_instance_id=>@fedora_17_x86_64.id).count > 0
   end
 
   def test_create_clone_preserve_type
+    @fedora_17_x86_64.stubs(:checksum_type).returns(nil)
     @fedora_17_x86_64.content_type = 'file'
     @fedora_17_x86_64.save!
-    clone = @fedora_17_x86_64.create_clone(@staging)
+    clone = @fedora_17_x86_64.create_clone(:environment => @staging)
     assert clone.id
     assert_equal @fedora_17_x86_64.content_type, clone.content_type
   end
 
   def test_repo_id
-    @fedora             = Product.find(products(:fedora).id)
-    @library            = KTEnvironment.find(environments(:library).id)
-    @acme_corporation   = Organization.find(organizations(:acme_corporation).id)
+    @acme_corporation   = get_organization
+
+    @fedora             = Product.find(katello_products(:fedora).id)
+    @library            = KTEnvironment.find(katello_environments(:library).id)
 
     repo_id = Repository.repo_id(@fedora.label, @fedora_17_x86_64.label, @library.label,
-                                 @acme_corporation.label, @library.default_content_view.label)
-    assert_equal "acme_corporation_label-library_label-org_default_label-fedora_label-fedora_17_x86_64_label", repo_id
+                                 @acme_corporation.label, @library.default_content_view.label, nil)
+    assert_equal "Empty_Organization-library_label-org_default_label-fedora_label-fedora_17_x86_64_label", repo_id
+  end
+
+  def test_clone_repo_path
+    path = Repository.clone_repo_path(:repository => @fedora_17_x86_64,
+                                      :version => @fedora_17_x86_64.content_view_version,
+                                      :content_view => @fedora_17_x86_64.content_view
+                                     )
+    assert_equal "/content_views/org_default_label/1/library/fedora_17_label", path
+
+    path = Repository.clone_repo_path(:repository => @fedora_17_x86_64,
+                                      :environment => @fedora_17_x86_64.organization.library,
+                                      :content_view => @fedora_17_x86_64.content_view
+                                     )
+    assert_equal "/library_default_view_library/library/fedora_17_label", path
   end
 
   def test_clone_repo_path_for_component
     # validate that clone repo path for a component view does not include the component view label
-    @content_view_definition = content_view_definition_bases(:composite_def)
-    dev = KTEnvironment.find(environments(:dev).id)
-    cv = @content_view_definition.component_content_views.first
-    cve = ContentViewEnvironment.where(:environment_id => dev,
+    library = KTEnvironment.find(katello_environments(:library).id)
+    cv = ContentView.find(katello_content_views(:composite_view))
+    cve = ContentViewEnvironment.where(:environment_id => library,
                                         :content_view_id => cv).first
-
-    relative_path = Repository.clone_repo_path(@fedora_17_x86_64, dev, cv)
+    relative_path = Repository.clone_repo_path(repository: @fedora_17_x86_64,
+                                               environment: library,
+                                               content_view: cv)
     assert_equal "/#{cve.label}/library/fedora_17_label", relative_path
+
+    # archive path
+    version = stub(:version => 1)
+    relative_path = Repository.clone_repo_path(repository: @fedora_17_x86_64,
+                                               version: version,
+                                               content_view: cv)
+    assert_equal "/content_views/composite_view/1/library/fedora_17_label", relative_path
   end
 
-  def test_blank_feed_url
+  def new_custom_repo
     new_custom_repo = @fedora_17_x86_64.clone
     new_custom_repo.name = "new_custom_repo"
     new_custom_repo.label = "new_custom_repo"
     new_custom_repo.pulp_id = "new_custom_repo"
-    new_custom_repo.feed = ""
-    assert new_custom_repo.save
-    assert new_custom_repo.persisted?
-    assert_equal "", new_custom_repo.reload.feed
-    refute new_custom_repo.syncable?
+    new_custom_repo
+  end
 
-    rhel = Repository.find(repositories(:rhel_6_x86_64))
-    rhel.feed = ""
+  def test_nil_url_url
+    new_repo = new_custom_repo
+    new_repo.url = nil
+    assert new_repo.save
+    assert new_repo.persisted?
+    assert_equal nil, new_repo.reload.url
+    refute new_repo.url?
+  end
+
+  def test_blank_url_url
+    new_repo = new_custom_repo
+
+    original_url = new_repo.url
+    new_repo.url = ""
+    refute new_repo.save
+    refute new_repo.errors.empty?
+    assert_equal original_url, new_repo.reload.url
+  end
+
+  def test_nil_rhel_url
+    rhel = Repository.find(katello_repositories(:rhel_6_x86_64))
+    rhel.url = nil
     refute rhel.valid?
     refute rhel.save
     refute_empty rhel.errors
   end
+
+  def test_node_syncable
+    lib_yum_repo = Repository.find(katello_repositories(:rhel_6_x86_64))
+    lib_puppet_repo = Repository.find(katello_repositories(:p_forge))
+    lib_iso_repo = Repository.find(katello_repositories(:iso))
+
+    assert lib_yum_repo.node_syncable?
+    refute lib_puppet_repo.node_syncable?
+    refute lib_iso_repo.node_syncable?
+  end
+
+end
 end

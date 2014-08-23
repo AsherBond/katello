@@ -1,5 +1,5 @@
 /**
- * Copyright 2013 Red Hat, Inc.
+ * Copyright 2014 Red Hat, Inc.
  *
  * This software is licensed to you under the GNU General Public
  * License as published by the Free Software Foundation; either version
@@ -15,7 +15,8 @@
 describe('Directive: alchTable', function() {
     var scope,
         compile,
-        tableElement;
+        tableElement,
+        chooseTableElement;
 
     beforeEach(module('alchemy'));
 
@@ -32,6 +33,10 @@ describe('Directive: alchTable', function() {
         },{
             name: 'Pilsner',
             style: 'lager'
+        },{
+            name: 'Quadrupel',
+            style: 'beer',
+            unselectable: true
         }]
     });
 
@@ -45,7 +50,7 @@ describe('Directive: alchTable', function() {
                   '</tr>' +
                 '</thead>' +
                 '<tbody>' +
-                  '<tr alch-table-row ng-repeat="item in table.rows" row-select="item">' +
+                  '<tr alch-table-row ng-repeat="item in table.rows" row-select="item" active-row="true">' +
                     '<td alch-table-cell>{{ item.name }}</td>' +
                     '<td alch-table-cell>{{ item.style }}</td>' +
                  '</tr>' +
@@ -53,7 +58,26 @@ describe('Directive: alchTable', function() {
               '</table>' +
             '</div>');
 
+        chooseTableElement = angular.element(
+            '<div alch-table="table">' +
+              '<table>' +
+                '<thead class="hidden">' +
+                  '<tr alch-table-head row-choice>' +
+                    '<th alch-table-column>{{ "Name" }}</th>' +
+                  '</tr>' +
+                '</thead>' +
+                '<tbody>' +
+                  '<tr alch-table-row ng-repeat="item in table.rows" row-choice="item">' +
+                    '<td alch-table-cell>{{ item.name }}</td>' +
+                    '<td alch-table-cell>{{ item.style }}</td>' +
+                  '</tr>' +
+                '</tbody>' +
+              '</table>' +
+            '</div>');
+
+
         compile(tableElement)(scope);
+        compile(chooseTableElement)(scope);
         scope.$digest();
     });
 
@@ -92,14 +116,14 @@ describe('Directive: alchTable', function() {
             tableController.itemSelected(row);
 
             expect(scope.table.numSelected).toEqual(1);
-            expect(scope.table.allSelected).toEqual(false);
+            expect(scope.table.allSelected()).toEqual(false);
         });
 
-        it("should select all rows", function() {
+        it("should select all selectable rows", function() {
             tableController.selectAll(true);
 
             expect(scope.table.numSelected).toEqual(2);
-            expect(scope.table.allSelected).toEqual(true);
+            expect(scope.table.allSelected()).toEqual(true);
             expect(scope.table.rows[0].selected).toEqual(true);
         });
 
@@ -107,8 +131,27 @@ describe('Directive: alchTable', function() {
             tableController.selectAll(false);
 
             expect(scope.table.numSelected).toEqual(0);
-            expect(scope.table.allSelected).toEqual(false);
+            expect(scope.table.allSelected()).toEqual(false);
             expect(scope.table.rows[0].selected).toEqual(false);
+        });
+
+        it("should set the chosen row", function() {
+            var row = { id: 1 };
+
+            tableController.itemChosen(row);
+
+            expect(scope.table.chosenRow).toBe(row);
+        });
+
+        it("should disable select all", function() {
+            tableController.disableSelectAll(true);
+
+            expect(tableController.selection.selectAllDisabled).toBe(true);
+        });
+
+        it("should provide a method to check if all are selected", function() {
+            scope.table.selectAll(true);
+            expect(scope.table.allSelected()).toBe(true);
         });
 
     });
@@ -166,7 +209,7 @@ describe('Directive: alchTable', function() {
     describe('alchTableRow', function() {
 
         describe('directive', function() {
-            it("should select a row and add 'active-row' class", function() {
+            it("should select a row and add 'selected-row' class", function() {
                 var row = angular.element(tableElement.find('tbody').find('tr')[0]),
                     checkbox = row.find('.row-select').find('input');
 
@@ -175,7 +218,32 @@ describe('Directive: alchTable', function() {
                 checkbox.prop('checked', true);
 
                 expect(checkbox.is(':checked')).toBe(true);
-                expect(row.hasClass('active-row')).toBe(true);
+                expect(row.hasClass('selected-row')).toBe(true);
+            });
+
+            it("should choose a row and add 'selected-row' class", function() {
+                var row = angular.element(chooseTableElement.find('tbody').find('tr')[0]),
+                    radio = row.find('.row-choice').find('input');
+
+                radio.trigger('click');
+
+                expect(row.hasClass('selected-row')).toBe(true);
+            });
+
+            it("should only allow one row to be selected at a time", function() {
+                var radios = angular.element(chooseTableElement.find('input'));
+
+
+                angular.element(radios[0]).trigger('click');
+                angular.element(radios[1]).trigger('click');
+
+                expect(chooseTableElement.find('.selected-row').length).toBe(1);
+            });
+
+            it("should set a row as active and add 'active-row' class", function() {
+                var cells = angular.element(angular.element(tableElement.find('tbody').find('tr')[0])).find('td');
+
+                expect(cells.hasClass('active-row')).toBe(true);
             });
         });
 

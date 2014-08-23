@@ -1,6 +1,6 @@
 # encoding: utf-8
 #
-# Copyright 2013 Red Hat, Inc.
+# Copyright 2014 Red Hat, Inc.
 #
 # This software is licensed to you under the GNU General Public
 # License as published by the Free Software Foundation; either version
@@ -11,46 +11,53 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-require "minitest_helper"
+require "katello_test_helper"
 
-class Api::V2::SystemErrataControllerTest < Minitest::Rails::ActionController::TestCase
+module Katello
+class Api::V2::SystemErrataControllerTest < ActionController::TestCase
 
-  fixtures :all
+  include Support::ForemanTasks::Task
 
   def self.before_suite
     models = ["System"]
     disable_glue_layers(["Candlepin", "Pulp", "ElasticSearch"], models)
+    super
   end
 
   def permissions
-    @read_permission = UserPermission.new(:read_systems, :organizations, nil, @system.organization)
-    @update_permission = UserPermission.new(:update_systems, :organizations, nil, @system.organization)
-    @no_permission = NO_PERMISSION
+    @view_permission = :view_content_hosts
+    @create_permission = :create_content_hosts
+    @update_permission = :edit_content_hosts
+    @destroy_permission = :destroy_content_hosts
   end
 
   def setup
+    setup_controller_defaults_api
     login_user(User.find(users(:admin)))
     @request.env['HTTP_ACCEPT'] = 'application/json'
 
-    @system = systems(:simple_server)
+    @system = katello_systems(:simple_server)
     permissions
   end
 
   def test_apply
-    System.any_instance.expects(:install_errata).with(["foo"]).returns(TaskStatus.new)
-    put :apply, :system_id => @system.uuid, :errata_ids => ["foo"]
+    assert_async_task ::Actions::Katello::System::Erratum::Install do |system, errata|
+      system.id == @system.id && errata == %w(foo)
+    end
+
+    put :apply, :system_id => @system.uuid, :errata_ids => %w(foo)
 
     assert_response :success
-    assert_template 'api/v2/system_errata/system_task'
   end
 
-  def test_permissions
+  def test_apply_protected
     good_perms = [@update_permission]
-    bad_perms = [@read_permission, @no_permission ]
+    bad_perms = [@view_permission, @create_permission, @destroy_permission]
 
     assert_protected_action(:apply, good_perms, bad_perms) do
       put :apply, :system_id => @system.uuid, :errata=> ["foo*"]
     end
   end
 
+end
 end

@@ -1,5 +1,5 @@
 /**
- * Copyright 2013 Red Hat, Inc.
+ * Copyright 2014 Red Hat, Inc.
  *
  * This software is licensed to you under the GNU General Public
  * License as published by the Free Software Foundation; either version
@@ -12,7 +12,7 @@
  **/
 
 describe('Controller: ProductDetailsInfoController', function() {
-    var $scope;
+    var $scope, translate, MenuExpander;
 
     beforeEach(module(
         'Bastion.products',
@@ -23,18 +23,32 @@ describe('Controller: ProductDetailsInfoController', function() {
         var $controller = $injector.get('$controller'),
             $q = $injector.get('$q'),
             Product = $injector.get('MockResource').$new(),
+            SyncPlan = $injector.get('MockResource').$new();
             GPGKey = $injector.get('MockResource').$new();
 
         $scope = $injector.get('$rootScope').$new();
         $scope.$stateParams = {productId: 1};
 
+        MenuExpander = {};
+
+        translate = function(message) {
+            return message;
+        };
+
         $controller('ProductDetailsInfoController', {
             $scope: $scope,
             $q: $q,
+            translate: translate,
             Product: Product,
-            GPGKey: GPGKey
+            SyncPlan: SyncPlan,
+            GPGKey: GPGKey,
+            MenuExpander: MenuExpander
         });
     }));
+
+    it("sets the menu expander on the scope", function() {
+        expect($scope.menuExpander).toBe(MenuExpander);
+    });
 
     it('provides a method to retrieve available gpg keys', function() {
         var promise = $scope.gpgKeys(),
@@ -60,15 +74,25 @@ describe('Controller: ProductDetailsInfoController', function() {
     it('should save the product successfully', function() {
         $scope.save($scope.product);
 
-        expect($scope.saveSuccess).toBe(true);
+        expect($scope.successMessages.length).toBe(1);
+        expect($scope.errorMessages.length).toBe(0);
     });
 
     it('should fail to save the product', function() {
         $scope.product.failed = true;
+
         $scope.save($scope.product);
 
-        expect($scope.saveSuccess).toBe(false);
-        expect($scope.saveError).toBe(true);
+        expect($scope.successMessages.length).toBe(0);
+        expect($scope.errorMessages.length).toBe(1);
     });
 
+    it('provides a way to sync a product', function() {
+        $scope.product.$sync = function () {};
+        spyOn($scope.product, '$sync');
+
+        $scope.syncProduct();
+
+        expect($scope.product.$sync).toHaveBeenCalled();
+    });
 });

@@ -1,5 +1,5 @@
 #
-# Copyright 2013 Red Hat, Inc.
+# Copyright 2014 Red Hat, Inc.
 #
 # This software is licensed to you under the GNU General Public
 # License as published by the Free Software Foundation; either version
@@ -13,6 +13,6 @@
 module UserHelperMethods
   def new_user name = "foo"
     disable_user_orchestration
-    User.create!(:username => name, :password => "redhat", :email =>"foo12@redhat.com")
+    User.create!(:login => name, :password => "redhat", :mail =>"foo12@redhat.com")
   end
 end

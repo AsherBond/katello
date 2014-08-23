@@ -1,5 +1,5 @@
 /**
- * Copyright 2013 Red Hat, Inc.
+ * Copyright 2014 Red Hat, Inc.
  *
  * This software is licensed to you under the GNU General Public
  * License as published by the Free Software Foundation; either version
@@ -24,7 +24,7 @@ module.exports = function (grunt) {
 
     // configurable paths
     var bastionConfig = {
-        src: 'app/assets/bastion',
+        src: 'app/assets/javascripts/bastion',
         dist: 'dist'
     };
 
@@ -34,6 +34,26 @@ module.exports = function (grunt) {
 
     grunt.initConfig({
         bastion: bastionConfig,
+        bower: {
+            update: {
+                options: {
+                    targetDir: 'vendor/assets',
+                    copy: true,
+                    layout: function (type, component) {
+                        // We provide a bit of customization here by allowing
+                        // explicit path declarations if the component is included
+                        // in the type. This is handy for sub-nesting within folders
+                        // for a component. Fallback is 'byType'.
+                        if (type.indexOf(component) !== -1) {
+                            return require('path').join(type);
+                        } else {
+                            return require('path').join(type, component);
+                        }
+                    },
+                    clearBowerDir: true
+                }
+            }
+        },
         clean: {
             build: '<%= bastion.dist %>'
         },
@@ -52,6 +72,7 @@ module.exports = function (grunt) {
             },
             test: {
                 options: {
+                    port: 9000,
                     middleware: function (connect) {
                         return [
                             mountFolder(connect, 'test')
@@ -66,22 +87,48 @@ module.exports = function (grunt) {
             },
             all: [
                 'Gruntfile.js',
-                '<%= bastion.src %>/**/*.js'
+                '<%= bastion.src %>/**/*.js',
+                '!<%= bastion.src %>/i18n/translations.js'
             ]
         },
-        karma: {
-            //continuous integration mode
-            ci: {
-                browsers: ['PhantomJS'],
-                configFile: 'karma.conf.js',
-                singleRun: true
+        htmlhint: {
+            html: {
+                src: [bastionConfig.src + '/**/*.html'],
+                options: {
+                    'tagname-lowercase': true,
+                    'attr-lowercase': true,
+                    'attr-value-doublequotes': true,
+                    'tag-pair': true,
+                    'tag-self-close': true,
+                    'id-unique': true,
+                    'src-not-empty': true,
+                    'style-disabled': true,
+                    'img-alt-require': true,
+                    'spec-char-escape': true
+                },
             },
+        },
+        karma: {
             server: {
                 configFile: 'karma.conf.js',
                 autoWatch: true
             },
             singleRun: {
                 configFile: 'karma.conf.js',
+                singleRun: true
+            },
+            //continuous integration mode
+            ci: {
+                configFile: 'karma.conf.js',
+                reporters: ['progress', 'coverage'],
+                preprocessors: {
+                    'app/assets/javascripts/bastion/**/*.html': ['ng-html2js'],
+                    'app/assets/javascripts/bastion/**/*.js': ['coverage']
+                },
+                coverageReporter: {
+                    type: 'cobertura',
+                    dir: 'coverage/'
+                },
                 singleRun: true
             }
         },
@@ -93,23 +140,43 @@ module.exports = function (grunt) {
                     id: 'bastion_api',
                     title: 'API Reference',
                     scripts: [
-                        'app/assets/bastion/components/',
-                        'app/assets/bastion/i18n/',
-                        'app/assets/bastion/incubator',
-                        'app/assets/bastion/menu',
-                        'app/assets/bastion/systems',
-                        'app/assets/bastion/utils',
-                        'app/assets/bastion/widgets'
+                        bastionConfig.src
                     ]
                 }]
             }],
             showDocularDocs: false,
             showAngularDocs: false
+        },
+        'nggettext_extract': {
+            bastion: {
+                options: {
+                    markerName: 'translate'
+                },
+                src: ['<%= bastion.src %>/**/*.html', '<%= bastion.src %>/**/*.js'],
+                dest: '<%= bastion.src %>/i18n/katello.pot'
+            }
+        },
+        'nggettext_compile': {
+            options: {
+                module: 'Bastion.i18n'
+            },
+            bastion: {
+                src: ['<%= bastion.src %>/i18n/locale/**/*.po'],
+                dest: '<%= bastion.src %>/i18n/translations.js'
+            }
         }
     });
 
     grunt.registerTask('docs', [
         'docular'
+    ]);
+
+    grunt.registerTask('i18n:extract', [
+        'nggettext_extract'
+    ]);
+
+    grunt.registerTask('i18n:compile', [
+        'nggettext_compile'
     ]);
 
     grunt.registerTask('test', [
@@ -125,12 +192,14 @@ module.exports = function (grunt) {
     grunt.registerTask('ci', [
         'connect:test',
         'jshint',
+        'htmlhint',
         'karma:ci'
     ]);
 
     grunt.registerTask('build', [
         'clean:build',
         'jshint',
+        'htmlhint',
         'test'
     ]);
 

@@ -1,5 +1,5 @@
 #
-# Copyright 2013 Red Hat, Inc.
+# Copyright 2014 Red Hat, Inc.
 #
 # This software is licensed to you under the GNU General Public
 # License as published by the Free Software Foundation; either version
@@ -10,8 +10,10 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-require 'helpers/repo_test_data'
+require File.expand_path("repo_test_data", File.dirname(__FILE__))
+require File.expand_path("product_test_data", File.dirname(__FILE__))
 
+module Katello
 module ProductHelperMethods
 
   def self.included(base)
@@ -23,8 +25,8 @@ module ProductHelperMethods
     @library.library = true
     @library.organization = org
     @library.name = "Library"
-    @library.stub!(:products).and_return([])
-    org.stub!(:library).and_return(@library)
+    @library.stubs(:products).returns([])
+    org.stubs(:library).returns(@library)
     new_test_product org, @library
   end
 
@@ -40,20 +42,20 @@ module ProductHelperMethods
     repo = Repository.new(:environment => env, :product => @p, :name=>"FOOREPO" + suffix,
                           :label=>"FOOREPO" + suffix, :pulp_id=>RepoTestData::REPO_ID,
                           :content_id=> "1234", :content_view_version=>env.default_content_view_version,
-                          :relative_path=>'/foo/', :feed => 'https://localhost.com/foo')
-    repo.stub(:create_pulp_repo).and_return([])
+                          :relative_path=>'/foo/', :url => 'https://localhost.com/foo')
+    repo.stubs(:create_pulp_repo).returns([])
     repo.save!
 
     pkg = Package.new(:name=>"Pkg" + suffix, :id=>"234" + suffix)
-    repo.stub(:packages).and_return([pkg])
+    repo.stubs(:packages).returns([pkg])
 
     errata = Errata.new(:title=>"Errata" + suffix, :id=>"1235" + suffix)
-    repo.stub(:errata).and_return([errata])
-    Glue::Pulp::Errata.stub!(:filter).and_return([:errata])
+    repo.stubs(:errata).returns([errata])
+    Glue::Pulp::Errata.stubs(:filter).returns([:errata])
     distribution = Distribution.new()
-    repo.stub(:distributions).and_return([distribution])
+    repo.stubs(:distributions).returns([distribution])
 
-    @p.stub(:repos).and_return([repo])
+    @p.stubs(:repos).returns([repo])
     @p
   end
 
@@ -63,15 +65,16 @@ module ProductHelperMethods
     lib_instance = repo.library_instance.nil? ? repo : repo.library_instance
 
     repo_clone = new_test_repo(environment, repo.product, repo.name,
-                               "#{environment.organization.name}/#{environment.name}/prod/repo", true, "", lib_instance)
-    repo.stub(:create_clone).and_return(repo_clone)
-    repo.stub(:clone_contents).and_return([])
-    repo.stub(:sync).and_return([])
+                               "#{environment.organization.name}/#{environment.name}/prod/repo", "", lib_instance)
+    repo.stubs(:create_clone).returns(repo_clone)
+    repo.stubs(:clone_contents).returns([])
+    repo.stubs(:sync).returns([])
 
-    repo.stub!(:pulp_repo_facts).and_return({:clone_ids => []})
-    repo.stub(:content => {:id => "123"})
+    repo.stubs(:pulp_repo_facts).returns({'distributors' => []})
+    repo.stubs(:content => {:id => "123"})
     Repository.where(:environment_id => environment, :product_id => repo.product).first.tap do |promoted|
-        promoted.stub(:feed => repo.feed)
+        promoted.stubs(:url => repo.url)
     end
   end
+end
 end

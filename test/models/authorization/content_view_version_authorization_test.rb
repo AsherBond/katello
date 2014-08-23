@@ -1,5 +1,5 @@
 #
-# Copyright 2013 Red Hat, Inc.
+# Copyright 2014 Red Hat, Inc.
 #
 # This software is licensed to you under the GNU General Public
 # License as published by the Free Software Foundation; either version
@@ -10,8 +10,9 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-require './test/models/authorization/authorization_base'
+require 'models/authorization/authorization_base'
 
+module Katello
 class ContentViewVersionAuthorizationAdminTest < AuthorizationTestBase
   def setup
     super
@@ -19,17 +20,18 @@ class ContentViewVersionAuthorizationAdminTest < AuthorizationTestBase
   end
 
   def test_readable
-    refute_empty ContentViewVersion.readable(@acme_corporation)
+    refute_empty ContentViewVersion.readable
   end
 end
 
 class ContentViewVersionAuthorizationNonAuthUserTest < AuthorizationTestBase
   def setup
     super
-    User.current = User.find(users(:no_perms_user))
+    User.current = User.find(users(:restricted))
   end
 
   def test_readable
-    assert_empty ContentViewVersion.readable(@acme_corporation)
+    assert_empty ContentViewVersion.readable
   end
+end
 end

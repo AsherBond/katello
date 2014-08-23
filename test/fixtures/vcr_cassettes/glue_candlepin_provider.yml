@@ -5,14 +5,14 @@ http_interactions:
     uri: https://localhost:8443/candlepin/owners/
     body: 
       encoding: US-ASCII
-      string: "{\"key\":\"candlepin_org_label\",\"displayName\":\"Candlepin_Org\",\"contentPrefix\":\"/candlepin_org_label/$env\"}"
+      string: "{\"key\":\"Organization_2\",\"displayName\":\"Organization 2\",\"contentPrefix\":\"/Organization_2/$env\"}"
     headers: 
       Accept: 
       - application/json
       Accept-Encoding: 
       - gzip, deflate
       Authorization: 
-      - OAuth oauth_body_hash="2jmj7l5rSw0yVb%2FvlWAYkK%2FYBwk%3D", oauth_consumer_key="katello", oauth_nonce="hwcngJL5gZlhK1OhhU4UzYRCmRA170Em2bExWD7oAvk", oauth_signature="qRYJShKOLwLsk7yMBtiLro6rfZE%3D", oauth_signature_method="HMAC-SHA1", oauth_timestamp="1379710289", oauth_version="1.0"
+      - OAuth oauth_body_hash="2jmj7l5rSw0yVb%2FvlWAYkK%2FYBwk%3D", oauth_consumer_key="katello", oauth_nonce="1fLDvIS2Q1hqLmiWQ8xVqFipJ2kifOxM8RYpflw3KE", oauth_signature="UfPJdaP0iU8bIZ82nq%2B498O%2BGQE%3D", oauth_signature_method="HMAC-SHA1", oauth_timestamp="1400185847", oauth_version="1.0"
       Accept-Language: 
       - en
       Content-Type: 
@@ -20,7 +20,7 @@ http_interactions:
       Cp-User: 
       - admin
       Content-Length: 
-      - "103"
+      - "94"
       User-Agent: 
       - Ruby
   response: 
@@ -30,22 +30,24 @@ http_interactions:
     headers: 
       Server: 
       - Apache-Coyote/1.1
+      X-Candlepin-Request-Uuid: 
+      - e032b403-5377-4d66-a067-5252ab5320e4
       X-Candlepin-Version: 
-      - 0.8.16-1
+      - 0.9.11-1
       Content-Type: 
       - application/json
       Transfer-Encoding: 
       - chunked
       Date: 
-      - Fri, 20 Sep 2013 20:51:28 GMT
+      - Thu, 15 May 2014 20:30:47 GMT
     body: 
       encoding: US-ASCII
-      string: "{\"created\":\"2013-09-20T20:51:29.385+0000\",\"updated\":\"2013-09-20T20:51:29.385+0000\",\"parentOwner\":null,\"id\":\"ff808081413cd64101413d2445e9003c\",\"key\":\"candlepin_org_label\",\"displayName\":\"Candlepin_Org\",\"contentPrefix\":\"/candlepin_org_label/$env\",\"defaultServiceLevel\":null,\"upstreamConsumer\":null,\"href\":\"/owners/candlepin_org_label\"}"
+      string: "{\"parentOwner\":null,\"id\":\"ff8080814600f23d014601947fcf0045\",\"key\":\"Organization_2\",\"displayName\":\"Organization 2\",\"contentPrefix\":\"/Organization_2/$env\",\"defaultServiceLevel\":null,\"upstreamConsumer\":null,\"logLevel\":null,\"href\":\"/owners/Organization_2\",\"created\":\"2014-05-15T20:30:47.759+0000\",\"updated\":\"2014-05-15T20:30:47.759+0000\"}"
     http_version: 
-  recorded_at: Fri, 20 Sep 2013 20:51:29 GMT
+  recorded_at: Thu, 15 May 2014 20:30:47 GMT
 - request: 
     method: delete
-    uri: https://localhost:8443/candlepin/owners/candlepin_org_label
+    uri: https://localhost:8443/candlepin/owners/Organization_2
     body: 
       encoding: US-ASCII
       string: ""
@@ -55,7 +57,7 @@ http_interactions:
       Accept-Encoding: 
       - gzip, deflate
       Authorization: 
-      - OAuth oauth_consumer_key="katello", oauth_nonce="kvUBdXL1rEdwwVZYciPbz1X4PqfEMwAum0lnsBOU", oauth_signature="1cpoD97eL5Yx8V56kJiS%2FV%2BNPWQ%3D", oauth_signature_method="HMAC-SHA1", oauth_timestamp="1379710289", oauth_version="1.0"
+      - OAuth oauth_consumer_key="katello", oauth_nonce="wVHqzG75ABuCLng2vOEBIOvhM9I6Kw6rxFo4Cuf0AGY", oauth_signature="91%2BTYsRoJc1Er95hzve5yz5Nsz0%3D", oauth_signature_method="HMAC-SHA1", oauth_timestamp="1400185847", oauth_version="1.0"
       Cp-User: 
       - admin
       User-Agent: 
@@ -67,13 +69,15 @@ http_interactions:
     headers: 
       Server: 
       - Apache-Coyote/1.1
+      X-Candlepin-Request-Uuid: 
+      - e65dd2c1-2d28-4226-9f88-802e3d64991d
       X-Candlepin-Version: 
-      - 0.8.16-1
+      - 0.9.11-1
       Date: 
-      - Fri, 20 Sep 2013 20:51:28 GMT
+      - Thu, 15 May 2014 20:30:47 GMT
     body: 
       encoding: US-ASCII
       string: ""
     http_version: 
-  recorded_at: Fri, 20 Sep 2013 20:51:29 GMT
-recorded_with: VCR 2.5.0
+  recorded_at: Thu, 15 May 2014 20:30:48 GMT
+recorded_with: VCR 2.9.0

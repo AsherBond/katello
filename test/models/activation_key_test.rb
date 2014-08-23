@@ -1,5 +1,5 @@
 #
-# Copyright 2013 Red Hat, Inc.
+# Copyright 2014 Red Hat, Inc.
 #
 # This software is licensed to you under the GNU General Public
 # License as published by the Free Software Foundation; either version
@@ -10,31 +10,34 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-require 'minitest_helper'
+require 'katello_test_helper'
 
-class ActivationKeyTest < MiniTest::Rails::ActiveSupport::TestCase
-  fixtures :all
+module Katello
+class ActivationKeyTest < ActiveSupport::TestCase
+
+  def self.before_suite
+    models = ["ActivationKey", "KTEnvironment", "ContentViewEnvironment", "ContentView", "Organization"]
+    disable_glue_layers(["Candlepin", "Pulp", "ElasticSearch"], models, true)
+  end
 
   def setup
-    @dev_key = activation_keys(:dev_key)
-    @dev_view = content_views(:library_dev_view)
-    @lib_view = content_views(:library_view)
+    @dev_key = ActivationKey.find(katello_activation_keys(:dev_key))
+    @dev_view = ContentView.find(katello_content_views(:library_dev_view))
+    @lib_view = ContentView.find(katello_content_views(:library_view))
   end
 
   test "can have content view" do
-    @dev_key = activation_keys(:dev_key)
+    @dev_key = ActivationKey.find(katello_activation_keys(:dev_key))
     @dev_key.content_view = @dev_view
     assert @dev_key.save!
     assert_not_nil @dev_key.content_view
     assert_includes @dev_view.activation_keys, @dev_key
   end
 
-  test "requires a content view" do
+  test "does not require a content view" do
     assert_nil @dev_key.content_view
-    refute @dev_key.save
-    assert_raises(ActiveRecord::RecordInvalid) do
-      @dev_key.save!
-    end
+    assert @dev_key.save!
+    assert_nil @dev_key.content_view
   end
 
   test "content view must be in environment" do
@@ -46,4 +49,20 @@ class ActivationKeyTest < MiniTest::Rails::ActiveSupport::TestCase
     end
   end
 
+  test "same name can be used across organizations" do
+    org = Organization.find(taxonomies(:organization2))
+    key = ActivationKey.find(katello_activation_keys(:simple_key))
+    assert ActivationKey.new(:name => key.name, :organization => org).valid?
+  end
+
+  test "renamed key can be used again" do
+    key1 = ActivationKey.find(katello_activation_keys(:simple_key))
+    org = key1.organization
+    original_name = key1.name
+    key1.name = "new name"
+    key1.save!
+    assert ActivationKey.new(:name => original_name, :organization => org).valid?
+  end
+
+end
 end

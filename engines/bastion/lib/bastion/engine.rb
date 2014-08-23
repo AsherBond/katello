@@ -1,37 +1,24 @@
-require 'ui_alchemy-rails'
-
 module Bastion
   class Engine < ::Rails::Engine
+
     isolate_namespace Bastion
 
+    initializer 'bastion.assets_dispatcher', :before => :build_middleware_stack do |app|
+      app.middleware.use ::ActionDispatch::Static, "#{Bastion::Engine.root}/app/assets/javascripts/bastion"
+    end
+
+    initializer 'bastion.mount_engine', :after => :build_middleware_stack do |app|
+      app.routes_reloader.paths << "#{Bastion::Engine.root}/config/routes/mount_engine.rb"
+    end
+
     initializer "bastion.assets.paths", :group => :all do |app|
-      app.config.assets.paths << Bastion::Engine.root.join('app', 'assets')
-      app.config.assets.paths << Bastion::Engine.root.join('vendor', 'assets', 'components')
-      app.config.assets.paths << Bastion::Engine.root.join('vendor', 'assets', 'components', 'font-awesome')
+      app.config.less.paths << "#{Bastion::Engine.root}/app/assets/stylesheets/bastion"
+      app.config.less.paths << "#{Bastion::Engine.root}/vendor/assets/stylesheets/bastion"
+      app.middleware.use ::ActionDispatch::Static, "#{Bastion::Engine.root}/app/assets/javascripts/bastion"
+    end
 
-      # Slight hack due to how import loading of SCSS looks up paths
-      app.config.assets.paths << "#{::UIAlchemy::Engine.root}/vendor/assets/ui_alchemy/alchemy-forms"
-      app.config.assets.paths << "#{::UIAlchemy::Engine.root}/vendor/assets/ui_alchemy/alchemy-buttons"
-
-      app.middleware.use ::ActionDispatch::Static, "#{root}/app/assets/bastion"
-
-      app.config.assets.precompile << proc do |path|
-        full_path = Rails.application.assets.resolve(path).to_path
-        if path =~ /\.(css|js)\z/
-          if full_path.include?("bastion.js")
-            puts "Including Bastion master JS file"
-            true
-          elsif full_path.include?("bastion.scss")
-            puts "Including Bastion master CSS file"
-            true
-          else
-            false
-          end
-        else
-          false
-        end
-      end
-
+    initializer "angular_templates", :group => :all do |app|
+      app.config.angular_templates.ignore_prefix = '[bastion]*\/+'
     end
   end
 end

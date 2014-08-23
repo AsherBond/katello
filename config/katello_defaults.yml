@@ -24,8 +24,6 @@ common:
   app_name: # set a name if you want to override default
   gravatar: false # set to true/false for enabling disabling gravatar
   warden: database
-  ldap_roles: false
-  validate_ldap: false
   rest_client_timeout: 30
   gpg_strict_validation: false
 
@@ -50,7 +48,7 @@ common:
   elastic_index: katello
   elastic_url: http://localhost:9200
 
-  post_sync_url: "http://localhost:3000/katello/api/repositories/sync_complete"
+  post_sync_url: "http://localhost:3000/katello/api/v2/repositories/sync_complete?token=katello"
   thumbslug_url: https://localhost:8088
 
   # Specifies the number of minutes that a password reset token will remain valid.
@@ -69,6 +67,8 @@ common:
   simple_search_tokens: [":", " and\\b", " or\\b", " not\\b"]
 
   redhat_repository_url: https://cdn.redhat.com
+
+  consumer_cert_rpm: 'katello-ca-consumer-latest.noarch.rpm'
 
   # Add actions you want to profile with ruby-prof to profiling option, e.g.
   #   profiling:
@@ -93,24 +93,6 @@ common:
   #
   notification:
     polling_seconds: 120
-
-  ldap_fluff_config:
-    host: ## ip address or hostname
-    port: 389 ## ip address or hostname
-    encryption: ## blank or :start_tls
-    base_dn: dc=redhat,dc=com ## baseDN for ldap auth, eg dc=redhat,dc=com
-    group_base: dc=redhat,dc=com ##baseDN for your ldap groups, eg ou=Groups,dc=redhat,dc=com
-    server_type: posix ## type of server. default == posix. :active_directory, :posix, :free_ipa
-    ad_domain: ## domain for your users if using active directory, eg redhat.com
-    service_user: ## service account for authenticating ldap calls in active directory or ipa
-    service_pass: ## service password for authenticating ldap calls in active directory or ipa
-    anon_queries: ## allow anonymous queries for AD or FreeIPA
-
-  # authentication
-  sso:
-    enable: true
-    provider_url: https://localhost/signo
-    logout_path: /logout
 
   # Setup your UI search configuration.
   search:
@@ -156,7 +138,7 @@ common:
     # (typically /etc/pki/tls/certs/localhost.crt) location that is needed
     # to connect to pulp over https.
     ca_cert_file:
-
+    default_login: admin
     sync_KBlimit:
     upload_chunk_size: 1048575 # upload size in bytes to pulp. see SSLRenegBufferSize in apache
 
@@ -187,7 +169,7 @@ common:
   cdn_proxy:
   #    host: localhost
   #    port: 3128
-  #    user: username
+  #    user: login
   #    password: password
 
 
@@ -195,7 +177,7 @@ common:
     adapter: postgresql
     host: localhost
     encoding: UTF8
-    username: katellouser
+    login: katellouser
     password: katellouser
 
   # when adding a new logger don't forget to add it in here even if it's disabled by default
@@ -263,8 +245,8 @@ common:
         enabled: true
       foreman_rest:
         enabled: true
-      roles:
-        enabled: false
+      action:
+        enabled: true
       # tire is a special case, all logs coming from it are debug level however they count depends
       # on root level configuration, e.g. root debug level will print most info from tire
       # unfortunately there is currently no better way
@@ -302,7 +284,7 @@ development:
   sso:
     enable: false
   logging:
-    ignored_paths: ['/notices/get_new', '/assets/']
+    ignored_paths: ['/notices/get_new', '/assets/', '/api/tasks/bulk_search']
     colorize: true
     loggers:
       root:

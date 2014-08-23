@@ -1,5 +1,5 @@
 #
-# Copyright 2013 Red Hat, Inc.
+# Copyright 2014 Red Hat, Inc.
 #
 # This software is licensed to you under the GNU General Public
 # License as published by the Free Software Foundation; either version
@@ -10,13 +10,11 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-require 'minitest_helper'
-require './test/support/candlepin/owner_support'
+require 'katello_test_helper'
+require 'support/candlepin/owner_support'
 
-class GlueCandlepinOwnerTestBase < MiniTest::Rails::ActiveSupport::TestCase
-  extend  ActiveRecord::TestFixtures
-
-  fixtures :all
+module Katello
+class GlueCandlepinOwnerTestBase < ActiveSupport::TestCase
 
   def self.before_suite
     @loaded_fixtures = load_fixtures
@@ -56,8 +54,7 @@ class GlueCandlepinOwnerTestSLA < GlueCandlepinOwnerTestBase
     e = assert_raises(RestClient::BadRequest) do
       @@org.service_level = 'Premium'
     end
-    expected = "{\n  \"displayMessage\" : \"Service level 'Premium' is not available to consumers of organization GlueCandlepinOwnerTestSystem_1.\"\n}"
-    assert_equal JSON.parse(expected), JSON.parse(e.response)
+    refute_nil JSON.parse(e.response)['displayMessage']
     assert_equal nil, @@org.service_level
 
     # Should be able to set clear the default
@@ -69,4 +66,5 @@ class GlueCandlepinOwnerTestSLA < GlueCandlepinOwnerTestBase
     assert_equal nil, @@org.service_level
   end
 
+end
 end

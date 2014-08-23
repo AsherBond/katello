@@ -1,11 +1,11 @@
 FactoryGirl.define do
-  factory :repository do
+  factory :katello_repository, :class => Katello::Repository do
     sequence(:name) { |n| "Repo #{n}" }
     sequence(:label) { |n| "repo_#{n}" }
     sequence(:pulp_id) { |n| "pulp-#{n}" }
     sequence(:content_id)
     sequence(:relative_path) {|n| "/ACME_Corporation/DEV/Repo#{n}"}
-    feed "http://localhost/foo"
+    url "http://localhost/foo"
 
     ignore do
       stubbed = true
@@ -31,5 +31,8 @@ FactoryGirl.define do
       content_type "puppet"
     end
 
+    trait :iso do
+      content_type "file"
+    end
   end
 end

@@ -1,5 +1,5 @@
 #
-# Copyright 2013 Red Hat, Inc.
+# Copyright 2014 Red Hat, Inc.
 #
 # This software is licensed to you under the GNU General Public
 # License as published by the Free Software Foundation; either version
@@ -10,6 +10,7 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
+module Katello
 module ProductTestData
   ORG_ID = "admin-org-37070"
   PRODUCT_ID = '37070'
@@ -30,7 +31,8 @@ module ProductTestData
     :cp_id => 1,
     :productContent => [],
     :attrs => [],
-    :multiplier => 1
+    :multiplier => 1,
+    :organization_id => 1
   }.with_indifferent_access
 
   SIMPLE_PRODUCT_WITH_INVALID_NAME = HashWithIndifferentAccess.new({
@@ -76,7 +78,7 @@ module ProductTestData
     :id => ProductTestData::PRODUCT_ID,
     :multiplier => 1,
     :productContent => [
-         Candlepin::ProductContent.new(
+         Katello::Candlepin::ProductContent.new(
           "content" => {
             "name" => "some-name(33)",
             "id" => "1234999",
@@ -154,6 +156,14 @@ module ProductTestData
     "restrictedToUsername" => nil,
     "updated" => "2011-07-11T20=>26=>26.510+0000",
     "created" => "2011-07-11T20=>26=>26.510+0000"
+  })
+
+  DERIVED_PROVIDED_PRODUCT = HashWithIndifferentAccess.new({
+      "created" => "2013-12-30T16:11:26.000+0000",
+      "id" => "8a85f987430cc341014344462dc06c38",
+      "productId" => "180",
+      "productName" => "Red Hat Beta",
+      "updated" => "2013-12-30T16:11:26.000+0000"
   })
 
 #   PRODUCT_WITHOUT_CONTENT_ID = HashWithIndifferentAccess.new({
@@ -351,4 +361,5 @@ module ProductTestData
 #
 #
 
+end
 end

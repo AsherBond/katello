@@ -1,5 +1,5 @@
 #
-# Copyright 2013 Red Hat, Inc.
+# Copyright 2014 Red Hat, Inc.
 #
 # This software is licensed to you under the GNU General Public
 # License as published by the Free Software Foundation; either version
@@ -16,7 +16,7 @@ module Katello
     private_class_method :new
 
     def configure(options = {})
-      raise 'logging can be configured only once' if @configured
+      fail 'logging can be configured only once' if @configured
       @configured = true
 
       configure_color_scheme
@@ -155,7 +155,7 @@ module Katello
       when 'file'
         build_file_appender(name, options)
       else
-        raise 'unsupported logger type, please choose syslog or file'
+        fail 'unsupported logger type, please choose syslog or file'
       end
     end
 

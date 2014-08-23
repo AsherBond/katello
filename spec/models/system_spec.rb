@@ -1,5 +1,5 @@
 #
-# Copyright 2013 Red Hat, Inc.
+# Copyright 2014 Red Hat, Inc.
 #
 # This software is licensed to you under the GNU General Public
 # License as published by the Free Software Foundation; either version
@@ -10,14 +10,16 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-require 'spec_helper'
+require 'katello_test_helper'
 require 'helpers/system_test_data'
-include OrchestrationHelper
-include SystemHelperMethods
 
+module Katello
 describe System do
 
-  include AuthorizationHelperMethods
+
+  include OrchestrationHelper
+  include OrganizationHelperMethods
+  include SystemHelperMethods
 
   let(:facts) { {"distribution.name" => "Fedora"} }
   let(:system_name) { 'testing' }
@@ -42,10 +44,8 @@ describe System do
   before(:each) do
     disable_org_orchestration
 
-    @organization = Organization.create!(:name=>'test_org', :label=> 'test_org')
+    @organization = get_organization
     @environment = @organization.library
-    #create_environment(:name=>'test', :label=> 'test', :prior => @organization.library.id, :organization => @organization)
-    @organization.reload #reload to get environment info
 
     @system = System.new(:name => system_name,
                          :environment => @environment,
@@ -56,31 +56,22 @@ describe System do
                          :installedProducts => installed_products,
                          :serviceLevel => nil)
 
-    Resources::Candlepin::Consumer.stub!(:create).and_return({:uuid => uuid, :owner => {:key => uuid}})
-    Resources::Candlepin::Consumer.stub!(:update).and_return(true)
+    Resources::Candlepin::Consumer.stubs(:create).returns({:uuid => uuid, :owner => {:key => uuid}})
+    Resources::Candlepin::Consumer.stubs(:update).returns(true)
 
-    Katello.pulp_server.extensions.consumer.stub!(:create).and_return({:id => uuid}) if Katello.config.katello?
+    Katello.pulp_server.extensions.consumer.stubs(:create).returns({:id => uuid}) if Katello.config.katello?
   end
 
-  context "system in valid state should be valid" do
+  describe "system in valid state should be valid" do
     before(:each) { @system = System.new }
-    specify { System.new(:name => system_name, :environment => @organization.library, :cp_type => cp_type, :facts => facts).should be_valid }
+    specify { System.new(:name => system_name, :environment => @organization.library, :cp_type => cp_type, :facts => facts).must_be :valid? }
   end
 
-  context "system in invalid state should not be valid" do
+  describe "system in invalid state should not be valid" do
     before(:each) { @system = System.new }
-    specify { System.new(:name => 'name', :environment => @organization.environments.first, :cp_type => cp_type).should_not be_valid }
-    specify { System.new(:name => 'name', :environment => @organization.environments.first, :facts => facts).should_not be_valid }
-    specify { System.new(:cp_type => cp_type, :environment => @organization.environments.first, :facts => facts).should_not be_valid }
-  end
-
-  it "registers system in candlepin and pulp on create", :katello => true do
-    Resources::Candlepin::Consumer.should_receive(:create).once.with(@environment.id.to_s, @organization.name,
-                                                                      system_name, cp_type, facts, installed_products,
-                                                                      nil, nil, nil, "1234", nil).and_return({:uuid => uuid,
-                                                                                                :owner => {:key => uuid}})
-    Katello.pulp_server.extensions.consumer.should_receive(:create).once.with(uuid, {:display_name => system_name}).and_return({:id => uuid}) if Katello.config.katello?
-    @system.save!
+    specify { System.new(:name => 'name', :environment => @organization.kt_environments.first, :cp_type => cp_type).wont_be :valid? }
+    specify { System.new(:name => 'name', :environment => @organization.kt_environments.first, :facts => facts).wont_be :valid? }
+    specify { System.new(:cp_type => cp_type, :environment => @organization.kt_environments.first, :facts => facts).wont_be :valid? }
   end
 
   it "adds custom info if organization has default custom info set" do
@@ -103,70 +94,58 @@ describe System do
 
     s.save!
 
-    System.find(s.id).custom_info.size.should == 1
-    System.find(s.id).custom_info.find_by_keyname("test_key").keyname.should == "test_key"
+    System.find(s.id).custom_info.size.must_equal(1)
+    System.find(s.id).custom_info.find_by_keyname("test_key").keyname.must_equal("test_key")
   end
 
-  context "delete system" do
-    before(:each) {
-      @system.save!
-    }
-
-    it "should delete consumer in candlepin and pulp" do
-      Resources::Candlepin::Consumer.should_receive(:destroy).once.with(uuid).and_return(true)
-      Katello.pulp_server.extensions.consumer.should_receive(:delete).once.with(uuid).and_return(true) if Katello.config.katello?
-      @system.destroy
-    end
-  end
-
-  context "regenerate identity certificates" do
+  describe "regenerate identity certificates" do
     before { @system.uuid = uuid }
 
     it "should call Resources::Candlepin::Consumer.regenerate_identity_certificates" do
-      Resources::Candlepin::Consumer.should_receive(:regenerate_identity_certificates).once.with(uuid).and_return(true)
+      Resources::Candlepin::Consumer.expects(:regenerate_identity_certificates).once.with(uuid).returns(true)
       @system.regenerate_identity_certificates
     end
   end
 
-  context "subscribe an entitlement" do
+  describe "subscribe an entitlement" do
     before { @system.uuid = uuid }
 
     it "should call Resources::Candlepin::Consumer.consume_entitlement" do
       pool_id = "foo"
-      Resources::Candlepin::Consumer.should_receive(:consume_entitlement).once.with(uuid,pool_id,nil).and_return(true)
+      Resources::Candlepin::Consumer.expects(:consume_entitlement).once.with(uuid,pool_id,nil).returns(true)
       @system.subscribe pool_id
     end
   end
 
-  context "unsubscribe an entitlement" do
+  describe "unsubscribe an entitlement" do
     before { @system.uuid = uuid }
     entitlement_id = "foo"
     it "should call Resources::Candlepin::Consumer.remove_entitlement" do
-      Resources::Candlepin::Consumer.should_receive(:remove_entitlement).once.with(uuid, entitlement_id).and_return(true)
+      Resources::Candlepin::Consumer.expects(:remove_entitlement).once.with(uuid, entitlement_id).returns(true)
       @system.unsubscribe entitlement_id
     end
   end
 
-  context "unsubscribe an certificate by serial" do
+  describe "unsubscribe an certificate by serial" do
     before { @system.uuid = uuid }
 
     it "should call Resources::Candlepin::Consumer.remove_certificate" do
       serial_id = "foo"
-      Resources::Candlepin::Consumer.should_receive(:remove_certificate).once.with(uuid,serial_id).and_return(true)
+      Resources::Candlepin::Consumer.expects(:remove_certificate).once.with(uuid,serial_id).returns(true)
       @system.unsubscribe_by_serial serial_id
     end
   end
 
-  context "unsubscribe all entitlements" do
+  describe "unsubscribe all entitlements" do
     before { @system.uuid = uuid }
 
     it "should call Resources::Candlepin::Consumer.remove_entitlements" do
-      Resources::Candlepin::Consumer.should_receive(:remove_entitlements).once.with(uuid).and_return(true)
+      Resources::Candlepin::Consumer.expects(:remove_entitlements).once.with(uuid).returns(true)
       @system.unsubscribe_all
     end
   end
 
-  context "update system" do
+  describe "update system" do
     before(:each) do
       @system.save!
     end
@@ -174,177 +153,131 @@ describe System do
     it "should give facts to Resources::Candlepin::Consumer" do
       @system.facts = facts
       @system.installedProducts = nil # simulate it's not loaded in memory
-      Resources::Candlepin::Consumer.should_receive(:update).once.with(uuid, facts, nil, nil, nil, nil, nil, anything, nil, nil).and_return(true)
+      Resources::Candlepin::Consumer.expects(:update).once.with(uuid, facts, nil, nil, nil, nil, nil, anything, nil, nil).returns(true)
       @system.save!
     end
 
     it "should give installeProducts to Resources::Candlepin::Consumer" do
       @system.installedProducts = installed_products
       @system.facts = nil # simulate it's not loaded in memory
-      Resources::Candlepin::Consumer.should_receive(:update).once.with(uuid, nil, nil, installed_products, nil, nil, nil, anything, nil, nil).and_return(true)
+      Resources::Candlepin::Consumer.expects(:update).once.with(uuid, nil, nil, installed_products, nil, nil, nil, anything, nil, nil).returns(true)
       @system.save!
     end
 
     it "should fail if the content view is not in the enviornment" do
-      content_view = FactoryGirl.build_stubbed(:content_view)
-      @system.stub(:content_view_id).and_return(content_view.id)
-      ContentView.stub(:find).and_return(content_view)
-      content_view.stub(:in_environment?).and_return(false)
-      @system.save.should be_false
-      expect { @system.save! }.to raise_exception(/Content view.*is not in environment/)
+      content_view = FactoryGirl.build_stubbed(:katello_content_view)
+      @system.stubs(:content_view_id).returns(content_view.id)
+      ContentView.stubs(:find).returns(content_view)
+      content_view.stubs(:in_environment?).returns(false)
+      @system.save.must_equal(false)
+      lambda { @system.save! }.must_raise(ActiveRecord::RecordInvalid)
     end
   end
 
-  context "persisted system has correct attributes" do
+  describe "persisted system has correct attributes" do
     before(:each) {
       @count = System.count
       @system.save! }
 
-    specify { System.count.should == @count + 1 }
+    specify { System.count.must_equal(@count + 1) }
     specify { System.find(@system.id).name == system_name }
-    specify { System.find(@system.id).uuid.should == uuid }
+    specify { System.find(@system.id).uuid.must_equal(uuid) }
     specify {
-      System.find(@system.id).organization.id.should == @organization.id }
+      System.find(@system.id).organization.id.must_equal(@organization.id) }
   end
 
-  context "cp attributes" do
-    context "in persisted object" do
+  describe "cp attributes" do
+    describe "in persisted object" do
       before(:each) do
         @system.uuid = uuid
         @system.save
-        Resources::Candlepin::Consumer.stub!(:get).and_return({:href => href, :uuid => uuid})
-        Resources::Candlepin::Consumer.stub!(:entitlements).and_return({})
-        Resources::Candlepin::Consumer.stub!(:available_pools).and_return([])
+        Resources::Candlepin::Consumer.stubs(:get).returns({:href => href, :uuid => uuid})
+        Resources::Candlepin::Consumer.stubs(:entitlements).returns({})
+        Resources::Candlepin::Consumer.stubs(:available_pools).returns([])
       end
 
       it "should access candlepin if uninialized" do
-        Resources::Candlepin::Consumer.should_receive(:get).once.with(uuid).and_return({:href => href, :uuid => uuid})
+        Resources::Candlepin::Consumer.expects(:get).once.with(uuid).returns({:href => href, :uuid => uuid})
         @system.href
       end
 
       it "href dude" do
-        @system.href.should == href
+        @system.href.must_equal(href)
       end
 
       it "uuid bro" do
-        @system.uuid.should == uuid
+        @system.uuid.must_equal(uuid)
       end
 
       it "cp_type srsly" do
-        @system.cp_type.should == cp_type
+        @system.cp_type.must_equal(cp_type)
       end
 
       it "should access candlepin if entitlements is uninialized" do
-        Resources::Candlepin::Consumer.should_receive(:entitlements).once.with(uuid).and_return({})
+        Resources::Candlepin::Consumer.expects(:entitlements).once.with(uuid).returns({})
         @system.entitlements
       end
 
-      context "shouldn't access candlepin if initialized" do
+      describe "shouldn't access candlepin if initialized" do
         before(:each) do
           @system.href = href
           @system.entitlements = entitlements
           @system.save
 
-          Resources::Candlepin::Consumer.should_not_receive(:get)
-          Resources::Candlepin::Consumer.should_not_receive(:entitlements)
+          Resources::Candlepin::Consumer.expects(:get).never
+          Resources::Candlepin::Consumer.expects(:entitlements).never
         end
 
-        specify { @system.href.should == href; }
-        specify { @system.entitlements.should == entitlements; }
+        specify { @system.href.must_equal(href) }
+        specify { @system.entitlements.must_equal(entitlements) }
       end
 
       it "should access candlepin if pools is uninialized" do
-        Resources::Candlepin::Consumer.should_receive(:entitlements).once.with(uuid).and_return([{"pool" => {"id" => 100}}])
-        Resources::Candlepin::Pool.should_receive(:find).once.and_return({})
+        Resources::Candlepin::Consumer.expects(:entitlements).once.with(uuid).returns([{"pool" => {"id" => 100}}])
+        Resources::Candlepin::Pool.expects(:find).once.returns({})
         @system.pools
       end
 
-      context "shouldn't access candlepin pools if initialized" do
+      describe "shouldn't access candlepin pools if initialized" do
         before(:each) do
           @system.href = href
           @system.pools = {}
-          Resources::Candlepin::Consumer.should_not_receive(:get)
-          Resources::Candlepin::Consumer.should_not_receive(:entitlements)
-          Resources::Candlepin::Pool.should_not_receive(:find)
+          Resources::Candlepin::Consumer.expects(:get).never
+          Resources::Candlepin::Consumer.expects(:entitlements).never
+          Resources::Candlepin::Pool.expects(:find).never
         end
 
-        specify { @system.href.should == href }
-        specify { @system.pools.should == pools }
+        specify { @system.href.must_equal(href) }
+        specify { @system.pools.must_equal(pools) }
       end
 
       it "should access candlepin if available_pools is uninitialized" do
-        Resources::Candlepin::Consumer.should_receive(:available_pools).once.with(uuid, false).and_return([])
+        Resources::Candlepin::Consumer.expects(:available_pools).once.with(uuid, false).returns([])
         @system.available_pools
       end
 
-      context "shouldn't access candlepin available_pools if initialized" do
+      describe "shouldn't access candlepin available_pools if initialized" do
         before(:each) do
           @system.available_pools = available_pools
-          Resources::Candlepin::Consumer.should_not_receive(:get)
-          Resources::Candlepin::Consumer.should_not_receive(:available_pools)
+          Resources::Candlepin::Consumer.expects(:get).never
+          Resources::Candlepin::Consumer.expects(:available_pools).never
         end
-        specify { @system.available_pools.should == available_pools }
+        specify { @system.available_pools.must_equal(available_pools) }
       end
 
     end
 
-    context "shouldn't access candlepin if new record" do
-      before(:each) { Resources::Candlepin::Consumer.should_not_receive(:get) }
-      specify { @system.href.should be_nil }
+    describe "shouldn't access candlepin if new record" do
+      before(:each) { Resources::Candlepin::Consumer.expects(:get).never }
+      specify { @system.href.must_be_nil }
     end
   end
 
-  context "pulp attributes", :katello => true do
+  describe "pulp attributes (katello)" do
     it "should update package-profile" do
-      Katello.pulp_server.extensions.consumer.should_receive(:upload_profile).once.with(uuid, 'rpm', package_profile).and_return(true)
-      System.any_instance.should_receive(:generate_applicability).once
+      Katello.pulp_server.extensions.consumer.expects(:upload_profile).once.with(uuid, 'rpm', package_profile).returns(true)
+      System.any_instance.expects(:generate_applicability).once
       @system.upload_package_profile(package_profile)
-    end
-  end
-
-  describe "available releases" do
-    before do
-      disable_product_orchestration
-      disable_repo_orchestration
-      @product = Product.create!(:name=>"prod1", :label=> "prod1", :cp_id => '12345', :provider => @organization.redhat_provider)
-      @environment = create_environment({:name=>"Dev", :label=> "Dev", :prior => @organization.library, :organization => @organization})
-      environment = Katello.config.katello? ? @environment : @organization.library
-      @releases = %w[6.1 6.2 6Server]
-      @releases.each do |release|
-        Repository.create!(:name => "Repo #{release}",
-                          :label => "Repo#{release.gsub(".", "_")}",
-                          :pulp_id => "repo #{release}",
-                          :enabled => true,
-                          :environment => environment,
-                          :product => @product,
-                          :major => "6",
-                          :minor => release,
-                          :cp_label => "repo",
-                          :relative_path=>'/foo',
-                          :content_id=>'foo',
-                          :content_view_version=>environment.content_view_versions.first,
-                          :feed => 'https://localhost')
-      end
-      Repository.create!(:name => "Repo without releases",
-                         :label => "Repo_without_releases",
-                         :pulp_id => "repo_without_release",
-                         :enabled => true,
-                         :environment => environment,
-                         :product => @product,
-                         :major => nil,
-                         :minor => nil,
-                         :cp_label => "repo",
-                         :relative_path=>'/foo',
-                         :content_id=>'foo',
-                         :content_view_version=>environment.content_view_versions.first,
-                         :feed => 'https://localhost')
-      @system.environment = environment
-      @system.content_view = environment.content_views.first
-      @system.save!
-    end
-
-    it "returns all releases available for the current environment", :katello => true do
-      @system.available_releases.should == @releases.sort
     end
   end
 
@@ -364,7 +297,7 @@ describe System do
       @system_2 = create_system(common_attrs.merge(:name => "sys_2", :uuid => "sys_2_uuid"))
       @system_3 = create_system(common_attrs.merge(:name => "sys_3", :uuid => "sys_3_uuid"))
 
-      Resources::Candlepin::Entitlement.stub(:get).and_return([
+      Resources::Candlepin::Entitlement.stubs(:get).returns([
         {"pool" => {"id" => pool_id_1}, "consumer" => {"uuid" => @system_1.uuid}},
         {"pool" => {"id" => pool_id_1}, "consumer" => {"uuid" => @system_2.uuid}},
         {"pool" => {"id" => pool_id_2}, "consumer" => {"uuid" => @system_2.uuid}},
@@ -374,277 +307,27 @@ describe System do
 
     it "should find all systems that are subscribed to the pool" do
       pool_uuids = System.all_by_pool(pool_id_1).map{ |sys| sys.uuid}
-      pool_uuids.should == [@system_1.uuid, @system_2.uuid]
+      pool_uuids.must_equal([@system_1.uuid, @system_2.uuid])
     end
 
     it "should return empty array if the system isn't subscribed to that pool" do
-      System.all_by_pool(pool_id_3).should == []
+      System.all_by_pool(pool_id_3).must_equal([])
     end
 
   end
 
   describe "host-guest relation" do
 
-    # TODO: Unsure how to test this after making :host, :guests use lazy_accessor
-    pending "guest system" do
-      before { Resources::Candlepin::Consumer.stub(:host => nil, :guests => []) }
-
-      it "should get host system" do
-        Resources::Candlepin::Consumer.should_receive(:host).with(@system.uuid).and_return(SystemTestData.host)
-        @system.host.name.should == SystemTestData.host["name"]
-      end
-    end
-
-    # TODO: Unsure how to test this after making :host, :guests use lazy_accessor
-    pending "host system" do
-      before { Resources::Candlepin::Consumer.stub(:host => nil, :guests => []) }
-
-      it "should get guest systems" do
-        Resources::Candlepin::Consumer.should_receive(:guests).with(@system.uuid).and_return(SystemTestData.guests)
-        guests = @system.guests
-        guests.should have(1).system
-        guests.first.name.should == SystemTestData.guests.first["name"]
-      end
-    end
-
-    context "guest without host (before running virt-who)" do
+    describe "guest without host (before running virt-who)" do
       it "should return no host" do
-        Resources::Candlepin::CandlepinResource.stub(:default_headers => {}, :get => MemoStruct.new(:code => 204, :body => ""))
-        @system.host.should_not be
+        response = stub
+        response.stubs(:code => 204, :body => "")
+        Resources::Candlepin::CandlepinResource.stubs(:default_headers => {}, :get => response)
+        @system.virtual_host.must_be_nil
       end
     end
 
   end
 
-  describe "a user with no permissions" do
-    before :each do
-      #give access to the org
-      User.current =  user_with_permissions{ |u| u.can(:create, :providers, nil, @organization) }
-    end
-
-    it "Should not be able to do anything with systems", :katello => true do
-      System.readable(@organization).should_not include(@system)
-      System.any_readable?(@organization).should == false
-      System.registerable?(@environment, @organization).should == false
-      System.registerable?(nil, @organization).should == false
-      System.any_deletable?(@environment, @organization).should == false
-      System.any_deletable?(nil, @organization).should == false
-      @system.readable?.should == false
-      @system.editable?.should == false
-      @system.deletable?.should == false
-    end
-  end
-
-  describe "a user with environment system perms" do
-    before :each do
-      @system.save!
-    end
-
-    it "should be readable if user can read systems for environment", :katello => true do
-      User.current =  user_with_permissions { |u| u.can(:read_systems, :environments, @environment.id, @organization) }
-      System.readable(@organization).should include(@system)
-      System.any_readable?(@organization).should == true
-      System.registerable?(@environment, @organization).should == false
-      System.registerable?(nil, @organization).should == false
-      System.any_deletable?(@environment, @organization).should == false
-      System.any_deletable?(nil, @organization).should == false
-      @system.readable?.should == true
-      @system.editable?.should == false
-      @system.deletable?.should == false
-    end
-
-    it "should be editable if user can edit systems for environment", :katello => true do
-      User.current =  user_with_permissions { |u| u.can(:update_systems, :environments, @environment.id, @organization) }
-      System.readable(@organization).should include(@system)
-      System.any_readable?(@organization).should == true
-      System.registerable?(@environment, @organization).should == false
-      System.registerable?(nil, @organization).should == false
-      System.any_deletable?(@environment, @organization).should == false
-      System.any_deletable?(nil, @organization).should == false
-      @system.readable?.should == true
-      @system.editable?.should == true
-      @system.deletable?.should == false
-    end
-
-    it "should be registerable if user can edit systems for environment", :katello => true do
-      User.current =  user_with_permissions { |u| u.can(:register_systems, :environments, @environment.id, @organization) }
-      System.readable(@organization).should include(@system)
-      System.any_readable?(@organization).should == true
-      System.registerable?(@environment, @organization).should == true
-      System.registerable?(nil, @organization).should == false
-      System.any_deletable?(@environment, @organization).should == false
-      System.any_deletable?(nil, @organization).should == false
-      @system.readable?.should == true
-      @system.editable?.should == false
-      @system.deletable?.should == false
-    end
-
-    it "should be deletable if user can delete systems for environment", :katello => true do
-      User.current =  user_with_permissions { |u| u.can(:delete_systems, :environments, @environment.id, @organization) }
-      System.readable(@organization).should include(@system)
-      System.any_readable?(@organization).should == true
-      System.registerable?(@environment, @organization).should == false
-      System.registerable?(nil, @organization).should == false
-      System.any_deletable?(@environment, @organization).should == true
-      System.any_deletable?(nil, @organization).should == false
-      @system.readable?.should == true
-      @system.editable?.should == false
-      @system.deletable?.should == true
-    end
-
-  end
-
-  describe "a user with organization system perms " do
-    before :each do
-      @system.save!
-    end
-
-    it "should be readable if user can read systems for organization" do
-      User.current =  user_with_permissions { |u| u.can(:read_systems, :organizations, nil, @organization) }
-      System.readable(@organization).should include(@system)
-      System.any_readable?(@organization).should == true
-      System.registerable?(@environment, @organization).should == false
-      System.registerable?(nil, @organization).should == false
-      System.any_deletable?(@environment, @organization).should == false
-      System.any_deletable?(nil, @organization).should == false
-      @system.readable?.should == true
-      @system.editable?.should == false
-      @system.deletable?.should == false
-    end
-
-    it "should be editable if user can edit systems for organization" do
-      User.current =  user_with_permissions { |u| u.can(:update_systems, :organizations, nil, @organization) }
-      System.readable(@organization).should include(@system)
-      System.any_readable?(@organization).should == true
-      System.registerable?(@environment, @organization).should == false
-      System.registerable?(nil, @organization).should == false
-      System.any_deletable?(@environment, @organization).should == false
-      System.any_deletable?(nil, @organization).should == false
-      @system.readable?.should == true
-      @system.editable?.should == true
-      @system.deletable?.should == false
-    end
-
-    it "should be registerable if user can edit systems for organization" do
-      User.current =  user_with_permissions { |u| u.can(:register_systems, :organizations, nil, @organization) }
-      System.readable(@organization).should include(@system)
-      System.any_readable?(@organization).should == true
-      System.registerable?(@environment, @organization).should == true
-      System.registerable?(nil, @organization).should == true
-      System.any_deletable?(@environment, @organization).should == false
-      System.any_deletable?(nil, @organization).should == false
-      @system.readable?.should == true
-      @system.editable?.should == false
-      @system.deletable?.should == false
-    end
-
-    it "should be deletable if user can delete systems for organization" do
-      User.current =  user_with_permissions { |u| u.can(:delete_systems, :organizations, nil, @organization) }
-      System.readable(@organization).should include(@system)
-      System.any_readable?(@organization).should == true
-      System.registerable?(@environment, @organization).should == false
-      System.registerable?(nil, @organization).should == false
-      System.any_deletable?(@environment, @organization).should == true
-      System.any_deletable?(nil, @organization).should == true
-      @system.readable?.should == true
-      @system.editable?.should == false
-      @system.deletable?.should == true
-    end
-
-  end
-
-  describe "a user with random system permissions in headpin mode", :headpin => true do
-    before (:each) do
-      @system.save!
-      Katello.config.stub!(:katello?).and_return(false)
-    end
-
-    pending "should be deletable" do
-      User.current =  user_with_permissions { |u| u.can(:delete_systems, :organizations, nil, @organization) }
-      System.readable(@organization).should include(@system)
-      System.any_readable?(@organization).should == true
-      System.registerable?(@environment, @organization).should == false
-      System.registerable?(nil, @organization).should == false
-      System.any_deletable?(@environment, @organization).should == true
-      System.any_deletable?(nil, @organization).should == true
-      @system.readable?.should == true
-      @system.editable?.should == false
-      @system.deletable?.should == true
-    end
-
-    pending "should be editable" do
-      User.current =  user_with_permissions { |u| u.can(:update_systems, :organizations, nil, @organization) }
-      System.readable(@organization).should include(@system)
-      System.any_readable?(@organization).should == true
-      System.registerable?(@environment, @organization).should == false
-      System.registerable?(nil, @organization).should == false
-      System.any_deletable?(@environment, @organization).should == false
-      System.any_deletable?(nil, @organization).should == false
-      @system.readable?.should == true
-      @system.editable?.should == true
-      @system.deletable?.should == false
-    end
-
-    pending "should be registerable" do
-      User.current =  user_with_permissions { |u| u.can(:register_systems, :organizations, nil, @organization) }
-      System.readable(@organization).should include(@system)
-      System.any_readable?(@organization).should == true
-      System.registerable?(@environment, @organization).should == true
-      System.registerable?(nil, @organization).should == true
-      System.any_deletable?(@environment, @organization).should == false
-      System.any_deletable?(nil, @organization).should == false
-      @system.readable?.should == true
-      @system.editable?.should == false
-      @system.deletable?.should == false
-    end
-  end
-
-  describe "a user with organization system perms " do
-    before :each do
-      disable_consumer_group_orchestration
-      @group = SystemGroup.create!(:organization=>@organization, :name=>"test_group")
-      @system.system_groups << @group
-      @system.save!
-    end
-
-    it "should be readable if user can read systems for organization", :katello => true do
-      User.current =  user_with_permissions { |u| u.can(:read_systems, :system_groups, @group.id, @organization) }
-      System.readable(@organization).should include(@system)
-      System.any_readable?(@organization).should == true
-      System.registerable?(@environment, @organization).should == false
-      System.registerable?(nil, @organization).should == false
-      System.any_deletable?(@environment, @organization).should == false
-      System.any_deletable?(nil, @organization).should == false
-      @system.readable?.should == true
-      @system.editable?.should == false
-      @system.deletable?.should == false
-    end
-
-    it "should be editable if user can edit systems for organization", :katello => true do
-      User.current =  user_with_permissions { |u| u.can(:update_systems, :system_groups, @group.id, @organization) }
-      System.readable(@organization).should include(@system)
-      System.any_readable?(@organization).should == true
-      System.registerable?(@environment, @organization).should == false
-      System.registerable?(nil, @organization).should == false
-      System.any_deletable?(@environment, @organization).should == false
-      System.any_deletable?(nil, @organization).should == false
-      @system.readable?.should == true
-      @system.editable?.should == true
-      @system.deletable?.should == false
-    end
-
-    it "should be deletable if user can delete systems for organization", :katello => true do
-      User.current =  user_with_permissions { |u| u.can(:delete_systems, :system_groups, @group.id, @organization) }
-      System.readable(@organization).should include(@system)
-      System.any_readable?(@organization).should == true
-      System.registerable?(@environment, @organization).should == false
-      System.registerable?(nil, @organization).should == false
-      System.any_deletable?(@environment, @organization).should == true
-      System.any_deletable?(nil, @organization).should == true
-      @system.readable?.should == true
-      @system.editable?.should == false
-      @system.deletable?.should == true
-    end
-  end
-
+end
 end

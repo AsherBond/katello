@@ -1,5 +1,5 @@
 #
-# Copyright 2013 Red Hat, Inc.
+# Copyright 2014 Red Hat, Inc.
 #
 # This software is licensed to you under the GNU General Public
 # License as published by the Free Software Foundation; either version
@@ -10,9 +10,10 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-require 'minitest_helper'
+require 'katello_test_helper'
 
-class GlueElasticSearchTest < MiniTest::Rails::ActiveSupport::TestCase
+module Katello
+class GlueElasticSearchTest < ActiveSupport::TestCase
 
   def setup
     @FakeClass = Class.new do
@@ -37,7 +38,9 @@ class GlueElasticSearchTest < MiniTest::Rails::ActiveSupport::TestCase
   def test_items
     @results.expect(:total, 0)
     @results.expect(:total, 0)
+    @results.expect(:subtotal, 0)
     @results.expect(:results, [])
+    @results.expect(:facets, {})
 
     @FakeClass.stub(:search, @results) do
       items, count = @items.retrieve("*")
@@ -60,7 +63,6 @@ class GlueElasticSearchTest < MiniTest::Rails::ActiveSupport::TestCase
   end
 
   def test_total_items
-    filters = []
     @results.expect(:total, 10)
 
     @FakeClass.stub(:search, @results) do
@@ -70,4 +72,5 @@ class GlueElasticSearchTest < MiniTest::Rails::ActiveSupport::TestCase
     end
   end
 
+end
 end

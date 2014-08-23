@@ -1,5 +1,5 @@
 #
-# Copyright 2013 Red Hat, Inc.
+# Copyright 2014 Red Hat, Inc.
 #
 # This software is licensed to you under the GNU General Public
 # License as published by the Free Software Foundation; either version
@@ -10,14 +10,14 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-require 'spec_helper'
+require 'katello_test_helper'
 
-include OrchestrationHelper
-include UserHelperMethods
-
+module Katello
 describe PulpTaskStatus, :katello => true do
 
-  context "proxy TaskStatus for pulp task" do
+  include OrchestrationHelper
+
+  describe "proxy TaskStatus for pulp task" do
     let(:pulp_task_without_error) do
       {
           :task_id => '123',
@@ -49,36 +49,42 @@ describe PulpTaskStatus, :katello => true do
       }.with_indifferent_access
     end
 
-    context "TaskStatus should have correct attributes for a completed task" do
-      before { @t = PulpTaskStatus.using_pulp_task(pulp_task_without_error) }
-
-      specify { @t.uuid.should == pulp_task_without_error[:task_id] }
-      specify { @t.state.should == pulp_task_without_error[:state] }
-      specify { @t.start_time.should == pulp_task_without_error[:start_time] }
-      specify { @t.finish_time.should == pulp_task_without_error[:finish_time] }
-      specify { @t.result.should == pulp_task_without_error[:result] }
+    describe "TaskStatus should have correct attributes for a completed task" do
+      before do
+        Katello.pulp_server.resources.task.stubs(:poll).returns(pulp_task_without_error)
+        @t = PulpTaskStatus.using_pulp_task(pulp_task_with_error)
+      end
+      specify { @t.uuid.must_equal(pulp_task_without_error[:task_id]) }
+      specify { @t.state.must_equal(pulp_task_without_error[:state]) }
+      specify { @t.start_time.must_equal(pulp_task_without_error[:start_time]) }
+      specify { @t.finish_time.must_equal(pulp_task_without_error[:finish_time]) }
+      specify { @t.result.must_equal(pulp_task_without_error[:result]) }
     end
 
-    context "TaskStatus should have correct attributes for a failed task" do
-      before { @t = PulpTaskStatus.using_pulp_task(pulp_task_with_error) }
-      specify { @t.result.should == {:errors => [pulp_task_with_error[:exception], pulp_task_with_error[:traceback]]} }
+    describe "TaskStatus should have correct attributes for a failed task" do
+      before do
+        Katello.pulp_server.resources.task.stubs(:poll).returns(pulp_task_with_error)
+        @t = PulpTaskStatus.using_pulp_task(pulp_task_with_error)
+      end
+      specify { @t.result.must_equal({:errors => [pulp_task_with_error[:exception], pulp_task_with_error[:traceback]]}) }
     end
 
-    context "refreshing TaskStatus with latest from pulp" do
+    describe "refreshing TaskStatus with latest from pulp" do
       before(:each) do
         disable_org_orchestration
         @organization = Organization.create!(:name=>'test_org', :label=> 'test_org')
+        Katello.pulp_server.resources.task.stubs(:poll).returns(pulp_task_without_error)
         @t = PulpTaskStatus.using_pulp_task(pulp_task_without_error) do |t|
           t.organization = @organization
-          t.user = new_user
+          t.user = users(:one)
         end
         @t.save!
 
-        Katello.pulp_server.resources.task.stub(:poll).and_return(updated_pulp_task)  if Katello.config.katello?
+        Katello.pulp_server.resources.task.stubs(:poll).returns(updated_pulp_task)  if Katello.config.katello?
       end
 
       it "should fetch data from pulp" do
-        Katello.pulp_server.resources.task.should_receive(:poll).once.with(@t.uuid).and_return(updated_pulp_task)
+        Katello.pulp_server.resources.task.expects(:poll).once.with(@t.uuid).returns(updated_pulp_task)
         @t.refresh
       end
 
@@ -92,4 +98,5 @@ describe PulpTaskStatus, :katello => true do
     end
 
   end
+end
 end

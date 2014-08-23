@@ -1,0 +1,87 @@
+acme_default:
+  name:           ACME Default ContentView
+  label:          org_default_label
+  default:        true
+  next_version:   2
+  created_at: <%= Time.now %>
+  updated_at: <%= Time.now %>
+  organization_id: <%= ActiveRecord::Fixtures.identify(:empty_organization) %>
+
+
+#View published only to library
+library_view:
+  name:           Published LIbrary view
+  label:          'published_library_view'
+  default:        false
+  next_version:   3
+  created_at: <%= Time.now %>
+  updated_at: <%= Time.now %>
+  organization_id: <%= ActiveRecord::Fixtures.identify(:empty_organization) %>
+
+no_environment_view:
+  name:           No environment view
+  label:          'no_environment_view'
+  default:        false
+  next_version:   1
+  created_at: <%= Time.now %>
+  updated_at: <%= Time.now %>
+  organization_id: <%= ActiveRecord::Fixtures.identify(:empty_organization) %>
+
+#view published to library and dev
+library_dev_view:
+  name:           Published Library and dev view
+  label:          published_dev_view
+  default:        false
+  next_version:   2
+  created_at: <%= Time.now %>
+  updated_at: <%= Time.now %>
+  organization_id: <%= ActiveRecord::Fixtures.identify(:empty_organization) %>
+
+library_dev_staging_view:
+  name:           Published Library - dev - staging view
+  label:          published_dev_staging_view
+  default:        false
+  next_version:   4
+  created_at: <%= Time.now %>
+  updated_at: <%= Time.now %>
+  organization_id: <%= ActiveRecord::Fixtures.identify(:empty_organization) %>
+
+candlepin_default_cv:
+  name:           candlepin Default ContentView
+  label:          candlepin_library_default_cv
+  default:        true
+  next_version:   1
+  created_at: <%= Time.now %>
+  updated_at: <%= Time.now %>
+  organization_id: <%= ActiveRecord::Fixtures.identify(:organization2) %>
+
+
+# For use with glue/candlepin tests
+candlepin_library_cv:
+  name:           Candlepin Library Content View
+  label:          candlepin_library_cv
+  default:        false
+  next_version:   2
+  created_at: <%= Time.now %>
+  updated_at: <%= Time.now %>
+  organization_id: <%= ActiveRecord::Fixtures.identify(:organization2) %>
+
+candlepin_library_dev_cv:
+  name:           Candlepin Library and Dev Content View
+  label:          candlepin_library_dev_cv
+  default:        false
+  next_version:   2
+  created_at: <%= Time.now %>
+  updated_at: <%= Time.now %>
+  organization_id: <%= ActiveRecord::Fixtures.identify(:organization2) %>
+# end use with glue/candlepin tests
+
+composite_view:
+  name:           Composite view
+  label:          composite_view
+  composite:      true
+  default:        false
+  next_version:   2
+  created_at: <%= Time.now %>
+  updated_at: <%= Time.now %>
+  organization_id: <%= ActiveRecord::Fixtures.identify(:empty_organization) %>

@@ -1,5 +1,5 @@
 #
-# Copyright 2013 Red Hat, Inc.
+# Copyright 2014 Red Hat, Inc.
 #
 # This software is licensed to you under the GNU General Public
 # License as published by the Free Software Foundation; either version
@@ -10,13 +10,11 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-require 'minitest_helper'
+require 'katello_test_helper'
 require 'mocha/setup'
 
-class GlueCandlepinProviderTestBase < MiniTest::Rails::ActiveSupport::TestCase
-  extend  ActiveRecord::TestFixtures
-
-  fixtures :all
+module Katello
+class GlueCandlepinProviderTestBase < ActiveSupport::TestCase
 
   def self.before_suite
     @loaded_fixtures = load_fixtures
@@ -28,15 +26,15 @@ class GlueCandlepinProviderTestBase < MiniTest::Rails::ActiveSupport::TestCase
     User.current = User.find(@loaded_fixtures['users']['admin']['id'])
     VCR.insert_cassette('glue_candlepin_provider', :match_requests_on => [:path, :params, :method, :body_json])
 
-    @@dev      = KTEnvironment.find(@loaded_fixtures['environments']['candlepin_dev']['id'])
-    @@org      = Organization.find(@loaded_fixtures['organizations']['candlepin_org']['id'])
-    @@provider = Provider.find(@loaded_fixtures['providers']['candlepin_redhat']['id'])
+    @@dev      = KTEnvironment.find(@loaded_fixtures['katello_environments']['candlepin_dev']['id'])
+    @@org      = Organization.find(@loaded_fixtures['taxonomies']['organization2']['id'])
+    @@provider = Provider.find(@loaded_fixtures['katello_providers']['candlepin_redhat']['id'])
 
-    @@org.set_owner
+    CandlepinOwnerSupport.set_owner(@@org)
   end
 
   def self.after_suite
-    @@org.del_owner
+    Resources::Candlepin::Owner.destroy(@@org.label)
   ensure
     VCR.eject_cassette
   end
@@ -63,38 +61,26 @@ class GlueCandlepinProviderTestImport < GlueCandlepinProviderTestBase
     # Import the newest org1 manifest - should work
     manifest = 'minitest-org1-v2'
     VCR.use_cassette("support/candlepin/provider_#{manifest}", :match_requests_on => [:path, :params, :method]) do
-      @@provider.queue_import_manifest(:notify => true, :zip_file_path=>"test/fixtures/manifests/#{manifest}.zip")
-      notice = Notice.find_by_text("Subscription manifest uploaded successfully for provider 'Red Hat Provider'. Please enable the repositories you want to sync by selecting 'Enable Repositories' and selecting individual repositories to be enabled.")
-      assert notice, "Notice of successful import of #{manifest}.zip missing"
-      notice.destroy if notice # clean up
+      @@provider.queue_import_manifest(:zip_file_path=>"test/fixtures/manifests/#{manifest}.zip")
     end
 
     # Import the older org1 manifest - should fail
     manifest = 'minitest-org1-v1'
     VCR.use_cassette("support/candlepin/provider_#{manifest}", :match_requests_on => [:path, :params, :method]) do
       assert_raises(RestClient::Conflict) do
-        @@provider.queue_import_manifest(:notify => true, :zip_file_path=>"test/fixtures/manifests/#{manifest}.zip")
+        @@provider.queue_import_manifest(:zip_file_path=>"test/fixtures/manifests/#{manifest}.zip")
       end
-      notice = Notice.find_by_text("Subscription manifest uploaded successfully for provider 'Red Hat Provider'. Please enable the repositories you want to sync by selecting 'Enable Repositories' and selecting individual repositories to be enabled.")
-      assert notice, "Notice of successful import of #{manifest}.zip missing"
-      notice.destroy if notice # clean up
     end
 
     # Import different org2 manifest - should fail
     manifest = 'minitest-org2-v1'
     VCR.use_cassette("support/candlepin/provider_#{manifest}", :match_requests_on => [:path, :params, :method]) do
-      @@provider.queue_import_manifest(:notify => true, :zip_file_path=>"test/fixtures/manifests/#{manifest}.zip")
-      notice = Notice.find_by_text("Subscription manifest uploaded successfully for provider 'Red Hat Provider'. Please enable the repositories you want to sync by selecting 'Enable Repositories' and selecting individual repositories to be enabled.")
-      assert notice, "Notice of successful import of #{manifest}.zip missing"
-      notice.destroy if notice # clean up
+      @@provider.queue_import_manifest(:zip_file_path=>"test/fixtures/manifests/#{manifest}.zip")
     end
 
     manifest = 'minitest-org1-v2'
     VCR.use_cassette("support/candlepin/provider_#{manifest}", :match_requests_on => [:path, :params, :method]) do
-      @@provider.queue_delete_manifest({:notify => true})
-      notice = Notice.find_by_text("Subscription manifest deleted successfully for provider 'Red Hat Provider'.")
-      assert notice, "Notice of successful delete of #{manifest}.zip missing"
-      notice.destroy if notice # clean up
+      @@provider.queue_delete_manifest
     end
 
   end
@@ -111,4 +97,4 @@ class GlueCandlepinProviderTestDelete < GlueCandlepinProviderTestBase
     @@provider.delete_manifest
   end
 end
-
+end

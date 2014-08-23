@@ -1,5 +1,5 @@
 #
-# Copyright 2013 Red Hat, Inc.
+# Copyright 2014 Red Hat, Inc.
 #
 # This software is licensed to you under the GNU General Public
 # License as published by the Free Software Foundation; either version
@@ -10,8 +10,9 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-require 'helpers/repo_test_data'
+require File.expand_path("../helpers/repo_test_data", File.dirname(__FILE__))
 
+module Katello
 module OrchestrationHelper
 
   CERT = <<EOCERT
@@ -81,91 +82,105 @@ rKH9OkgKEvwkf8zQjO/XSvuoac83uBEFgKXJwYLHPA3U20JrchKU7klLwzSsmrXA
 -----END RSA PRIVATE KEY-----
 EOKEY
 
-  def disable_product_orchestration
-    Resources::Candlepin::Product.stub!(:get).and_return do
-      [{ :productContent => [] }] #return a fresh hash, as add_repo modified it
-    end
-    Resources::Candlepin::Product.stub!(:add_content).and_return(true)
-    Resources::Candlepin::Product.stub!(:delete_content).and_return(true)
-    Resources::Candlepin::Product.stub!(:create).and_return({ :id => '1' })
-    Resources::Candlepin::Product.stub!(:create_unlimited_subscription).and_return(true)
-    Resources::Candlepin::Product.stub!(:pools).and_return([])
-    Resources::Candlepin::Product.stub!(:delete_subscriptions).and_return(nil)
+  def disable_activation_key_orchestration
+    Resources::Candlepin::ActivationKey.stubs(:create).returns({:id => '123'})
+  end
 
-    Resources::Candlepin::Content.stub!(:create).and_return({ :id => '123', :type=>'yum' })
-    Resources::Candlepin::Content.stub!(:update).and_return({ :id => '123', :type=>'yum' })
+  def disable_product_orchestration
+    Resources::Candlepin::Product.stubs(:get).returns([{:productContent => []}]) #return a fresh hash, as add_repo modified it
+    Resources::Candlepin::Product.stubs(:add_content).returns(true)
+    Resources::Candlepin::Product.stubs(:delete_content).returns(true)
+    Resources::Candlepin::Product.stubs(:create).returns({ :id => '1' })
+    Resources::Candlepin::Product.stubs(:create_unlimited_subscription).returns(true)
+    Resources::Candlepin::Product.stubs(:pools).returns([])
+    Resources::Candlepin::Product.stubs(:delete_subscriptions).returns(nil)
+
+    Resources::Candlepin::Content.stubs(:create).returns({ :id => '123', :type=>'yum' })
+    Resources::Candlepin::Content.stubs(:update).returns({ :id => '123', :type=>'yum' })
 
     # pulp orchestration
-    Resources::Candlepin::Product.stub!(:certificate).and_return("")
-    Resources::Candlepin::Product.stub!(:key).and_return("")
-    Resources::Candlepin::Product.stub!(:destroy).and_return(true)
+    Resources::Candlepin::Product.stubs(:certificate).returns("")
+    Resources::Candlepin::Product.stubs(:key).returns("")
+    Resources::Candlepin::Product.stubs(:destroy).returns(true)
 
     if Katello.config.katello?
-      Katello.pulp_server.extensions.repository.stub!(:create_or_update_schedule).and_return(true)
-      Katello.pulp_server.extensions.repository.stub!(:remove_schedules).and_return(true)
+      Katello.pulp_server.extensions.repository.stubs(:create_or_update_schedule).returns(true)
+      Katello.pulp_server.extensions.repository.stubs(:remove_schedules).returns(true)
     end
   end
 
   def disable_pools_orchestration
-    Resources::Candlepin::Pool.stub!(:find).and_return({})
+    Resources::Candlepin::Pool.stubs(:find).returns({})
   end
 
   def disable_org_orchestration
-    Resources::Candlepin::Owner.stub!(:create).and_return({})
-    Resources::Candlepin::Owner.stub!(:create_user).and_return(true)
-    Resources::Candlepin::Owner.stub!(:destroy).and_return(true)
-    Resources::Candlepin::Owner.stub!(:get_ueber_cert).and_return({ :cert => CERT, :key => KEY })
+    Resources::Candlepin::Owner.stubs(:create).returns({})
+    Resources::Candlepin::Owner.stubs(:create_user).returns(true)
+    Resources::Candlepin::Owner.stubs(:destroy).returns(true)
+    Resources::Candlepin::Owner.stubs(:get_ueber_cert).returns({ :cert => CERT, :key => KEY })
+    Organization.any_instance.stubs(:ensure_not_in_transaction!)
+    disable_foreman_tasks_hooks_execution(Organization)
     disable_env_orchestration # env is orchestrated with org - we disable this as well
   end
 
   def disable_env_orchestration
-    Resources::Candlepin::Environment.stub!(:create).and_return({})
-    Resources::Candlepin::Environment.stub!(:destroy).and_return({})
-    Resources::Candlepin::Environment.stub!(:find).and_return({ :environmentContent => [] })
-    Resources::Candlepin::Environment.stub!(:add_content).and_return({})
-    Resources::Candlepin::Environment.stub!(:delete_content).and_return({})
+    disable_foreman_tasks_hooks(KTEnvironment)
+    Resources::Candlepin::Environment.stubs(:create).returns({})
+    Resources::Candlepin::Environment.stubs(:destroy).returns({})
+    Resources::Candlepin::Environment.stubs(:find).returns({ :environmentContent => [] })
+    Resources::Candlepin::Environment.stubs(:add_content).returns({})
+    Resources::Candlepin::Environment.stubs(:delete_content).returns({})
   end
 
   def disable_system_orchestration
-    Resources::Candlepin::Consumer.stub!(:get).and_return({})
+    Resources::Candlepin::Consumer.stubs(:get).returns({})
   end
 
   def disable_user_orchestration(options = {})
     if Katello.config.katello?
-      Katello.pulp_server.resources.user.stub!(:create).and_return({})
-      Katello.pulp_server.resources.user.stub!(:delete).and_return(200)
-      Katello.pulp_server.resources.role.stub!(:add).and_return(true)
-      Katello.pulp_server.resources.role.stub!(:remove).and_return(true)
+      Katello.pulp_server.resources.user.stubs(:create).returns({})
+      Katello.pulp_server.resources.user.stubs(:delete).returns(200)
+      Katello.pulp_server.resources.role.stubs(:add).returns(true)
+      Katello.pulp_server.resources.role.stubs(:remove).returns(true)
     end
+    disable_foreman_tasks_hooks(User)
+  end
 
+  def disable_foreman_tasks_hooks(model)
+    model.any_instance.stubs(create_action: nil, update_action: nil, destroy_action: nil)
+  end
+
+  # Don't go into run/finalize phase of the hooked execution plan
+  def disable_foreman_tasks_hooks_execution(model)
+    model.any_instance.stubs(execute_planned_action: nil)
   end
 
   def disable_consumer_group_orchestration
     if Katello.config.katello?
-      Katello.pulp_server.extensions.consumer_group.stub!(:create).and_return({})
-      Katello.pulp_server.extensions.consumer_group.stub!(:delete).and_return(200)
-      Katello.pulp_server.extensions.consumer_group.stub!(:retrieve).and_return({})
-      Katello.pulp_server.extensions.consumer_group.stub!(:add_consumers_by_id).and_return(200)
-      Katello.pulp_server.extensions.consumer_group.stub!(:remove_consumers_by_id).and_return(200)
+      Katello.pulp_server.extensions.consumer_group.stubs(:create).returns({})
+      Katello.pulp_server.extensions.consumer_group.stubs(:delete).returns(200)
+      Katello.pulp_server.extensions.consumer_group.stubs(:retrieve).returns({})
+      Katello.pulp_server.extensions.consumer_group.stubs(:add_consumers_by_id).returns(200)
+      Katello.pulp_server.extensions.consumer_group.stubs(:remove_consumers_by_id).returns(200)
     end
   end
 
   def disable_repo_orchestration
     if Katello.config.katello?
-      Katello.pulp_server.extensions.repository.stub(:create).and_return({})
-      Katello.pulp_server.extensions.repository.stub(:sync_history).and_return([])
-      Katello.pulp_server.resources.task.stub!(:destroy).and_return({})
+      Katello.pulp_server.extensions.repository.stubs(:create).returns({})
+      Katello.pulp_server.extensions.repository.stubs(:sync_history).returns([])
+      Katello.pulp_server.resources.task.stubs(:destroy).returns({})
 
-      Katello.pulp_server.extensions.repository.stub(:packages).with(RepoTestData::REPO_ID).and_return(RepoTestData::REPO_PACKAGES)
-      Katello.pulp_server.extensions.repository.stub(:errata).with(RepoTestData::REPO_ID).and_return(RepoTestData::REPO_ERRATA)
-      Katello.pulp_server.extensions.repository.stub(:distributions).with(RepoTestData::REPO_ID).and_return(RepoTestData::REPO_DISTRIBUTIONS)
-      Katello.pulp_server.extensions.repository.stub(:find).with(RepoTestData::REPO_ID).and_return(RepoTestData::REPO_PROPERTIES)
-      Katello.pulp_server.extensions.repository.stub(:find).with(RepoTestData::CLONED_REPO_ID).and_return(RepoTestData::CLONED_PROPERTIES)
+      Katello.pulp_server.extensions.repository.stubs(:packages).with(RepoTestData::REPO_ID).returns(RepoTestData::REPO_PACKAGES)
+      Katello.pulp_server.extensions.repository.stubs(:errata).with(RepoTestData::REPO_ID).returns(RepoTestData::REPO_ERRATA)
+      Katello.pulp_server.extensions.repository.stubs(:distributions).with(RepoTestData::REPO_ID).returns(RepoTestData::REPO_DISTRIBUTIONS)
+      Katello.pulp_server.extensions.repository.stubs(:find).with(RepoTestData::REPO_ID).returns(RepoTestData::REPO_PROPERTIES)
+      Katello.pulp_server.extensions.repository.stubs(:find).with(RepoTestData::CLONED_REPO_ID).returns(RepoTestData::CLONED_PROPERTIES)
     end
 
-    Resources::Candlepin::Content.stub!(:create).and_return({ :id => '123', :type=>'yum'})
-    Resources::Candlepin::Content.stub!(:update).and_return({ :id => '123', :type=>'yum' })
-    Resources::Candlepin::Content.stub!(:get).and_return({ :id => '123', :type=>'yum'})
+    Resources::Candlepin::Content.stubs(:create).returns({ :id => '123', :type=>'yum'})
+    Resources::Candlepin::Content.stubs(:update).returns({ :id => '123', :type=>'yum' })
+    Resources::Candlepin::Content.stubs(:get).returns({ :id => '123', :type=>'yum'})
 
     Repository.instance_eval do
       define_method(:index_packages) {
@@ -174,13 +189,22 @@ EOKEY
       define_method(:index_errata) {
         #do nothing
       }
+      define_method(:lookup_checksum_type) {
+        #do nothing
+      }
     end
   end
 
   def disable_cdn
-    Resources::CDN::CdnResource.stub(:ca_file => "#{Rails.root}/config/candlepin-ca.crt")
-    OpenSSL::X509::Certificate.stub(:new).and_return(&:to_s)
-    OpenSSL::PKey::RSA.stub(:new).and_return(&:to_s)
+    Resources::CDN::CdnResource.stubs(:ca_file => "#{Katello::Engine.root}/config/candlepin-ca.crt")
+    OpenSSL::X509::Certificate.stubs(:new).returns(&:to_s)
+    OpenSSL::PKey::RSA.stubs(:new).returns(&:to_s)
   end
 
+  def method_stub(name, return_data)
+    item = stub
+    item.stubs(name.to_sym).returns(return_data)
+    item
+  end
+end
 end

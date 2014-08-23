@@ -1,5 +1,5 @@
 #
-# Copyright 2013 Red Hat, Inc.
+# Copyright 2014 Red Hat, Inc.
 #
 # This software is licensed to you under the GNU General Public
 # License as published by the Free Software Foundation; either version
@@ -10,9 +10,9 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-require 'minitest_helper'
-require './test/support/pulp/task_support'
+require 'support/pulp/task_support'
 
+module Katello
 module RepositorySupport
   include TaskSupport
 
@@ -40,20 +40,34 @@ module RepositorySupport
   def self.create_repo(repo_id)
     @repo = Repository.find(repo_id)
     @repo.relative_path = '/test_path/'
-    @repo.feed = @repo.content_type == 'puppet' ? @puppet_repo_url : @repo_url
-    @repo.create_pulp_repo
-  ensure
+    @repo.url = @repo.content_type == 'puppet' ? @puppet_repo_url : @repo_url
+
+    ::ForemanTasks.sync_task(::Actions::Pulp::Repository::Create,
+                             content_type: @repo.content_type,
+                             pulp_id: @repo.pulp_id,
+                             name: @repo.name,
+                             feed: @repo.url,
+                             ssl_ca_cert: @repo.feed_ca,
+                             ssl_client_cert: @repo.feed_cert,
+                             ssl_client_key: @repo.feed_key,
+                             unprotected: @repo.unprotected,
+                             checksum_type: @repo.checksum_type,
+                             path: @repo.relative_path,
+                             with_importer: true
+                            )
     return @repo
   end
 
   def self.sync_repo
-    tasks = @repo.sync
-    TaskSupport.wait_on_tasks(tasks)
+    ::ForemanTasks.sync_task(::Actions::Pulp::Repository::Sync,
+                             pulp_id: @repo.pulp_id
+                            )
   end
 
   def self.destroy_repo
-    @repo.destroy_repo
+    ::ForemanTasks.sync_task(::Actions::Pulp::Repository::Destroy, :pulp_id => @repo.pulp_id)
   rescue RestClient::ResourceNotFound => e
   end
 
+end
 end

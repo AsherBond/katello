@@ -1,5 +1,5 @@
 #
-# Copyright 2013 Red Hat, Inc.
+# Copyright 2014 Red Hat, Inc.
 #
 # This software is licensed to you under the GNU General Public
 # License as published by the Free Software Foundation; either version
@@ -10,8 +10,9 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-require './test/models/authorization/authorization_base'
+require 'models/authorization/authorization_base'
 
+module Katello
 class RepositoryAuthorizationAdminTest < AuthorizationTestBase
 
   def setup
@@ -27,53 +28,26 @@ class RepositoryAuthorizationAdminTest < AuthorizationTestBase
     assert @fedora_17_x86_64.readable?
   end
 
+  def test_syncable?
+    assert @fedora_17_x86_64.syncable?
+  end
+
   def test_deletable?
-    repository = Repository.find(repositories(:fedora_17_x86_64_library_view))
+    repository = Repository.find(katello_repositories(:fedora_17_x86_64_library_view_1))
     assert repository.deletable?
   end
 
   def test_redhat_deletable?
-    repository = Repository.find(repositories(:rhel_6_x86_64))
-    refute repository.redhat_deletable?
-
-    repository.enabled = false
+    repository = Repository.find(katello_repositories(:rhel_6_x86_64))
     assert repository.redhat_deletable?
   end
 
   def test_readable
-    refute_empty Repository.readable(@library)
+    refute_empty Repository.readable
   end
 
-  def test_creatable?
-    assert Repository.creatable?(@fedora)
-  end
-
-  def test_any_readable?
-    assert Repository.any_readable?(@acme_corporation)
-  end
-
-  def test_libraries_content_readable
-    refute_empty Repository.libraries_content_readable(@acme_corporation)
-  end
-
-  def test_content_readable
-    refute_empty Repository.content_readable(@acme_corporation)
-  end
-
-  def test_readable_for_product
-    refute_empty Repository.readable_for_product(@library, @fedora)
-  end
-
-  def test_editable_in_library
-    refute_empty Repository.editable_in_library(@acme_corporation)
-  end
-
-  def test_readable_in_org
-    refute_empty Repository.readable_in_org(@acme_corporation)
-  end
-
-  def test_any_contents_readable_in_org?
-    assert Repository.any_contents_readable_in_org?(@acme_corporation)
+  def test_deletable
+    refute_empty Repository.deletable
   end
 
 end
@@ -82,7 +56,7 @@ class RepositoryAuthorizationNonAuthUserTest < AuthorizationTestBase
 
   def setup
     super
-    User.current = User.find(users(:no_perms_user))
+    User.current = User.find(users(:restricted))
   end
 
   def test_editable
@@ -97,40 +71,17 @@ class RepositoryAuthorizationNonAuthUserTest < AuthorizationTestBase
     refute @fedora_17_x86_64.deletable?
   end
 
+  def test_syncable?
+    refute @fedora_17_x86_64.syncable?
+  end
+
   def test_readable
-    assert_empty Repository.readable(@library)
+    assert_empty Repository.readable
   end
 
-  def test_creatable?
-    refute Repository.creatable?(@fedora)
+  def test_deletable
+    assert_empty Repository.deletable
   end
 
-  def test_any_readable?
-    refute Repository.any_readable?(@acme_corporation)
-  end
-
-  def test_libraries_content_readable
-    assert_empty Repository.libraries_content_readable(@acme_corporation)
-  end
-
-  def test_content_readable
-    assert_empty Repository.content_readable(@acme_corporation)
-  end
-
-  def test_readable_for_product
-    assert_empty Repository.readable_for_product(@library, @fedora)
-  end
-
-  def test_editable_in_library
-    assert_empty Repository.editable_in_library(@acme_corporation)
-  end
-
-  def test_readable_in_org
-    assert_empty Repository.readable_in_org(@acme_corporation)
-  end
-
-  def test_any_contents_readable_in_org?
-    refute Repository.any_contents_readable_in_org?(@acme_corporation)
-  end
-
+end
 end

@@ -5,77 +5,125 @@
 #
 
 require 'util/password'
-require 'util/puppet'
-
-# variables which are taken from Puppet
-first_user_name = (un = Util::Puppet.config_value("user_name")).blank? ? 'admin' : un
-first_user_password = (pw = Util::Puppet.config_value("user_pass")).blank? ? 'admin' : pw
-first_user_email = (em = Util::Puppet.config_value("user_email")).blank? ? 'root@localhost' : em
-first_org_name = (org = Util::Puppet.config_value("org_name")).blank? ? 'ACME_Corporation' : org
-first_remote_id = first_user_name.gsub(/[^A-Za-z0-9_-]/, "_")
 
 def format_errors(model = nil)
   return '(nil found)' if model.nil?
   model.errors.full_messages.join(';')
 end
 
-# create basic roles
-superadmin_role = Role.make_super_admin_role
-
-# create read *everything* role and assign permissions to it
-reader_role = Role.make_readonly_role('Read Everything')
-raise "Unable to create reader role: #{format_errors reader_role}" if reader_role.nil? || reader_role.errors.size > 0
-reader_role.update_attributes(:locked => true)
-
-# create the super admin if none exist - it must be created before any statement in the seed.rb script
-User.current = user_admin = User.find_by_username(first_user_name)
-unless user_admin
-  user_admin   = User.new(
-      :roles    => [superadmin_role],
-      :username => first_user_name,
-      :password => first_user_password,
-      :email    => first_user_email,
-      :remote_id => first_remote_id)
-  User.current = user_admin
-  user_admin.save!
-end
-raise "Unable to create admin user: #{format_errors user_admin}" if user_admin.nil? || user_admin.errors.size > 0
-
-unless hidden_user = User.hidden.first
-  hidden_user = User.new(
-    :roles => [],
-    :username => "hidden-#{Password.generate_random_string(6)}",
-    :password => Password.generate_random_string(25),
-    :email => "#{Password.generate_random_string(10)}@localhost",
-    :hidden => true)
-  hidden_user.save!
-end
-raise "Unable to create hidden user: #{format_errors hidden_user}" if hidden_user.nil? || hidden_user.errors.size > 0
-
-first_org_desc = first_org_name + " Organization"
-first_org_label = first_org_name.gsub(' ', '_')
-# create the default org = "admin" if none exist
-first_org = Organization.find_or_create_by_name(:name => first_org_name, :label => first_org_label, :description => first_org_desc, :label => first_org_label)
-raise "Unable to create first org: #{format_errors first_org}" if first_org && first_org.errors.size > 0
-raise "Are you sure you cleared candlepin?! Unable to create first org!" if first_org.environments.nil?
-
-#create a provider
-if Provider.count == 0
-  Provider.create!({
-      :name => 'Custom Provider 1',
-      :organization => first_org,
-      :repository_url => 'http://download.fedoraproject.org/pub/fedora/linux/releases/',
-      :provider_type => Provider::CUSTOM
-  })
-
-  Provider.create!({
-      :name => 'Red Hat',
-      :organization => first_org,
-      :repository_url => 'https://somehost.example.com/content/',
-      :provider_type => Provider::REDHAT
-  })
-end
+::User.current = ::User.anonymous_api_admin
 
 if Katello.config.use_pulp
-  Repository.ensure_sync_notification
+  Katello::Repository.ensure_sync_notification
+end
+
+# Provisioning Templates
+
+kinds = [:provision, :finish, :user_data].inject({}) do |hash, kind|
+  hash[kind] = TemplateKind.find_by_name(kind)
+  hash
+end
+
+defaults = {:vendor => "Katello", :default => true, :locked => true}
+
+templates = [{:name => "Katello Kickstart Default",           :source => "kickstart-katello.erb",      :template_kind => kinds[:provision]},
+             {:name => "Katello Kickstart Default for RHEL",  :source => "kickstart-katello_rhel.erb", :template_kind => kinds[:provision]},
+             {:name => "Katello Kickstart Default User Data", :source => "userdata-katello.erb",       :template_kind => kinds[:user_data]},
+             {:name => "Katello Kickstart Default Finish",    :source => "finish-katello.erb",         :template_kind => kinds[:finish]},
+             {:name => "subscription_manager_registration",   :source => "snippets/_subscription_manager_registration.erb", :snippet => true}]
+
+templates.each do |template|
+ template[:template] = File.read(File.join(Katello::Engine.root, "app/views/foreman/unattended", template.delete(:source)))
+ ConfigTemplate.find_or_create_by_name(template).update_attributes(defaults.merge(template))
+end
+
+# Take ownership of Foreman templates we rely on
+templates = ["puppet.conf", "freeipa_register", "Kickstart default iPXE", "Kickstart default PXELinux", "PXELinux global default"]
+
+ConfigTemplate.where(:name => templates).each do |template|
+  template.update_attributes(defaults)
+end
+
+# Ensure all default templates are seeded into the first org and loc
+ConfigTemplate.where(:default => true).each do |template|
+  template.organizations << Organization.first unless template.organizations.include?(Organization.first) || Organization.count.zero?
+  template.locations << Location.first unless template.locations.include?(Location.first) || Location.count.zero?
+end
+
+Katello::Util::Search.backend_search_classes.each{|c| c.create_index}
+
+# Proxy features
+feature = Feature.find_or_create_by_name('Pulp')
+if feature.nil? || feature.errors.any?
+  fail "Unable to create proxy feature: #{format_errors feature}"
+end
+
+# Roles and Permissions
+
+permissions = [
+  %w(Katello::ActivationKey view_activation_keys),
+  %w(Katello::ActivationKey create_activation_keys),
+  %w(Katello::ActivationKey edit_activation_keys),
+  %w(Katello::ActivationKey destroy_activation_keys),
+  %w(SmartProxy manage_capsule_content),
+  %w(Katello::System view_content_hosts),
+  %w(Katello::System create_content_hosts),
+  %w(Katello::System edit_content_hosts),
+  %w(Katello::System destroy_content_hosts),
+  %w(Katello::ContentView view_content_views),
+  %w(Katello::ContentView create_content_views),
+  %w(Katello::ContentView edit_content_views),
+  %w(Katello::ContentView destroy_content_views),
+  %w(Katello::ContentView publish_content_views),
+  %w(Katello::ContentView promote_or_remove_content_views),
+  %w(Katello::GpgKey view_gpg_keys),
+  %w(Katello::GpgKey create_gpg_keys),
+  %w(Katello::GpgKey edit_gpg_keys),
+  %w(Katello::GpgKey destroy_gpg_keys),
+  %w(Katello::HostCollection view_host_collections),
+  %w(Katello::HostCollection create_host_collections),
+  %w(Katello::HostCollection edit_host_collections),
+  %w(Katello::HostCollection destroy_host_collections),
+  %w(Katello::KTEnvironment view_lifecycle_environments),
+  %w(Katello::KTEnvironment create_lifecycle_environments),
+  %w(Katello::KTEnvironment edit_lifecycle_environments),
+  %w(Katello::KTEnvironment destroy_lifecycle_environments),
+  %w(Katello::KTEnvironment promote_or_remove_content_views_to_environments),
+  %w(Katello::Product view_products),
+  %w(Katello::Product create_products),
+  %w(Katello::Product edit_products),
+  %w(Katello::Product destroy_products),
+  %w(Katello::Product sync_products),
+  %w(Katello::SyncPlan view_sync_plans),
+  %w(Katello::SyncPlan create_sync_plans),
+  %w(Katello::SyncPlan edit_sync_plans),
+  %w(Katello::SyncPlan destroy_sync_plans),
+  %w(Organization view_subscriptions),
+  %w(Organization attach_subscriptions),
+  %w(Organization unattach_subscriptions),
+  %w(Organization import_manifest),
+  %w(Organization delete_manifest),
+]
+
+permissions.each do |resource, permission|
+  Permission.find_or_create_by_resource_type_and_name resource, permission
+end
+
+default_permissions = {
+    :Viewer => [:view_activation_keys, :view_content_hosts, :view_content_views, :view_gpg_keys, :view_host_collections,
+                :view_lifecycle_environments, :view_products, :view_subscriptions, :view_sync_plans]
+}
+
+Role.without_auditing do
+  default_permissions.each do |role_name, permission_names|
+    permissions = Permission.find_all_by_name permission_names
+    create_filters(Role.find_by_name(role_name), permissions)
+  end
+end
+
+Setting.find_by_name("dynflow_enable_console").update_attributes!(:value => true) if Rails.env.development?
+
+["Pulp", "Pulp Node"].each do |input|
+  f = Feature.find_or_create_by_name(input)
+  fail "Unable to create proxy feature: #{format_errors f}" if f.nil? || f.errors.any?
 end

@@ -1,5 +1,5 @@
 /**
- * Copyright 2013 Red Hat, Inc.
+ * Copyright 2014 Red Hat, Inc.
  *
  * This software is licensed to you under the GNU General Public
  * License as published by the Free Software Foundation; either version
@@ -28,8 +28,8 @@ describe('Directive: alchInfiniteScroll', function () {
                 return deferred.promise;
             }
         };
-
-        element = angular.element('<div alch-infinite-scroll="scrollHandler.doIt()" style=" height: 100px; position: absolute; overflow-y: auto;"></div>');
+        $scope.data = [];
+        element = angular.element('<div data="data" alch-infinite-scroll="scrollHandler.doIt()" style=" height: 100px; position: absolute; overflow-y: auto;"></div>');
         $('body').append(element);
     }));
 

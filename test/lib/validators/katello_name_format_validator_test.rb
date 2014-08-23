@@ -1,6 +1,6 @@
 # encoding: utf-8
 #
-# Copyright 2013 Red Hat, Inc.
+# Copyright 2014 Red Hat, Inc.
 #
 # This software is licensed to you under the GNU General Public
 # License as published by the Free Software Foundation; either version
@@ -11,9 +11,10 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-require 'minitest_helper'
+require 'katello_test_helper'
 
-class KatelloNameFormatValidatorTest < MiniTest::Rails::ActiveSupport::TestCase
+module Katello
+class KatelloNameFormatValidatorTest < ActiveSupport::TestCase
 
   def setup
     @validator = Validators::KatelloNameFormatValidator.new({:attributes => [:name]})
@@ -78,4 +79,5 @@ class KatelloNameFormatValidatorTest < MiniTest::Rails::ActiveSupport::TestCase
     assert_empty @model.errors[:name]
   end
 
+end
 end

@@ -1,5 +1,5 @@
 #
-# Copyright 2013 Red Hat, Inc.
+# Copyright 2014 Red Hat, Inc.
 #
 # This software is licensed to you under the GNU General Public
 # License as published by the Free Software Foundation; either version
@@ -10,8 +10,9 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-require './test/models/authorization/authorization_base'
+require 'models/authorization/authorization_base'
 
+module Katello
 class ProductAuthorizationAdminTest < AuthorizationTestBase
 
   def setup
@@ -21,28 +22,20 @@ class ProductAuthorizationAdminTest < AuthorizationTestBase
     @org = @acme_corporation
   end
 
-  def test_all_readable
-    refute_empty Product.all_readable(@org)
-  end
-
   def test_readable
-    refute_empty Product.readable(@org)
-  end
-
-  def test_all_editable
-    refute_empty Product.all_editable(@org)
+    refute_empty Product.readable
   end
 
   def test_editable
-    refute_empty Product.editable(@org)
+    refute_empty Product.editable
   end
 
   def test_syncable
-    refute_empty Product.syncable(@org)
+    refute_empty Product.syncable
   end
 
-  def test_any_readable?
-    assert Product.any_readable?(@org)
+  def test_syncable
+    refute_empty Product.deletable
   end
 
   def test_readable?
@@ -58,12 +51,16 @@ class ProductAuthorizationAdminTest < AuthorizationTestBase
   end
 
   def test_deletable?
-    product = Product.find(products(:empty_product))
+    product = Product.find(katello_products(:empty_product))
     assert product.deletable?
   end
 
-  def test_creatable?
-    assert Product.creatable?(@fedora_hosted)
+  def test_readable_repositories
+    refute_empty Product.readable_repositories
+  end
+
+  def test_readable_repositories_with_ids
+    refute_empty Product.readable_repositories([Repository.first.id])
   end
 
 end
@@ -72,33 +69,25 @@ class ProductAuthorizationNoPermsTest < AuthorizationTestBase
 
   def setup
     super
-    User.current = User.find(users('no_perms_user'))
+    User.current = User.find(users('restricted'))
     @prod = @fedora
     @org = @acme_corporation
   end
 
-  def test_all_readable
-    assert_empty Product.all_readable(@org)
-  end
-
   def test_readable
-    assert_empty Product.readable(@org)
-  end
-
-  def test_all_editable
-    assert_empty Product.all_editable(@org)
+    assert_empty Product.readable
   end
 
   def test_editable
-    assert_empty Product.editable(@org)
+    assert_empty Product.editable
   end
 
   def test_syncable
-    assert_empty Product.syncable(@org)
+    assert_empty Product.syncable
   end
 
-  def test_any_readable?
-    refute Product.any_readable?(@org)
+  def test_deletable
+    assert_empty Product.deletable
   end
 
   def test_readable?
@@ -117,8 +106,21 @@ class ProductAuthorizationNoPermsTest < AuthorizationTestBase
     refute @prod.deletable?
   end
 
-  def test_creatable?
-    refute Product.creatable?(@fedora_hosted)
+  def test_readable_repositories
+    assert_empty Product.readable_repositories
   end
 
+  def test_readable_repositories_with_ids
+    assert_empty Product.readable_repositories([Repository.first.id])
+  end
+
+  def test_readable_repositories_with_search
+    setup_current_user_with_permissions(:name => "view_products",
+                                        :search => "name=\"#{Repository.first.product.name}\"")
+
+    assert_equal([Repository.first], Product.readable_repositories([Repository.first.id]))
+    assert_empty(Product.readable_repositories([Repository.where('product_id != ?', Katello::Product.readable.pluck(:id)).first]))
+  end
+
+end
 end

@@ -1,5 +1,5 @@
 #
-# Copyright 2013 Red Hat, Inc.
+# Copyright 2014 Red Hat, Inc.
 #
 # This software is licensed to you under the GNU General Public
 # License as published by the Free Software Foundation; either version
@@ -10,38 +10,31 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-require './test/models/authorization/authorization_base'
+require 'models/authorization/authorization_base'
 
+module Katello
 class GpgKeyAuthorizationAdminTest < AuthorizationTestBase
 
   def setup
     super
     User.current = User.find(users('admin'))
-    @key = GpgKey.find(gpg_keys('fedora_gpg_key'))
+    @key = GpgKey.find(katello_gpg_keys('fedora_gpg_key'))
   end
 
   def test_readable
-    refute_empty GpgKey.readable(@acme_corporation)
+    refute_empty GpgKey.readable
   end
 
-  def test_manageable
-    refute_empty GpgKey.manageable(@acme_corporation)
-  end
-
-  def test_createable?
-    assert GpgKey.createable?(@acme_corporation)
-  end
-
-  def test_any_readable?
-    assert GpgKey.any_readable?(@acme_corporation)
-  end
-
-  def test_key_readable
+  def test_key_readable?
     assert @key.readable?
   end
 
-  def test_key_manageable?
-     assert @key.manageable?
+  def test_key_editable?
+    assert @key.editable?
+  end
+
+  def test_key_deletable?
+    assert @key.deletable?
   end
 end
 
@@ -49,32 +42,25 @@ class GpgKeyAuthorizationNoPermsTest < AuthorizationTestBase
 
   def setup
     super
-    User.current = User.find(users('no_perms_user'))
-    @key = GpgKey.find(gpg_keys('fedora_gpg_key'))
+    User.current = User.find(users('restricted'))
+    @key = GpgKey.find(katello_gpg_keys('fedora_gpg_key'))
   end
 
   def test_readable
-    assert_empty GpgKey.readable(@acme_corporation)
+    assert_empty GpgKey.readable
   end
 
-  def test_manageable
-    assert_empty GpgKey.manageable(@acme_corporation)
-  end
-
-  def test_createable?
-    refute GpgKey.createable?(@acme_corporation)
-  end
-
-  def test_any_readable?
-    refute GpgKey.any_readable?(@acme_corporation)
-  end
-
-  def test_key_readable
+  def test_key_readable?
     refute @key.readable?
   end
 
-  def test_key_manageable?
-     refute @key.manageable?
+  def test_key_editable?
+    refute @key.editable?
   end
 
+  def test_key_deletable?
+    refute @key.deletable?
+  end
+
+end
 end

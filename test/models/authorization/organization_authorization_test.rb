@@ -1,5 +1,5 @@
 #
-# Copyright 2013 Red Hat, Inc.
+# Copyright 2014 Red Hat, Inc.
 #
 # This software is licensed to you under the GNU General Public
 # License as published by the Free Software Foundation; either version
@@ -10,70 +10,30 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-require './test/models/authorization/authorization_base'
+require 'models/authorization/authorization_base'
 
+module Katello
 class OrganizationAuthorizationAdminTest < AuthorizationTestBase
-
   def setup
     super
     User.current = User.find(users('admin'))
     @org = @acme_corporation
   end
 
-  def test_class_readable
-    refute_empty Organization.readable
-  end
-
-  def def_class_creatable?
-    assert Organization.creatable?
-  end
-
-  def test_any_readable?
-    assert Organization.any_readable?
+  def test_promotion_paths
+    assert_equal(@org.promotion_paths, @org.readable_promotion_paths)
   end
 
   def test_editable?
     assert @org.editable?
   end
 
-  def test_deletable?
-    assert @org.deletable?
+  def test_manifest_importable?
+    assert @org.manifest_importable?
   end
 
-  def test_readable?
-    assert @org.readable?
-  end
-
-  def test_environments_manageable?
-    assert @org.environments_manageable?
-  end
-
-  def test_systems_readable?
-    assert @org.systems_readable?
-  end
-
-  def test_systems_deletable?
-    assert @org.systems_deletable?
-  end
-
-  def test_systems_registerable?
-    assert @org.systems_registerable?
-  end
-
-  def test_any_systems_registerable?
-    assert @org.systems_registerable?
-  end
-
-  def test_gpg_keys_manageable?
-    assert @org.gpg_keys_manageable?
-  end
-
-  def test_syncable?
-    assert @org.syncable?
-  end
-
-  def test_redhat_manageable?
-    assert @org.redhat_manageable?
+  def test_subscriptions_readable?
+    assert @org.subscriptions_readable?
   end
 
 end
@@ -82,64 +42,43 @@ class OrganizationAuthorizationNoPermsTest < AuthorizationTestBase
 
   def setup
     super
-    User.current = User.find(users('no_perms_user'))
+    User.current = User.find(users('restricted'))
     @org = @acme_corporation
-  end
-
-  def test_class_readable
-    assert_empty Organization.readable
   end
 
   def def_class_creatable?
     refute Organization.creatable?
   end
 
-  def test_any_readable?
-    refute Organization.any_readable?
+  def test_read_promotion_paths
+    assert_empty @org.readable_promotion_paths
   end
 
-  def test_editable?
-    refute @org.editable?
+  def test_read_promotion_paths_one
+    environment = katello_environments(:staging_path1)
+    setup_current_user_with_permissions(:name => "view_lifecycle_environments",
+                                        :search => "name=\"#{environment.name}\"")
+
+    refute_equal(@org.promotion_paths, @org.readable_promotion_paths)
+    assert_equal(1, @org.readable_promotion_paths.size)
   end
 
-  def test_deletable?
-    refute @org.deletable?
+  def test_promotable_promotion_paths_one
+    environment = katello_environments(:staging_path1)
+    setup_current_user_with_permissions(:name => "promote_or_remove_content_views_to_environments",
+                                        :search => "name=\"#{environment.name}\"")
+
+    refute_equal(@org.promotion_paths, @org.promotable_promotion_paths)
+    assert_equal(1, @org.promotable_promotion_paths.size)
   end
 
-  def test_readable?
-    refute @org.readable?
+  def test_manifest_importable?
+    refute @org.manifest_importable?
   end
 
-  def test_environments_manageable?
-    refute @org.environments_manageable?
+  def test_subscriptions_readable?
+    refute @org.subscriptions_readable?
   end
 
-  def test_systems_readable?
-    refute @org.systems_readable?
-  end
-
-  def test_systems_deletable?
-    refute @org.systems_deletable?
-  end
-
-  def test_systems_registerable?
-    refute @org.systems_registerable?
-  end
-
-  def test_any_systems_registerable?
-    refute @org.systems_registerable?
-  end
-
-  def test_gpg_keys_manageable?
-    refute @org.gpg_keys_manageable?
-  end
-
-  def test_syncable?
-    refute @org.syncable?
-  end
-
-  def test_redhat_manageable?
-    refute @org.redhat_manageable?
-  end
-
+end
 end
