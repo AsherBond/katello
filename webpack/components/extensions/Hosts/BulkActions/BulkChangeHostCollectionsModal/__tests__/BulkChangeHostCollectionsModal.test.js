@@ -65,6 +65,7 @@ const defaultProps = {
   closeModal: jest.fn(),
   fetchBulkParams: jest.fn(() => 'name ~ test'),
   selectedCount: 5,
+  refreshTableData: jest.fn(),
 };
 
 beforeEach(() => {
@@ -352,11 +353,6 @@ test('shows success toast notification on successful save', async () => {
     .put('/api/v2/hosts/bulk/add_host_collections')
     .reply(200, { displayMessages: ['Host collections updated'] });
 
-  const hostsRefreshScope = nockInstance
-    .get('/api/hosts')
-    .query(true)
-    .reply(200, { results: [] });
-
   const { getAllByRole, getByText } = renderWithRedux(
     <BulkChangeHostCollectionsModal {...defaultProps} />,
     renderOptions(),
@@ -388,10 +384,13 @@ test('shows success toast notification on successful save', async () => {
 
   await patientlyWaitFor(() => {
     expect(addToast).toHaveBeenCalledWith(expect.objectContaining({ type: 'success' }));
+    expect(defaultProps.refreshTableData).toHaveBeenCalledTimes(1);
+    expect(defaultProps.closeModal).toHaveBeenCalledTimes(1);
+    expect(defaultProps.refreshTableData.mock.invocationCallOrder[0])
+      .toBeLessThan(defaultProps.closeModal.mock.invocationCallOrder[0]);
   });
 
   assertNockRequest(saveScope, false);
-  assertNockRequest(hostsRefreshScope, false);
   assertNockRequest(hostCollectionsScope, false);
   assertNockRequest(autocompleteScope, false);
 });
@@ -445,6 +444,7 @@ test('shows error toast notification on failed save', async () => {
 
   await patientlyWaitFor(() => {
     expect(addToast).toHaveBeenCalledWith(expect.objectContaining({ type: 'danger' }));
+    expect(defaultProps.refreshTableData).not.toHaveBeenCalled();
   });
 
   assertNockRequest(saveScope, false);
@@ -469,11 +469,6 @@ test('makes correct API call when Add action is selected', async () => {
   const saveScope = nockInstance
     .put('/api/v2/hosts/bulk/add_host_collections')
     .reply(200, { displayMessages: ['Host collections updated'] });
-
-  const hostsRefreshScope = nockInstance
-    .get('/api/hosts')
-    .query(true)
-    .reply(200, { results: [] });
 
   const { getAllByRole, getByText, getByLabelText } = renderWithRedux(
     <BulkChangeHostCollectionsModal {...defaultProps} />,
@@ -511,7 +506,6 @@ test('makes correct API call when Add action is selected', async () => {
 
   assertNockRequest(hostCollectionsScope, false);
   assertNockRequest(autocompleteScope, false);
-  assertNockRequest(hostsRefreshScope, false);
 });
 
 // Test for Remove action API call
@@ -531,11 +525,6 @@ test('makes correct API call when Remove action is selected', async () => {
   const saveScope = nockInstance
     .put('/api/v2/hosts/bulk/remove_host_collections')
     .reply(200, { displayMessages: ['Host collections updated'] });
-
-  const hostsRefreshScope = nockInstance
-    .get('/api/hosts')
-    .query(true)
-    .reply(200, { results: [] });
 
   const { getAllByRole, getByText, getByLabelText } = renderWithRedux(
     <BulkChangeHostCollectionsModal {...defaultProps} />,
@@ -580,7 +569,6 @@ test('makes correct API call when Remove action is selected', async () => {
 
   assertNockRequest(hostCollectionsScope, false);
   assertNockRequest(autocompleteScope, false);
-  assertNockRequest(hostsRefreshScope, false);
 });
 
 // Test for multiple host collections selected
@@ -600,11 +588,6 @@ test('makes correct API call with multiple host collections', async () => {
   const saveScope = nockInstance
     .put('/api/v2/hosts/bulk/add_host_collections')
     .reply(200, { displayMessages: ['Host collections updated'] });
-
-  const hostsRefreshScope = nockInstance
-    .get('/api/hosts')
-    .query(true)
-    .reply(200, { results: [] });
 
   const { getAllByRole, getByText } = renderWithRedux(
     <BulkChangeHostCollectionsModal {...defaultProps} />,
@@ -640,7 +623,6 @@ test('makes correct API call with multiple host collections', async () => {
 
   assertNockRequest(hostCollectionsScope, false);
   assertNockRequest(autocompleteScope, false);
-  assertNockRequest(hostsRefreshScope, false);
 });
 
 const emptyHostCollections = {
