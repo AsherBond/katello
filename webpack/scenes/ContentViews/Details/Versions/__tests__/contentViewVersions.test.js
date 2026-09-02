@@ -162,6 +162,35 @@ test('Can show additional content and link to list page', async (done) => {
   act(done);
 });
 
+test('Files content is rendered once via generic framework', async (done) => {
+  const autocompleteScope = mockAutocomplete(nockInstance, autocompleteUrl);
+  const scope = nockInstance
+    .get(cvVersions)
+    .query(true)
+    .reply(200, cvVersionsData);
+
+  const { queryAllByText } = renderWithRedux(
+    withCVRoute(<ContentViewVersions cvId={5} details={cvDetailData} />),
+    renderOptions,
+  );
+
+  await patientlyWaitFor(() => {
+    // Files should appear exactly once via generic framework
+    const filesElements = queryAllByText('3 Files');
+    expect(filesElements).toHaveLength(1);
+    expect(filesElements[0].closest('a'))
+      .toHaveAttribute('href', '/content_views/5#/versions/11/files/');
+  });
+
+  await patientlyWaitFor(() => {
+    expect(autocompleteScope.isDone()).toBe(true);
+    expect(scope.isDone()).toBe(true);
+  });
+  autocompleteScope.done();
+  scope.done();
+  act(done);
+});
+
 test('Can load for empty versions', async (done) => {
   const autocompleteScope = mockAutocomplete(nockInstance, autocompleteUrl);
   const scope = nockInstance

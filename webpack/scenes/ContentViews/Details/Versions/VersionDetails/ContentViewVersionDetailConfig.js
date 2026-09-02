@@ -15,7 +15,6 @@ import {
   getDebPackages,
   getDockerTags,
   getErrata,
-  getFiles,
   getPackageGroups,
   getRepositories,
   getRPMPackages,
@@ -28,8 +27,6 @@ import {
   selectDebPackagesStatus,
   selectDockerTags,
   selectDockerTagsStatus,
-  selectFiles,
-  selectFilesStatus,
   selectErrata,
   selectErrataStatus,
   selectRepositories,
@@ -172,28 +169,6 @@ export default ({ cvId, versionId }) => [
     columnHeaders: [
       { title: __('Name'), getProperty: item => item?.name },
       { title: __('Repository'), getProperty: item => item?.repository?.name },
-    ],
-  },
-  {
-    name: __('Files'),
-    route: 'files',
-    repoType: 'file',
-    getCountKey: item => item?.file_count,
-    responseSelector: state => selectFiles(state),
-    statusSelector: state => selectFilesStatus(state),
-    autocompleteEndpoint: '/katello/api/v2/files',
-    autocompleteQueryParams: { content_view_version_id: versionId },
-    bookmarkController: 'katello_content_view_components',
-    fetchItems: params => getFiles({ content_view_version_id: versionId, ...params }),
-    columnHeaders: [
-      {
-        title: __('Name'),
-        getProperty: item => (
-          <a href={urlBuilder(`files/${item?.id}`, '')}>
-            {item?.name}
-          </a>),
-      },
-      { title: __('Path'), getProperty: item => item?.path },
     ],
   },
   {

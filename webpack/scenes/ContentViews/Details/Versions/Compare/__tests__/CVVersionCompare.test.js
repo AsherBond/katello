@@ -660,6 +660,8 @@ test('Can select viewing by "Same" in the dropdown and see the content in common
     testConfigViewBySame.forEach(({ name }) => {
       expect(queryByText(name)).toBeTruthy();
     });
+  });
+  await patientlyWaitFor(() => {
     (testConfigViewBySame.filter(({ name }) => !(name === 'Files'))).forEach(({ textQuery }) => {
       textQuery.forEach(query => expect(queryAllByText(query)).toBeTruthy());
     });
